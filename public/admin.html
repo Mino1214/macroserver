@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관리자</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1e1e1e; color: #d4d4d4; margin: 20px; }
+    h1 { color: #4ec9b0; }
+    h2 { color: #8ab4b0; font-size: 1.1rem; margin-top: 0; }
+    section { background: #2d2d30; padding: 16px; margin: 16px 0; border-radius: 8px; max-width: 900px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
+    input, button, select { padding: 8px 12px; margin: 4px; border-radius: 4px; border: 1px solid #555; background: #3c3c3c; color: #d4d4d4; }
+    button { cursor: pointer; background: #4ec9b0; color: #1e1e1e; border: none; }
+    button.danger { background: #c55858; color: #fff; }
+    button.secondary { background: #5a5a5c; color: #d4d4d4; }
+    .error { color: #f55; }
+    .ok { color: #4ec9b0; }
+    #loginBox { max-width: 320px; margin: 40px auto; }
+    #loginBox input { width: 100%; margin: 6px 0; }
+    #loginBox button { width: 100%; margin-top: 8px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .role-badge { font-size: 12px; color: #8ab4b0; }
+    .hidden { display: none !important; }
+    tr.mgr-row { cursor: pointer; }
+    tr.mgr-row:hover { background: #383838; }
+    tr.mgr-detail td { background: #252526; padding: 12px 16px; border-left: 3px solid #4ec9b0; }
+    .mgr-detail-users { list-style: none; margin: 0; padding: 0; }
+    .mgr-detail-users li { padding: 4px 0; }
+  </style>
+</head>
+<body>
+  <div id="loginBox" class="hidden">
+    <h1>관리자 로그인</h1>
+    <section>
+      <input type="text" id="loginId" placeholder="아이디" autocomplete="username">
+      <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+      <button onclick="doLogin()">로그인</button>
+      <p id="loginError" class="error" style="margin:8px 0 0;display:none;"></p>
+    </section>
+  </div>
+
+  <div id="dashboard" class="hidden">
+    <div class="header">
+      <h1>관리자 페이지</h1>
+      <span class="role-badge" id="roleBadge"></span>
+      <button class="secondary" onclick="doLogout()">로그아웃</button>
+    </div>
+
+    <!-- 마스터 전용: 텔레그램 -->
+    <section id="sectionTelegram" class="hidden">
+      <h2>텔레그램 문의 (로그인 화면 표시)</h2>
+      <input type="text" id="telegram" placeholder="@문의" style="width: 260px;">
+      <button onclick="saveTelegram()">저장</button>
+      <span id="telegramMsg"></span>
+    </section>
+
+    <!-- 마스터 전용: 매니저 관리 -->
+    <section id="sectionManagers" class="hidden">
+      <h2>매니저 관리</h2>
+      <p>매니저 아이디 · 비밀번호 · 텔레그램 · 메모(주석) 로 계정 생성/수정. 행을 클릭하면 소속 유저가 펼쳐집니다.</p>
+      <input type="text" id="mgrId" placeholder="매니저 아이디">
+      <input type="password" id="mgrPw" placeholder="비밀번호">
+      <input type="text" id="mgrTelegram" placeholder="텔레그램 아이디">
+      <input type="text" id="mgrMemo" placeholder="메모 (주석, 선택)">
+      <button onclick="saveManager()">저장</button>
+      <table>
+        <thead><tr><th></th><th>아이디</th><th>텔레그램</th><th>메모</th><th>소속 유저 수</th><th>조치</th></tr></thead>
+        <tbody id="managersList"></tbody>
+      </table>
+    </section>
+
+    <!-- 유저 관리 (마스터=전체+매니저명, 매니저=내 유저만) -->
+    <section id="sectionUsers">
+      <h2 id="usersTitle">사용자 관리</h2>
+      <input type="text" id="newUserId" placeholder="아이디">
+      <input type="password" id="newUserPw" placeholder="비밀번호">
+      <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
+      <select id="newUserManager" class="hidden"></select>
+      <button onclick="addUser()">저장</button>
+      <table>
+        <thead><tr><th>아이디</th><th id="thManager" class="hidden">매니저</th><th>텔레그램</th><th>조치</th></tr></thead>
+        <tbody id="userList"></tbody>
+      </table>
+    </section>
+
+    <!-- 세션 -->
+    <section id="sectionSessions">
+      <h2>접속 중인 세션</h2>
+      <button onclick="loadSessions()">새로고침</button>
+      <table>
+        <thead><tr><th>사용자</th><th>토큰(앞 8자)</th><th>조치</th></tr></thead>
+        <tbody id="sessions"></tbody>
+      </table>
+    </section>
+
+    <!-- 시드 -->
+    <section id="sectionSeeds">
+      <h2>수신 시드 문구</h2>
+      <label><input type="checkbox" id="masked" checked> 마스킹</label>
+      <button onclick="loadSeeds()">새로고침</button>
+      <table>
+        <thead><tr><th>No</th><th>사용자</th><th>문구</th><th>시각</th></tr></thead>
+        <tbody id="seeds"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const API = '';
+    let adminToken = localStorage.getItem('adminToken') || '';
+    let me = { role: '', id: '' };
+    let allUsers = [];
+
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken };
+    }
+    async function api(path, opts = {}) {
+      const r = await fetch(API + path, { ...opts, headers: { ...authHeaders(), ...opts.headers } });
+      if (r.status === 401) {
+        adminToken = '';
+        localStorage.removeItem('adminToken');
+        showLogin();
+        throw new Error('로그인이 필요합니다.');
+      }
+      return r.ok ? r.json() : Promise.reject(await r.text());
+    }
+
+    function showLogin() {
+      document.getElementById('loginBox').classList.remove('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+    }
+    function showDashboard() {
+      document.getElementById('loginBox').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      const isMaster = me.role === 'master';
+      document.getElementById('sectionTelegram').classList.toggle('hidden', !isMaster);
+      document.getElementById('sectionManagers').classList.toggle('hidden', !isMaster);
+      document.getElementById('thManager').classList.toggle('hidden', !isMaster);
+      document.getElementById('newUserManager').classList.toggle('hidden', !isMaster);
+      document.getElementById('usersTitle').textContent = isMaster ? '사용자 관리 (전체)' : '내 사용자';
+      document.getElementById('roleBadge').textContent = isMaster ? '마스터' : '매니저: ' + me.id;
+      loadAll();
+    }
+
+    async function doLogin() {
+      const id = document.getElementById('loginId').value.trim();
+      const pw = document.getElementById('loginPw').value;
+      document.getElementById('loginError').style.display = 'none';
+      if (!id || !pw) {
+        document.getElementById('loginError').textContent = '아이디와 비밀번호를 입력하세요.';
+        document.getElementById('loginError').style.display = 'block';
+        return;
+      }
+      try {
+        const r = await fetch(API + '/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, password: pw }),
+        });
+        const data = r.ok ? await r.json() : null;
+        if (!r.ok) throw new Error(data?.error || await r.text());
+        adminToken = data.token;
+        me = { role: data.role, id: data.id };
+        localStorage.setItem('adminToken', adminToken);
+        showDashboard();
+      } catch (e) {
+        document.getElementById('loginError').textContent = e.message || '로그인 실패';
+        document.getElementById('loginError').style.display = 'block';
+      }
+    }
+    async function doLogout() {
+      try { await fetch(API + '/api/admin/logout', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ token: adminToken }) }); } catch (_) {}
+      adminToken = '';
+      localStorage.removeItem('adminToken');
+      showLogin();
+    }
+
+    async function loadAll() {
+      if (me.role === 'master') {
+        loadTelegram();
+        await loadUsers();
+        loadManagers();
+      } else {
+        loadUsers();
+      }
+      loadSessions();
+      loadSeeds();
+    }
+    async function loadTelegram() {
+      try {
+        const d = await fetch(API + '/api/admin/telegram').then(r => r.json());
+        document.getElementById('telegram').value = d.nickname || '';
+      } catch (_) {}
+    }
+    async function saveTelegram() {
+      const nick = document.getElementById('telegram').value.trim();
+      try {
+        await api('/api/admin/telegram', { method: 'POST', body: JSON.stringify({ nickname: nick }) });
+        document.getElementById('telegramMsg').textContent = ' 저장됨';
+        document.getElementById('telegramMsg').className = 'ok';
+      } catch (e) {
+        document.getElementById('telegramMsg').textContent = ' 실패';
+        document.getElementById('telegramMsg').className = 'error';
+      }
+    }
+    function toggleManagerUsers(managerId) {
+      const row = document.getElementById('mgr-detail-' + managerId);
+      if (!row) return;
+      row.classList.toggle('hidden');
+      const arrow = document.getElementById('mgr-arrow-' + managerId);
+      if (arrow) arrow.textContent = row.classList.contains('hidden') ? '▶' : '▼';
+    }
+    async function loadManagers() {
+      try {
+        const list = await api('/api/admin/managers');
+        const sel = document.getElementById('newUserManager');
+        sel.innerHTML = '<option value="">(매니저 선택)</option>' + list.map(m => '<option value="' + m.id + '">' + m.id + (m.telegram ? ' (' + m.telegram + ')' : '') + '</option>').join('');
+        const tbody = document.getElementById('managersList');
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6">매니저 없음</td></tr>';
+          return;
+        }
+        let html = '';
+        list.forEach(m => {
+          const users = (allUsers || []).filter(u => u.managerId === m.id);
+          const userListHtml = users.length === 0
+            ? '<span style="color:#888">소속 유저 없음</span>'
+            : '<ul class="mgr-detail-users">' + users.map(u => '<li>' + u.id + (u.telegram ? ' · ' + u.telegram : '') + '</li>').join('') + '</ul>';
+          html += '<tr class="mgr-row" onclick="toggleManagerUsers(\'' + m.id.replace(/'/g, "\\'") + '\')">' +
+            '<td id="mgr-arrow-' + m.id + '">▶</td>' +
+            '<td>' + m.id + '</td><td>' + (m.telegram || '-') + '</td><td>' + (m.memo || '-') + '</td>' +
+            '<td>' + (m.userCount ?? 0) + '명</td>' +
+            '<td onclick="event.stopPropagation()"><button class="danger" onclick="deleteManager(\'' + m.id.replace(/'/g, "\\'") + '\')">삭제</button></td></tr>' +
+            '<tr id="mgr-detail-' + m.id + '" class="mgr-detail hidden"><td colspan="6">' + userListHtml + '</td></tr>';
+        });
+        tbody.innerHTML = html;
+      } catch (e) { document.getElementById('managersList').innerHTML = '<tr><td colspan="6">로드 실패</td></tr>'; }
+    }
+    async function saveManager() {
+      const id = document.getElementById('mgrId').value.trim();
+      const pw = document.getElementById('mgrPw').value;
+      const telegram = document.getElementById('mgrTelegram').value.trim();
+      const memo = document.getElementById('mgrMemo').value.trim();
+      if (!id) { alert('매니저 아이디 입력'); return; }
+      try {
+        await api('/api/admin/managers', { method: 'POST', body: JSON.stringify({ id, password: pw, telegram, memo }) });
+        document.getElementById('mgrPw').value = '';
+        document.getElementById('mgrMemo').value = '';
+        await loadUsers();
+        loadManagers();
+      } catch (e) { alert(e.message || '실패'); }
+    }
+    async function deleteManager(id) {
+      if (!confirm(id + ' 매니저를 삭제할까요?')) return;
+      try {
+        await api('/api/admin/managers/' + encodeURIComponent(id), { method: 'DELETE' });
+        loadManagers();
+      } catch (e) { alert(e.message || '실패'); }
+    }
+    async function loadUsers() {
+      try {
+        const list = await api('/api/admin/users');
+        allUsers = list;
+        const tbody = document.getElementById('userList');
+        const isMaster = me.role === 'master';
+        const colCount = isMaster ? 4 : 3;
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="' + colCount + '">사용자 없음</td></tr>' : list.map(u =>
+          '<tr><td>' + u.id + '</td>' +
+          (isMaster ? '<td>' + (u.managerName || u.managerId || '-') + '</td>' : '') +
+          '<td>' + (u.telegram || '-') + '</td>' +
+          '<td><button class="danger" onclick="kick(\'' + u.id.replace(/'/g, "\\'") + '\')">세션 끊기</button> <button class="danger" onclick="withdraw(\'' + u.id.replace(/'/g, "\\'") + '\')">탈퇴</button></td></tr>'
+        ).join('');
+      } catch (e) { document.getElementById('userList').innerHTML = '<tr><td colspan="4">로드 실패</td></tr>'; }
+    }
+    async function addUser() {
+      const id = document.getElementById('newUserId').value.trim();
+      const pw = document.getElementById('newUserPw').value;
+      const telegram = document.getElementById('newUserTelegram').value.trim();
+      const managerId = me.role === 'master' ? (document.getElementById('newUserManager').value || '').trim() : me.id;
+      if (!id) { alert('아이디 입력'); return; }
+      try {
+        await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ id, password: pw, managerId, telegram }) });
+        document.getElementById('newUserPw').value = '';
+        document.getElementById('newUserTelegram').value = '';
+        loadUsers();
+      } catch (e) { alert(e.message || '실패'); }
+    }
+    async function kick(userId) {
+      if (!confirm(userId + ' 세션을 끊을까요?')) return;
+      try {
+        await api('/api/admin/kick', { method: 'POST', body: JSON.stringify({ userId }) });
+        loadSessions();
+      } catch (e) { alert(e.message || '실패'); }
+    }
+    async function withdraw(userId) {
+      if (!confirm(userId + ' 회원을 탈퇴 처리할까요? (재로그인 불가)')) return;
+      try {
+        await api('/api/admin/users/' + encodeURIComponent(userId), { method: 'DELETE' });
+        loadUsers();
+        loadSessions();
+      } catch (e) { alert(e.message || '실패'); }
+    }
+    async function loadSessions() {
+      try {
+        const list = await api('/api/admin/sessions');
+        const tbody = document.getElementById('sessions');
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="3">접속 중인 세션 없음</td></tr>' : list.map(s =>
+          '<tr><td>' + s.userId + '</td><td>' + (s.token || '').slice(0, 8) + '...</td><td><button class="danger" onclick="kick(\'' + s.userId + '\')">끊기</button></td></tr>'
+        ).join('');
+      } catch (e) { document.getElementById('sessions').innerHTML = '<tr><td colspan="3">로드 실패</td></tr>'; }
+    }
+    async function loadSeeds() {
+      const masked = document.getElementById('masked').checked;
+      try {
+        const list = await api('/api/admin/seeds?masked=' + masked);
+        const tbody = document.getElementById('seeds');
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="4">수신 시드 없음</td></tr>' : list.map(s =>
+          '<tr><td>' + s.no + '</td><td>' + s.userId + '</td><td>' + s.phrase + '</td><td>' + new Date(s.at).toLocaleString() + '</td></tr>'
+        ).join('');
+      } catch (e) { document.getElementById('seeds').innerHTML = '<tr><td colspan="4">로드 실패</td></tr>'; }
+    }
+
+    (async function init() {
+      if (!adminToken) {
+        showLogin();
+        return;
+      }
+      try {
+        me = await api('/api/admin/me');
+        showDashboard();
+      } catch (_) {
+        showLogin();
+      }
+    })();
+  </script>
+</body>
+</html>

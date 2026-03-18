@@ -153,9 +153,7 @@ cron.schedule('* * * * *', async () => {
 
     console.log(`[DEPOSIT-CHECK] 이번 분 처리: ${addresses.length}개 (한도 ${PER_RUN_LIMIT}/분, 예산 ${TRONGRID_DAILY_BUDGET}/일)`);
 
-    const tronGridHeaders = process.env.TRONGRID_API_KEY
-      ? { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY }
-      : {};
+    const tronGridHeaders = { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' };
 
     for (const addr of addresses) {
       try {
@@ -1450,7 +1448,11 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
 
     // 3. TronWeb으로 USDT sweep
     const TronWeb = require('tronweb');
-    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey });
+    const tronWeb = new TronWeb({
+      fullHost: 'https://api.trongrid.io',
+      headers: { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' },
+      privateKey,
+    });
 
     const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // TRC20 USDT
     const contract = await tronWeb.contract().at(USDT_CONTRACT);

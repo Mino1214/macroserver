@@ -48,7 +48,7 @@ const managerDB = {
   // 전체 매니저 목록 (role='manager'만)
   async getAll() {
     const [rows] = await pool.query(
-      'SELECT id, telegram, memo FROM managers WHERE role = "manager" ORDER BY id'
+      'SELECT id, telegram, memo, tg_bot_token, tg_chat_id, created_at FROM managers WHERE role = "manager" ORDER BY id'
     );
     
     // 각 매니저의 사용자 수 계산
@@ -62,6 +62,9 @@ const managerDB = {
         id: manager.id,
         telegram: manager.telegram || '',
         memo: manager.memo || '',
+        tg_bot_token: manager.tg_bot_token || '',
+        tg_chat_id: manager.tg_chat_id || '',
+        created_at: manager.created_at || null,
         userCount: count[0].cnt,
       });
     }
@@ -71,7 +74,7 @@ const managerDB = {
   // 특정 매니저 조회
   async get(id) {
     const [rows] = await pool.query(
-      'SELECT id, telegram, memo FROM managers WHERE id = ?',
+      'SELECT id, telegram, memo, tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
       [id]
     );
     return rows.length > 0 ? rows[0] : null;

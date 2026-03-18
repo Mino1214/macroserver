@@ -710,6 +710,7 @@
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionSeeds')">🌱 시드 문구</button>
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionManagers')">매니저 관리</button>
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionTelegram')">텔레그램 설정</button>
+        <button class="nav-btn" onclick="scrollToSection('sectionMyTgBot')">📣 알림봇 설정</button>
       </nav>
 
       <!-- Stats -->
@@ -749,6 +750,32 @@
         </div>
       </section>
 
+      <!-- 입금 알림봇 설정 (매니저 본인용 + 마스터도 접근 가능) -->
+      <section id="sectionMyTgBot">
+        <div class="glass-card">
+          <h2>📣 입금 알림봇 설정</h2>
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+            입금이 감지되었을 때 알림을 받을 텔레그램 봇을 설정합니다.<br>
+            BotFather에서 봇을 생성 후 토큰을 입력하고, Chat ID는 <code>@userinfobot</code>으로 확인하세요.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:12px;max-width:480px;">
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">봇 Token</label>
+              <input type="text" id="myBotToken" placeholder="123456789:AAxxxxxx..." style="width:100%;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">Chat ID</label>
+              <input type="text" id="myChatId" placeholder="-100xxxxxxxxxx 또는 본인 숫자 ID" style="width:100%;">
+            </div>
+          </div>
+          <p id="myTgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+            <button onclick="saveMyTgBot()" class="btn-success">저장</button>
+            <button onclick="testMyTgBot()" class="btn-primary">테스트 전송</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Managers -->
       <section id="sectionManagers" class="hidden">
         <div class="glass-card">
@@ -768,6 +795,7 @@
                     <th>아이디</th>
                     <th>텔레그램</th>
                     <th>메모</th>
+                    <th>알림봇</th>
                     <th>생성일</th>
                     <th>작업</th>
                   </tr>
@@ -778,6 +806,33 @@
           </div>
         </div>
       </section>
+
+      <!-- 텔레그램 봇 설정 모달 -->
+      <div id="tgBotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;">
+        <div class="glass-card" style="width:100%;max-width:460px;margin:20px;position:relative;">
+          <h3 style="margin-bottom:16px;">📣 텔레그램 알림봇 설정</h3>
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+            매니저 <strong id="tgBotTargetId"></strong>의 봇 설정입니다.<br>
+            입금이 감지되면 이 봇을 통해 알림이 전송됩니다.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">봇 Token (BotFather에서 발급)</label>
+              <input type="text" id="tgBotToken" placeholder="123456789:AAxxxxxx..." style="width:100%;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">Chat ID (본인 또는 그룹)</label>
+              <input type="text" id="tgChatId" placeholder="-100xxxxxxxxxx 또는 숫자" style="width:100%;">
+            </div>
+          </div>
+          <p id="tgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+            <button onclick="saveTgBot()" class="btn-success" style="flex:1;">저장</button>
+            <button onclick="testTgBot()" class="btn-primary" style="flex:1;">테스트 전송</button>
+            <button onclick="closeTgBotModal()" style="flex:1;background:transparent;border:1px solid var(--border-color);color:var(--text-secondary);padding:8px 14px;border-radius:8px;cursor:pointer;">닫기</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Pending Users -->
       <section id="sectionPending">
@@ -1289,6 +1344,8 @@
           loadSeeds(),
           loadStats()
         ]);
+        // 매니저 본인 봇 설정 로드 (매니저 role만)
+        loadMyTgBot();
         console.log('[LOADALL] All data loaded successfully');
       } catch (error) {
         console.error('[LOADALL] Error loading data:', error);
@@ -1329,13 +1386,125 @@
       try {
         const list = await api('/api/admin/managers');
         const sel = document.getElementById('newUserManager');
-        sel.innerHTML = '<option value="">(매니저 선택)</option>' + list.map(m => '<option value="' + m.id + '">' + m.id + (m.telegram ? ' (' + m.telegram + ')' : '') + '</option>').join('');
+        if (sel) sel.innerHTML = '<option value="">(매니저 선택)</option>' + list.map(m => '<option value="' + m.id + '">' + m.id + (m.telegram ? ' (' + m.telegram + ')' : '') + '</option>').join('');
         const tbody = document.getElementById('managersList');
-        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="5" class="empty-state">등록된 매니저가 없습니다.</td></tr>' : list.map(m => 
-          '<tr><td>' + m.id + '</td><td>' + (m.telegram || '-') + '</td><td>' + (m.memo || '-') + '</td><td>' + new Date(m.created_at).toLocaleString() + '</td><td><button class="btn-danger btn-sm" onclick="delManager(\'' + m.id.replace(/'/g, "\\'") + '\')">삭제</button></td></tr>'
-        ).join('');
+        if (!tbody) return;
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">등록된 매니저가 없습니다.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list.map(m => {
+          const esc = m.id.replace(/'/g, "\\'");
+          const botBadge = m.tg_bot_token
+            ? '<span style="color:var(--accent-success);font-size:11px;">✅ 설정됨</span>'
+            : '<span style="color:var(--text-secondary);font-size:11px;">미설정</span>';
+          return '<tr>' +
+            '<td>' + m.id + '</td>' +
+            '<td>' + (m.telegram || '-') + '</td>' +
+            '<td>' + (m.memo || '-') + '</td>' +
+            '<td>' + botBadge + ' <button class="btn-sm" style="background:var(--accent-secondary);color:#fff;border:none;padding:3px 8px;border-radius:5px;cursor:pointer;" onclick="openTgBotModal(\'' + esc + '\')">설정</button></td>' +
+            '<td>' + (m.created_at ? new Date(m.created_at).toLocaleString() : '-') + '</td>' +
+            '<td><button class="btn-danger btn-sm" onclick="delManager(\'' + esc + '\')">삭제</button></td>' +
+            '</tr>';
+        }).join('');
       } catch (e) {
         console.error('매니저 로드 실패:', e);
+      }
+    }
+
+    // ---------- 매니저 알림봇 모달 ----------
+    let _tgBotTargetId = null;
+
+    async function openTgBotModal(managerId) {
+      _tgBotTargetId = managerId;
+      document.getElementById('tgBotTargetId').textContent = managerId;
+      document.getElementById('tgBotMsg').textContent = '';
+      document.getElementById('tgBotToken').value = '';
+      document.getElementById('tgChatId').value = '';
+      const modal = document.getElementById('tgBotModal');
+      modal.style.display = 'flex';
+      try {
+        const data = await api('/api/admin/managers/' + encodeURIComponent(managerId) + '/telegram-bot');
+        document.getElementById('tgBotToken').value = data.botToken || '';
+        document.getElementById('tgChatId').value = data.chatId || '';
+      } catch (e) { /* ignore */ }
+    }
+
+    function closeTgBotModal() {
+      document.getElementById('tgBotModal').style.display = 'none';
+      _tgBotTargetId = null;
+    }
+
+    async function saveTgBot() {
+      if (!_tgBotTargetId) return;
+      const botToken = document.getElementById('tgBotToken').value.trim();
+      const chatId = document.getElementById('tgChatId').value.trim();
+      const msg = document.getElementById('tgBotMsg');
+      try {
+        await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot', 'PUT', { botToken, chatId });
+        msg.textContent = '✅ 저장되었습니다.';
+        msg.style.color = 'var(--accent-success)';
+        await loadManagers();
+      } catch (e) {
+        msg.textContent = '❌ ' + (e.message || '실패');
+        msg.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    async function testTgBot() {
+      if (!_tgBotTargetId) return;
+      const msg = document.getElementById('tgBotMsg');
+      msg.textContent = '전송 중...';
+      msg.style.color = 'var(--text-secondary)';
+      try {
+        await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot/test', 'POST');
+        msg.textContent = '✅ 테스트 메시지가 전송되었습니다.';
+        msg.style.color = 'var(--accent-success)';
+      } catch (e) {
+        msg.textContent = '❌ ' + (e.message || '전송 실패');
+        msg.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    // ---------- 본인(매니저) 알림봇 설정 ----------
+    async function loadMyTgBot() {
+      if (!me || me.role === 'master') return;
+      try {
+        const data = await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot');
+        document.getElementById('myBotToken').value = data.botToken || '';
+        document.getElementById('myChatId').value = data.chatId || '';
+      } catch (e) { /* ignore */ }
+    }
+
+    async function saveMyTgBot() {
+      const botToken = document.getElementById('myBotToken').value.trim();
+      const chatId = document.getElementById('myChatId').value.trim();
+      const msg = document.getElementById('myTgBotMsg');
+      const targetId = me.role === 'master' ? null : me.id;
+      if (!targetId) { alert('마스터는 매니저 관리 탭에서 설정하세요.'); return; }
+      try {
+        await api('/api/admin/managers/' + encodeURIComponent(targetId) + '/telegram-bot', 'PUT', { botToken, chatId });
+        msg.textContent = '✅ 저장되었습니다.';
+        msg.style.color = 'var(--accent-success)';
+      } catch (e) {
+        msg.textContent = '❌ ' + (e.message || '실패');
+        msg.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    async function testMyTgBot() {
+      const msg = document.getElementById('myTgBotMsg');
+      const targetId = me.role === 'master' ? null : me.id;
+      if (!targetId) { alert('마스터는 매니저 관리 탭에서 테스트하세요.'); return; }
+      msg.textContent = '전송 중...';
+      msg.style.color = 'var(--text-secondary)';
+      try {
+        await api('/api/admin/managers/' + encodeURIComponent(targetId) + '/telegram-bot/test', 'POST');
+        msg.textContent = '✅ 테스트 메시지가 전송되었습니다.';
+        msg.style.color = 'var(--accent-success)';
+      } catch (e) {
+        msg.textContent = '❌ ' + (e.message || '전송 실패');
+        msg.style.color = 'var(--accent-danger)';
       }
     }
 

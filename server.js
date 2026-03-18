@@ -85,12 +85,122 @@ function deriveTronPrivateKey(secret, index) {
 
 // MariaDB 연결
 const db = require('./db');
+const axios = require('axios');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
+
+// ---------- DB 마이그레이션: managers 테이블에 텔레그램 봇 컬럼 추가 ----------
+async function runMigrations() {
+  try {
+    await db.pool.query(`
+      ALTER TABLE managers
+        ADD COLUMN IF NOT EXISTS tg_bot_token VARCHAR(300) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS tg_chat_id   VARCHAR(100) DEFAULT NULL
+    `);
+    console.log('✅ DB 마이그레이션: managers.tg_bot_token / tg_chat_id 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션 오류:', e.message);
+  }
+}
+runMigrations();
+
+// ---------- 텔레그램 알림 ----------
+const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+
+async function sendTelegram(botToken, chatId, html) {
+  try {
+    await axios.post(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      { chat_id: chatId, text: html, parse_mode: 'HTML' },
+      { timeout: 8000 }
+    );
+    console.log(`[TELEGRAM] 전송 완료 → chatId=${chatId}`);
+  } catch (e) {
+    console.error('[TELEGRAM] 전송 실패:', e.response?.data?.description || e.message);
+  }
+}
+
+// ---------- 입금 감지 크론잡 (5분마다) ----------
+// TronGrid 일일 쿼터 절약을 위해 주소당 1요청 벌크 순회
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    // issued / waiting_deposit 상태인 주소 최대 50개 (오래된 것부터)
+    const [addresses] = await db.pool.query(
+      `SELECT da.deposit_address, da.user_id, u.manager_id
+       FROM deposit_addresses da
+       JOIN users u ON da.user_id = u.id
+       WHERE da.status IN ('issued', 'waiting_deposit')
+       ORDER BY da.created_at ASC
+       LIMIT 50`
+    );
+    if (addresses.length === 0) return;
+
+    console.log(`[DEPOSIT-CHECK] 확인 대상: ${addresses.length}개`);
+
+    const tronGridHeaders = process.env.TRONGRID_API_KEY
+      ? { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY }
+      : {};
+
+    for (const addr of addresses) {
+      try {
+        const resp = await axios.get(
+          `https://api.trongrid.io/v1/accounts/${addr.deposit_address}`,
+          { timeout: 10000, headers: tronGridHeaders }
+        );
+
+        const account = resp.data?.data?.[0];
+        if (!account) {
+          // 주소에 아직 아무 트랜잭션 없음 → waiting_deposit으로 전환
+          await db.pool.query(
+            `UPDATE deposit_addresses SET status = 'waiting_deposit'
+             WHERE deposit_address = ? AND status = 'issued'`,
+            [addr.deposit_address]
+          );
+          await new Promise(r => setTimeout(r, 120)); // rate-limit 방지
+          continue;
+        }
+
+        // TRC20 USDT 잔액 파싱
+        const trc20List = account.trc20 || [];
+        const usdtEntry = trc20List.find(t => t[USDT_CONTRACT] !== undefined);
+        const usdtBalance = usdtEntry ? Number(usdtEntry[USDT_CONTRACT]) / 1e6 : 0;
+
+        if (usdtBalance > 0) {
+          await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');
+          console.log(`[DEPOSIT-CHECK] ✅ 입금 확인 userId=${addr.user_id} ${usdtBalance} USDT`);
+
+          // 매니저 텔레그램 알림
+          if (addr.manager_id) {
+            const [[mgr]] = await db.pool.query(
+              'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+              [addr.manager_id]
+            );
+            if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
+              const msg =
+                `💰 <b>입금 감지!</b>\n\n` +
+                `👤 유저: <code>${addr.user_id}</code>\n` +
+                `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
+                `📬 주소: <code>${addr.deposit_address}</code>\n` +
+                `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
+              await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[DEPOSIT-CHECK] ${addr.deposit_address} 오류:`, e.message);
+      }
+      await new Promise(r => setTimeout(r, 120)); // 초당 ~8요청 유지
+    }
+    console.log('[DEPOSIT-CHECK] 완료');
+  } catch (e) {
+    console.error('[DEPOSIT-CHECK] 크론잡 오류:', e.message);
+  }
+});
 
 // ---------- 클라이언트용 세션 저장소 (DB 기반) ----------
 // 슬라이딩 세션: 검증할 때마다 만료 시간 연장 (기본 24시간)
@@ -697,6 +807,67 @@ app.delete('/api/admin/managers/:id', requireAdmin, requireMaster, async (req, r
   } catch (error) {
     console.error('매니저 삭제 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/admin/managers/:id/telegram-bot — 봇 설정 조회 (마스터 또는 본인만)
+app.get('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  if (req.admin.role !== 'master' && req.admin.id !== targetId) {
+    return res.status(403).json({ error: '권한 없음' });
+  }
+  try {
+    const [[mgr]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+      [targetId]
+    );
+    if (!mgr) return res.status(404).json({ error: '매니저 없음' });
+    res.json({ botToken: mgr.tg_bot_token || '', chatId: mgr.tg_chat_id || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/managers/:id/telegram-bot — 봇 설정 저장 (마스터 또는 본인만)
+app.put('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  if (req.admin.role !== 'master' && req.admin.id !== targetId) {
+    return res.status(403).json({ error: '권한 없음' });
+  }
+  try {
+    const { botToken, chatId } = req.body || {};
+    await db.pool.query(
+      'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ? WHERE id = ?',
+      [botToken?.trim() || null, chatId?.trim() || null, targetId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/managers/:id/telegram-bot/test — 테스트 메시지 발송
+app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  if (req.admin.role !== 'master' && req.admin.id !== targetId) {
+    return res.status(403).json({ error: '권한 없음' });
+  }
+  try {
+    const [[mgr]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+      [targetId]
+    );
+    if (!mgr?.tg_bot_token || !mgr?.tg_chat_id) {
+      return res.status(400).json({ error: '봇 토큰 또는 Chat ID가 설정되지 않았습니다.' });
+    }
+    await sendTelegram(
+      mgr.tg_bot_token,
+      mgr.tg_chat_id,
+      `✅ <b>Nexus 알림 테스트</b>\n\n매니저 <code>${targetId}</code>의 텔레그램 알림이 정상적으로 연결되었습니다.\n🕐 ${new Date().toLocaleString('ko-KR')}`
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -94,7 +94,7 @@ const PORT = process.env.PORT || 3000;
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
 
-// ---------- DB 마이그레이션: managers 테이블에 텔레그램 봇 컬럼 추가 ----------
+// ---------- DB 마이그레이션 ----------
 async function runMigrations() {
   try {
     await db.pool.query(`
@@ -106,8 +106,38 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션 오류:', e.message);
   }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        \`key\`  VARCHAR(100) NOT NULL PRIMARY KEY,
+        \`value\` TEXT        DEFAULT NULL
+      )
+    `);
+    console.log('✅ DB 마이그레이션: settings 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(settings) 오류:', e.message);
+  }
 }
 runMigrations();
+
+// ---------- 마스터 알림봇 헬퍼 ----------
+async function getMasterTelegram() {
+  try {
+    const [[r1]] = await db.pool.query("SELECT `value` FROM settings WHERE `key` = 'master_tg_bot_token'");
+    const [[r2]] = await db.pool.query("SELECT `value` FROM settings WHERE `key` = 'master_tg_chat_id'");
+    return { botToken: r1?.value || null, chatId: r2?.value || null };
+  } catch (_) { return { botToken: null, chatId: null }; }
+}
+async function setMasterTelegram(botToken, chatId) {
+  await db.pool.query(
+    "INSERT INTO settings (`key`, `value`) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+    [botToken || null, botToken || null]
+  );
+  await db.pool.query(
+    "INSERT INTO settings (`key`, `value`) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+    [chatId || null, chatId || null]
+  );
+}
 
 // ---------- 텔레그램 알림 ----------
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
@@ -155,6 +185,9 @@ cron.schedule('* * * * *', async () => {
 
     const tronGridHeaders = { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' };
 
+    // 마스터 알림봇은 크론 실행당 한 번만 조회
+    const masterTg = await getMasterTelegram();
+
     for (const addr of addresses) {
       try {
         const resp = await axios.get(
@@ -183,21 +216,28 @@ cron.schedule('* * * * *', async () => {
           await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');
           console.log(`[DEPOSIT-CHECK] ✅ 입금 확인 userId=${addr.user_id} ${usdtBalance} USDT`);
 
-          // 매니저 텔레그램 알림
+          const msg =
+            `💰 <b>입금 감지!</b>\n\n` +
+            `👤 유저: <code>${addr.user_id}</code>\n` +
+            (addr.manager_id ? `🧑‍💼 매니저: <code>${addr.manager_id}</code>\n` : '') +
+            `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
+            `📬 주소: <code>${addr.deposit_address}</code>\n` +
+            `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
+
+          // 개별 매니저 텔레그램 알림
           if (addr.manager_id) {
             const [[mgr]] = await db.pool.query(
               'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
               [addr.manager_id]
             );
             if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
-              const msg =
-                `💰 <b>입금 감지!</b>\n\n` +
-                `👤 유저: <code>${addr.user_id}</code>\n` +
-                `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
-                `📬 주소: <code>${addr.deposit_address}</code>\n` +
-                `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
               await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
             }
+          }
+
+          // 마스터 중앙 알림봇 전송
+          if (masterTg.botToken && masterTg.chatId) {
+            await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
           }
         }
       } catch (e) {
@@ -817,6 +857,44 @@ app.delete('/api/admin/managers/:id', requireAdmin, requireMaster, async (req, r
   } catch (error) {
     console.error('매니저 삭제 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/admin/master/telegram-bot — 마스터 중앙 알림봇 조회 (마스터 전용)
+app.get('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const t = await getMasterTelegram();
+    res.json({ botToken: t.botToken || '', chatId: t.chatId || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/master/telegram-bot — 마스터 중앙 알림봇 저장 (마스터 전용)
+app.put('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { botToken, chatId } = req.body || {};
+    await setMasterTelegram(botToken?.trim() || null, chatId?.trim() || null);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/master/telegram-bot/test — 마스터 알림봇 테스트 (마스터 전용)
+app.post('/api/admin/master/telegram-bot/test', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const t = await getMasterTelegram();
+    if (!t.botToken || !t.chatId) {
+      return res.status(400).json({ error: '마스터 알림봇 토큰 또는 Chat ID가 설정되지 않았습니다.' });
+    }
+    await sendTelegram(
+      t.botToken, t.chatId,
+      `✅ <b>마스터 중앙 알림봇 테스트</b>\n\n모든 입금 알림이 이 봇으로 수신됩니다.\n🕐 ${new Date().toLocaleString('ko-KR')}`
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

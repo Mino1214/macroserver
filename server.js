@@ -236,14 +236,26 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     }
     const rootAddress = activeWallet.root_wallet_address;
 
-    // 2. 루트 / 입금주소 개인키 파생
-    const rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key);
+    // 2. 루트 / 입금주소 개인키 파생 (니모닉 필수 — xpub 불가)
+    let rootPrivKey, depositPrivKey;
+    try {
+      rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key);
+    } catch (e) {
+      console.error('[AUTO-SWEEP] ❌ 루트 개인키 파생 실패:', e.message);
+      console.error('[AUTO-SWEEP] ⚠️  관리자 페이지 > 지갑에서 xpub 대신 니모닉(12-24단어)으로 재등록 필요!');
+      return;
+    }
     const [[addrRow]] = await db.pool.query(
       'SELECT derivation_index FROM deposit_addresses WHERE deposit_address = ?',
       [depositAddress]
     );
     if (!addrRow) { console.warn('[AUTO-SWEEP] deposit_addresses 행 없음'); return; }
-    const depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
+    try {
+      depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
+    } catch (e) {
+      console.error('[AUTO-SWEEP] ❌ 입금주소 개인키 파생 실패:', e.message);
+      return;
+    }
 
     const { TronWeb } = require('tronweb');
     // ⚠️ TronWeb에는 API 키를 넣지 않음

@@ -199,6 +199,11 @@ const DEFAULT_PACKAGES = [
 ];
 
 async function calcDaysFromUsdt(usdtAmount) {
+  // ⚠️ 테스트 모드: 금액 무관 30일 고정
+  console.log(`[calcDays] 테스트 모드 — ${usdtAmount} USDT → 30일 고정`);
+  return 30;
+
+  /* 실제 운영 로직 (테스트 끝나면 위 두 줄 삭제 후 주석 해제)
   try {
     const raw = await db.settingDB.get('subscription_packages');
     const monthlyRaw = await db.settingDB.get('monthly_price_usdt');
@@ -215,6 +220,7 @@ async function calcDaysFromUsdt(usdtAmount) {
     // 비례 계산
     return Math.max(1, Math.floor((usdtAmount / monthlyPrice) * 30));
   } catch { return Math.max(1, Math.floor((usdtAmount / 39) * 30)); }
+  */
 }
 
 const TRX_FOR_ENERGY = 35; // TRX 선송금량 (에너지 비용 충당)
@@ -308,12 +314,26 @@ const CRON_MINUTES_PER_DAY = 1440;
 const PER_RUN_LIMIT = Math.floor(TRONGRID_DAILY_BUDGET / CRON_MINUTES_PER_DAY); // 62
 const REQUEST_DELAY_MS = 150; // 초당 ~6건, TronGrid 초당 한도(15건) 이내
 
+const ADDRESS_EXPIRE_HOURS = 1; // 입금 없는 주소 만료 시간
+
 let _depositCheckRunning = false;
 
 cron.schedule('* * * * *', async () => {
   if (_depositCheckRunning) return; // 이전 실행이 아직 끝나지 않은 경우 skip
   _depositCheckRunning = true;
   try {
+    // ── 1시간 초과 미결제 주소 만료 처리 ──
+    const [expireResult] = await db.pool.query(
+      `UPDATE deposit_addresses
+          SET status = 'expired'
+        WHERE status IN ('issued', 'waiting_deposit')
+          AND created_at < DATE_SUB(NOW(), INTERVAL ? HOUR)`,
+      [ADDRESS_EXPIRE_HOURS]
+    );
+    if (expireResult.affectedRows > 0) {
+      console.log(`[DEPOSIT-CHECK] ⏰ 만료 처리: ${expireResult.affectedRows}개 주소 → expired`);
+    }
+
     const [addresses] = await db.pool.query(
       `SELECT da.deposit_address, da.user_id, u.manager_id
        FROM deposit_addresses da
@@ -1537,7 +1557,10 @@ app.post('/api/payment/request-address', async (req, res) => {
       : '없음 (신규 발급)'
     );
 
-    if (existing) {
+    // expired 주소는 재사용하지 않고 새로 발급
+    const isExpiredAddress = existing?.status === 'expired';
+
+    if (existing && !isExpiredAddress) {
       // 기존 레코드 status → issued 리셋 (업서트)
       if (existing.status !== 'issued' && existing.status !== 'waiting_deposit') {
         await db.depositAddressDB.updateStatus(existing.deposit_address, 'issued');
@@ -1552,9 +1575,14 @@ app.post('/api/payment/request-address', async (req, res) => {
       });
     }
 
-    // 구버전 레코드 존재 여부 (invalidated 경고용 — 신규 발급 진행)
-    const oldRecord = await db.depositAddressDB.findOldVersion(resolvedUserId, activeWallet.wallet_version);
-    const wasInvalidated = !!oldRecord;
+    // 구버전 레코드 또는 만료 레코드 존재 여부 (invalidated 경고용 — 신규 발급 진행)
+    const oldRecord = !isExpiredAddress
+      ? await db.depositAddressDB.findOldVersion(resolvedUserId, activeWallet.wallet_version)
+      : null;
+    const wasInvalidated = !!oldRecord || isExpiredAddress;
+    if (isExpiredAddress) {
+      console.log('[REQUEST-ADDR] 기존 주소 만료됨 → 새 주소 발급 ▶', existing.deposit_address);
+    }
     if (wasInvalidated) {
       console.log('[REQUEST-ADDR] 구버전 레코드 있음 → 새 버전으로 신규 발급 ▶ oldVersion:', oldRecord.wallet_version);
     }

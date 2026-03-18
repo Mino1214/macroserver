@@ -1083,37 +1083,60 @@ app.post('/api/payment/request-address', async (req, res) => {
     }
 
     // 신규 주소 발급: 니모닉 기반 HD 파생 또는 root 주소 직접 사용
-    const [maxRows] = await db.pool.query(
-      'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
-      [activeWallet.wallet_version]
-    );
-    const newIndex = maxRows[0].maxIdx + 1;
-    console.log('[REQUEST-ADDR] 신규 index ▶', newIndex);
-
-    let newAddress;
+    // 동시 요청 시 index 충돌을 방지하기 위해 재시도 루프 사용
     const secret = activeWallet.xpub_key;
-    if (secret) {
-      try {
-        newAddress = deriveTronAddress(secret, newIndex);
-        console.log('[REQUEST-ADDR] HD 파생 주소 ▶', newAddress);
-      } catch (e) {
-        console.error('[REQUEST-ADDR] HD 주소 파생 오류 ▶', e.message);
-        return res.status(500).json({ error: '주소 파생 오류. 관리자에게 문의하세요.' });
+    let newAddress;
+    let newIndex;
+    let insertSuccess = false;
+    const MAX_RETRY = 5;
+
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      const [maxRows] = await db.pool.query(
+        'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+        [activeWallet.wallet_version]
+      );
+      newIndex = maxRows[0].maxIdx + 1 + attempt;
+      console.log(`[REQUEST-ADDR] 신규 index ▶ ${newIndex} (attempt ${attempt})`);
+
+      if (secret) {
+        try {
+          newAddress = deriveTronAddress(secret, newIndex);
+          console.log('[REQUEST-ADDR] HD 파생 주소 ▶', newAddress);
+        } catch (e) {
+          console.error('[REQUEST-ADDR] HD 주소 파생 오류 ▶', e.message);
+          return res.status(500).json({ error: '주소 파생 오류. 관리자에게 문의하세요.' });
+        }
+      } else {
+        newAddress = activeWallet.root_wallet_address;
+        console.log('[REQUEST-ADDR] 니모닉 없음 → root 주소 사용 ▶', newAddress);
       }
-    } else {
-      newAddress = activeWallet.root_wallet_address;
-      console.log('[REQUEST-ADDR] 니모닉 없음 → root 주소 사용 ▶', newAddress);
+
+      try {
+        await db.depositAddressDB.create({
+          userId: resolvedUserId,
+          orderId: orderId || null,
+          network: network || 'TRON',
+          token: tokenType || 'USDT',
+          depositAddress: newAddress,
+          walletVersion: activeWallet.wallet_version,
+          derivationIndex: newIndex,
+        });
+        console.log('[REQUEST-ADDR] DB 저장 완료 ▶ userId:', resolvedUserId, 'index:', newIndex);
+        insertSuccess = true;
+        break;
+      } catch (insertErr) {
+        if (insertErr.code === 'ER_DUP_ENTRY') {
+          console.warn(`[REQUEST-ADDR] 주소 충돌 (index ${newIndex}), 재시도 중...`);
+          continue;
+        }
+        throw insertErr;
+      }
     }
 
-    await db.depositAddressDB.create({
-      userId: resolvedUserId,
-      orderId: orderId || null,
-      network: network || 'TRON',
-      token: tokenType || 'USDT',
-      depositAddress: newAddress,
-      walletVersion: activeWallet.wallet_version,
-    });
-    console.log('[REQUEST-ADDR] DB 저장 완료 ▶ userId:', resolvedUserId);
+    if (!insertSuccess) {
+      console.error('[REQUEST-ADDR] 최대 재시도 초과 ▶ userId:', resolvedUserId);
+      return res.status(500).json({ error: '주소 발급 실패 (충돌). 잠시 후 다시 시도해주세요.' });
+    }
 
     res.json({
       address: newAddress,

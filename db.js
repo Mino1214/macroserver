@@ -422,22 +422,15 @@ const depositAddressDB = {
     return rows.length > 0 ? rows[0] : null;
   },
 
-  // 신규 주소 발급 (derivation_index는 wallet_version 내에서 자동 증가)
-  async create({ userId, orderId, network, token, depositAddress, walletVersion }) {
-    // 해당 wallet_version 내 최대 index 계산
-    const [maxRows] = await pool.query(
-      'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
-      [walletVersion]
-    );
-    const newIndex = maxRows[0].maxIdx + 1;
-
+  // 신규 주소 발급 (derivationIndex는 server.js에서 계산된 값을 그대로 사용)
+  async create({ userId, orderId, network, token, depositAddress, walletVersion, derivationIndex }) {
     await pool.query(
       `INSERT INTO deposit_addresses
         (user_id, order_id, network, token, deposit_address, derivation_index, wallet_version, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')`,
-      [userId, orderId || null, network || 'TRON', token || 'USDT', depositAddress, newIndex, walletVersion]
+      [userId, orderId || null, network || 'TRON', token || 'USDT', depositAddress, derivationIndex, walletVersion]
     );
-    return newIndex;
+    return derivationIndex;
   },
 
   // 주소 상태 업데이트

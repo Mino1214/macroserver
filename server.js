@@ -29,11 +29,58 @@ function ethAddressToTron(ethAddress) {
   return base58Encode(Buffer.concat([raw, h2.slice(0, 4)]));
 }
 
-// xpub 키로 index번째 자식 TRON 주소 파생
-function deriveTronAddress(xpub, index) {
-  const node = HDNodeWallet.fromExtendedKey(xpub);
-  const child = node.deriveChild(index);
-  return ethAddressToTron(child.address);
+// ---------- 니모닉/xpub 암호화 저장 ----------
+// .env에 WALLET_SECRET_KEY=<64자리 hex> 설정 권장
+// 미설정 시 서버 재시작마다 키가 바뀌어 기존 니모닉 복호화 불가 → 반드시 .env에 고정값 설정
+const _walletSecretKey = (() => {
+  const envKey = process.env.WALLET_SECRET_KEY;
+  if (envKey && envKey.length === 64) return Buffer.from(envKey, 'hex');
+  console.warn('⚠️  WALLET_SECRET_KEY 미설정. 임시 키 사용 — .env에 64자리 hex 값을 설정하세요!');
+  // 임시: 서버 시작 시 고정 fallback (운영에서는 반드시 .env 설정)
+  return crypto.createHash('sha256').update('mynolab-wallet-key-fallback').digest();
+})();
+
+function encryptSecret(plaintext) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', _walletSecretKey, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc:${iv.toString('hex')}:${enc.toString('hex')}:${tag.toString('hex')}`;
+}
+
+function decryptSecret(stored) {
+  if (!stored || !stored.startsWith('enc:')) return stored; // plain fallback
+  const parts = stored.split(':');
+  if (parts.length !== 4) return stored;
+  const [, ivHex, encHex, tagHex] = parts;
+  const decipher = crypto.createDecipheriv('aes-256-gcm', _walletSecretKey, Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+  const dec = Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]);
+  return dec.toString('utf8');
+}
+
+// secret = 니모닉(12/24단어) 또는 xpub 키
+// 니모닉: m/44'/195'/0'/0/index 경로로 TRON 주소 파생
+// xpub: 자식 인덱스로 파생 (sweep 불가)
+function deriveTronAddress(secret, index) {
+  const plain = decryptSecret(secret);
+  if (!plain) throw new Error('니모닉/xpub 키가 없습니다.');
+  if (plain.startsWith('xpub') || plain.startsWith('xprv')) {
+    const node = HDNodeWallet.fromExtendedKey(plain);
+    return ethAddressToTron(node.deriveChild(index).address);
+  }
+  // 니모닉 → TRON 경로 m/44'/195'/0'/0/index
+  const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/${index}`);
+  return ethAddressToTron(wallet.address);
+}
+
+// 니모닉에서 개인키 파생 (sweep용)
+function deriveTronPrivateKey(secret, index) {
+  const plain = decryptSecret(secret);
+  if (!plain) throw new Error('니모닉이 없습니다.');
+  if (plain.startsWith('xpub')) throw new Error('xpub으로는 개인키 파생 불가 (sweep 불가). 니모닉을 입력하세요.');
+  const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/${index}`);
+  return wallet.privateKey.replace('0x', '');
 }
 
 // MariaDB 연결
@@ -1033,16 +1080,18 @@ app.post('/api/payment/request-address', async (req, res) => {
     const newIndex = maxRows[0].maxIdx + 1;
 
     let newAddress;
-    if (activeWallet.xpub_key) {
-      // xpub 있을 때: HD wallet 파생으로 사용자별 고유 TRON 주소 생성
+    const secret = activeWallet.xpub_key; // xpub_key 컬럼에 암호화된 니모닉 or xpub 저장
+    if (secret) {
+      // 니모닉 or xpub 있을 때: HD wallet 파생으로 사용자별 고유 TRON 주소 생성
+      // f(니모닉, index) = 항상 동일한 TRON 주소 → private key 저장 불필요
       try {
-        newAddress = deriveTronAddress(activeWallet.xpub_key, newIndex);
+        newAddress = deriveTronAddress(secret, newIndex);
       } catch (e) {
         console.error('HD 주소 파생 오류:', e);
-        return res.status(500).json({ error: 'xpub 키가 올바르지 않습니다. 관리자에게 문의하세요.' });
+        return res.status(500).json({ error: '주소 파생 오류. 관리자에게 문의하세요.' });
       }
     } else {
-      // xpub 없을 때: root 주소를 그대로 반환 (모든 사용자 동일 주소)
+      // 니모닉 미등록: root 주소를 그대로 반환 (모든 사용자 동일 주소)
       newAddress = activeWallet.root_wallet_address;
     }
 
@@ -1094,24 +1143,37 @@ app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req,
 // POST /api/admin/collection-wallet — 새 수금 지갑 등록 (기존 버전 비활성화)
 app.post('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const { address, xpubKey, label } = req.body || {};
+    const { address, mnemonic, label } = req.body || {};
     if (!address?.trim()) return res.status(400).json({ error: 'TRON 수금 지갑 주소를 입력하세요.' });
 
-    // xpub 유효성 검증 (입력된 경우)
-    if (xpubKey?.trim()) {
+    let encryptedSecret = null;
+    if (mnemonic?.trim()) {
+      const plain = mnemonic.trim();
+      // 니모닉 유효성 검증
       try {
-        HDNodeWallet.fromExtendedKey(xpubKey.trim());
+        // 12 or 24단어 체크 + 첫 번째 주소 파생 테스트
+        const wordCount = plain.split(/\s+/).length;
+        if (wordCount !== 12 && wordCount !== 24) {
+          return res.status(400).json({ error: '니모닉은 12단어 또는 24단어여야 합니다.' });
+        }
+        HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/0`); // 유효성 검증
       } catch {
-        return res.status(400).json({ error: 'xpub 키 형식이 올바르지 않습니다.' });
+        return res.status(400).json({ error: '니모닉 형식이 올바르지 않습니다.' });
       }
+      encryptedSecret = encryptSecret(plain);
     }
 
     const newVersion = await db.collectionWalletDB.activate(
       address.trim(),
-      xpubKey?.trim() || null,
+      encryptedSecret,
       label?.trim() || ''
     );
-    res.json({ ok: true, walletVersion: newVersion, message: `수금 지갑이 v${newVersion}으로 변경되었습니다.` });
+    res.json({
+      ok: true,
+      walletVersion: newVersion,
+      canDerive: !!encryptedSecret,
+      message: `수금 지갑이 v${newVersion}으로 변경되었습니다. ${encryptedSecret ? '(개인 주소 파생 활성화)' : '(공용 주소 모드)'}`,
+    });
   } catch (error) {
     console.error('수금 지갑 변경 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
@@ -1132,6 +1194,58 @@ app.get('/api/admin/deposit-addresses', requireAdmin, requireMaster, async (req,
   } catch (error) {
     console.error('입금주소 목록 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// ---------- Sweep (입금 주소 → 메인 지갑 회수) ----------
+// POST /api/admin/sweep
+// body: { depositAddress } — 특정 입금주소의 USDT를 root 지갑으로 sweep
+app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { depositAddress } = req.body || {};
+    if (!depositAddress?.trim()) return res.status(400).json({ error: 'depositAddress 필요' });
+
+    // 1. 입금주소 정보 조회
+    const [[row]] = await db.pool.query(
+      'SELECT d.*, c.xpub_key, c.root_wallet_address FROM deposit_addresses d JOIN collection_wallets c ON d.wallet_version = c.wallet_version WHERE d.deposit_address = ?',
+      [depositAddress.trim()]
+    );
+    if (!row) return res.status(404).json({ error: '발급 주소를 찾을 수 없습니다.' });
+    if (!row.xpub_key) return res.status(400).json({ error: '이 버전은 니모닉이 없어 자동 sweep 불가합니다.' });
+
+    // 2. 개인키 파생
+    let privateKey;
+    try {
+      privateKey = deriveTronPrivateKey(row.xpub_key, row.derivation_index);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+
+    // 3. TronWeb으로 USDT sweep
+    const TronWeb = require('tronweb');
+    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey });
+
+    const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // TRC20 USDT
+    const contract = await tronWeb.contract().at(USDT_CONTRACT);
+    const balanceRaw = await contract.balanceOf(depositAddress.trim()).call();
+    const balance = Number(balanceRaw) / 1e6;
+
+    if (balance < 0.1) {
+      return res.status(400).json({ error: `잔액 부족 (${balance} USDT). sweep 최소 기준: 0.1 USDT` });
+    }
+
+    // 전액 전송
+    const toAddress = row.root_wallet_address;
+    const amount = Number(balanceRaw);
+    const tx = await contract.transfer(toAddress, amount).send({ feeLimit: 30_000_000 });
+
+    // 상태 업데이트
+    await db.depositAddressDB.updateStatus(depositAddress.trim(), 'swept');
+
+    res.json({ ok: true, txId: tx, amount: balance, to: toAddress });
+  } catch (error) {
+    console.error('Sweep 오류:', error);
+    res.status(500).json({ error: `Sweep 실패: ${error.message || error}` });
   }
 });
 

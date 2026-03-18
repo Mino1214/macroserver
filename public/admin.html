@@ -910,12 +910,17 @@
               </div>
               <div>
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
-                  xpub 키 <span style="color:#10b981;">(입력 시 유저별 개인 주소 자동 파생 활성화)</span>
+                  니모닉 (12 or 24단어) <span style="color:#10b981;">— 입력 시 유저별 개인 주소 자동 파생 + sweep 활성화</span>
                 </div>
-                <input id="newWalletXpub" type="text" placeholder="xpub6... (BIP32 확장 공개키, 선택)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 12px; width: 100%;" />
-                <div style="margin-top: 5px; font-size: 11px; color: var(--text-secondary);">
-                  xpub 미입력 시: 모든 유저가 동일한 수금 주소를 공유합니다.<br>
-                  xpub 입력 시: 유저마다 HD 파생 주소가 자동 발급됩니다. (TRON BIP44 m/44'/195'/0' 기준)
+                <div style="position: relative;">
+                  <textarea id="newWalletMnemonic" rows="2" placeholder="word1 word2 word3 ... (12 or 24단어, 스페이스 구분)"
+                    style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 12px; width: 100%; resize: none; -webkit-text-security: disc; font-size: 18px; letter-spacing: 2px;"></textarea>
+                  <button onclick="toggleMnemonicVisibility()" id="mnemonicToggleBtn"
+                    style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; padding: 4px;" title="보기/숨기기">👁</button>
+                </div>
+                <div style="margin-top: 5px; padding: 7px 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; font-size: 11px; color: #f87171;">
+                  🔐 니모닉은 AES-256 암호화 후 DB에 저장됩니다. 니모닉이 유출되면 모든 자산을 잃습니다.<br>
+                  미입력 시: 모든 유저에게 동일한 root 주소 표시 (sweep 불가)
                 </div>
               </div>
               <input id="newWalletLabel" type="text" placeholder="라벨 (메모, 선택)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 13px; width: 100%;" />
@@ -980,6 +985,7 @@
                       <th style="width: 60px;">Index</th>
                       <th style="width: 110px;">상태</th>
                       <th style="width: 160px;">발급일시</th>
+                      <th style="width: 80px;">Sweep</th>
                     </tr>
                   </thead>
                   <tbody id="depositAddressList"></tbody>
@@ -1717,9 +1723,19 @@
       }
     }
 
+    let _mnemonicVisible = false;
+    function toggleMnemonicVisibility() {
+      _mnemonicVisible = !_mnemonicVisible;
+      const el = document.getElementById('newWalletMnemonic');
+      el.style.webkitTextSecurity = _mnemonicVisible ? 'none' : 'disc';
+      el.style.letterSpacing = _mnemonicVisible ? 'normal' : '2px';
+      el.style.fontSize = _mnemonicVisible ? '12px' : '18px';
+      document.getElementById('mnemonicToggleBtn').textContent = _mnemonicVisible ? '🙈' : '👁';
+    }
+
     async function changeCollectionWallet() {
       const address = document.getElementById('newWalletAddress').value.trim();
-      const xpubKey = document.getElementById('newWalletXpub').value.trim();
+      const mnemonic = document.getElementById('newWalletMnemonic').value.trim();
       const label = document.getElementById('newWalletLabel').value.trim();
       const msgEl = document.getElementById('walletChangeMsg');
 
@@ -1729,22 +1745,39 @@
         return;
       }
 
-      const xpubNote = xpubKey ? '\n✅ xpub 키 포함 → 유저별 개인 주소 파생 활성화' : '\n⚠️ xpub 미입력 → 모든 유저가 동일 주소 사용';
-      if (!confirm(`수금 지갑을 변경하시겠습니까?\n\n주소: ${address}${xpubNote}\n\n이후 신규 발급 주소만 이 지갑 기준으로 생성됩니다.`)) return;
+      const mnemonicNote = mnemonic
+        ? `\n✅ 니모닉 포함 → 유저별 개인주소 파생 + Sweep 활성화`
+        : `\n⚠️ 니모닉 미입력 → 모든 유저가 동일 주소 사용 (Sweep 불가)`;
+      if (!confirm(`수금 지갑을 변경하시겠습니까?\n\n주소: ${address}${mnemonicNote}\n\n이후 신규 발급 주소만 새 지갑 기준으로 생성됩니다.`)) return;
 
       try {
         msgEl.textContent = '처리 중...';
         msgEl.style.color = 'var(--text-secondary)';
-        const res = await api('/api/admin/collection-wallet', 'POST', { address, xpubKey: xpubKey || undefined, label });
+        const res = await api('/api/admin/collection-wallet', 'POST', {
+          address,
+          mnemonic: mnemonic || undefined,
+          label,
+        });
         msgEl.textContent = res.message || '변경 완료';
         msgEl.style.color = 'var(--accent-success)';
         document.getElementById('newWalletAddress').value = '';
-        document.getElementById('newWalletXpub').value = '';
+        document.getElementById('newWalletMnemonic').value = '';
         document.getElementById('newWalletLabel').value = '';
         await loadCollectionWallet();
       } catch (e) {
         msgEl.textContent = e.message || '변경 실패';
         msgEl.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    async function sweepAddress(depositAddress) {
+      if (!confirm(`아래 주소의 USDT를 메인 지갑으로 회수하시겠습니까?\n\n${depositAddress}`)) return;
+      try {
+        const res = await api('/api/admin/sweep', 'POST', { depositAddress });
+        alert(`✅ Sweep 완료!\n금액: ${res.amount} USDT\nTxID: ${res.txId}`);
+        loadDepositAddresses(depositCurrentPage);
+      } catch (e) {
+        alert(`❌ Sweep 실패: ${e.message}`);
       }
     }
 
@@ -1835,6 +1868,7 @@
         } else {
           tbody.innerHTML = data.items.map(item => {
             const color = statusColors[item.status] || '#94a3b8';
+            const canSweep = ['issued','waiting_deposit','paid'].includes(item.status);
             return `<tr>
               <td>${item.id}</td>
               <td>${item.user_id}</td>
@@ -1843,6 +1877,7 @@
               <td>${item.derivation_index}</td>
               <td><span style="color:${color};font-weight:600;">${item.status}</span></td>
               <td>${new Date(item.created_at).toLocaleString()}</td>
+              <td>${canSweep ? `<button class="btn-secondary btn-sm" onclick="sweepAddress('${item.deposit_address}')" style="font-size:11px;padding:3px 8px;">Sweep</button>` : '-'}</td>
             </tr>`;
           }).join('');
         }

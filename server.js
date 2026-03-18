@@ -107,10 +107,12 @@ async function runMigrations() {
     console.error('DB 마이그레이션 오류:', e.message);
   }
   try {
+    // 예약어(key/value) 충돌 방지: 혹시 잘못된 스키마로 생성된 경우 재생성
+    await db.pool.query('DROP TABLE IF EXISTS settings');
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
-        \`key\`  VARCHAR(100) NOT NULL PRIMARY KEY,
-        \`value\` TEXT        DEFAULT NULL
+        skey  VARCHAR(100) NOT NULL PRIMARY KEY,
+        sval  TEXT         DEFAULT NULL
       )
     `);
     console.log('✅ DB 마이그레이션: settings 테이블 확인 완료');
@@ -123,18 +125,18 @@ runMigrations();
 // ---------- 마스터 알림봇 헬퍼 ----------
 async function getMasterTelegram() {
   try {
-    const [[r1]] = await db.pool.query("SELECT `value` FROM settings WHERE `key` = 'master_tg_bot_token'");
-    const [[r2]] = await db.pool.query("SELECT `value` FROM settings WHERE `key` = 'master_tg_chat_id'");
-    return { botToken: r1?.value || null, chatId: r2?.value || null };
+    const [[r1]] = await db.pool.query("SELECT sval FROM settings WHERE skey = 'master_tg_bot_token'");
+    const [[r2]] = await db.pool.query("SELECT sval FROM settings WHERE skey = 'master_tg_chat_id'");
+    return { botToken: r1?.sval || null, chatId: r2?.sval || null };
   } catch (_) { return { botToken: null, chatId: null }; }
 }
 async function setMasterTelegram(botToken, chatId) {
   await db.pool.query(
-    "INSERT INTO settings (`key`, `value`) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+    "INSERT INTO settings (skey, sval) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE sval = ?",
     [botToken || null, botToken || null]
   );
   await db.pool.query(
-    "INSERT INTO settings (`key`, `value`) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+    "INSERT INTO settings (skey, sval) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE sval = ?",
     [chatId || null, chatId || null]
   );
 }

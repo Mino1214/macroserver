@@ -125,22 +125,33 @@ async function sendTelegram(botToken, chatId, html) {
   }
 }
 
-// ---------- 입금 감지 크론잡 (5분마다) ----------
-// TronGrid 일일 쿼터 절약을 위해 주소당 1요청 벌크 순회
-cron.schedule('*/5 * * * *', async () => {
+// ---------- 입금 감지 크론잡 ----------
+// TronGrid 무료 쿼터: 100,000건/일 → 안전 예산 90,000건
+// 1,440분/일 → 분당 최대 62건 처리 (90,000 / 1,440 = 62.5)
+// 150ms 딜레이 × 62건 ≈ 9.3초/분 실행 → 1분 이내 완료
+const TRONGRID_DAILY_BUDGET = Number(process.env.TRONGRID_DAILY_BUDGET) || 90000;
+const CRON_MINUTES_PER_DAY = 1440;
+const PER_RUN_LIMIT = Math.floor(TRONGRID_DAILY_BUDGET / CRON_MINUTES_PER_DAY); // 62
+const REQUEST_DELAY_MS = 150; // 초당 ~6건, TronGrid 초당 한도(15건) 이내
+
+let _depositCheckRunning = false;
+
+cron.schedule('* * * * *', async () => {
+  if (_depositCheckRunning) return; // 이전 실행이 아직 끝나지 않은 경우 skip
+  _depositCheckRunning = true;
   try {
-    // issued / waiting_deposit 상태인 주소 최대 50개 (오래된 것부터)
     const [addresses] = await db.pool.query(
       `SELECT da.deposit_address, da.user_id, u.manager_id
        FROM deposit_addresses da
        JOIN users u ON da.user_id = u.id
        WHERE da.status IN ('issued', 'waiting_deposit')
        ORDER BY da.created_at ASC
-       LIMIT 50`
+       LIMIT ?`,
+      [PER_RUN_LIMIT]
     );
     if (addresses.length === 0) return;
 
-    console.log(`[DEPOSIT-CHECK] 확인 대상: ${addresses.length}개`);
+    console.log(`[DEPOSIT-CHECK] 이번 분 처리: ${addresses.length}개 (한도 ${PER_RUN_LIMIT}/분, 예산 ${TRONGRID_DAILY_BUDGET}/일)`);
 
     const tronGridHeaders = process.env.TRONGRID_API_KEY
       ? { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY }
@@ -155,13 +166,13 @@ cron.schedule('*/5 * * * *', async () => {
 
         const account = resp.data?.data?.[0];
         if (!account) {
-          // 주소에 아직 아무 트랜잭션 없음 → waiting_deposit으로 전환
+          // 주소에 아직 아무 트랜잭션 없음 → waiting_deposit으로 상태만 전환
           await db.pool.query(
             `UPDATE deposit_addresses SET status = 'waiting_deposit'
              WHERE deposit_address = ? AND status = 'issued'`,
             [addr.deposit_address]
           );
-          await new Promise(r => setTimeout(r, 120)); // rate-limit 방지
+          await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
           continue;
         }
 
@@ -194,11 +205,12 @@ cron.schedule('*/5 * * * *', async () => {
       } catch (e) {
         console.error(`[DEPOSIT-CHECK] ${addr.deposit_address} 오류:`, e.message);
       }
-      await new Promise(r => setTimeout(r, 120)); // 초당 ~8요청 유지
+      await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
     }
-    console.log('[DEPOSIT-CHECK] 완료');
   } catch (e) {
     console.error('[DEPOSIT-CHECK] 크론잡 오류:', e.message);
+  } finally {
+    _depositCheckRunning = false;
   }
 });
 

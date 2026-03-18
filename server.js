@@ -246,10 +246,11 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     const depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
 
     const { TronWeb } = require('tronweb');
-    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+    // ⚠️ TronWeb에는 API 키를 넣지 않음
+    // TRON-PRO-API-KEY 가 유효하지 않으면 오히려 401 반환됨 — 무료 티어(키 없음)가 안정적
+    const tronRoot = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey: rootPrivKey });
 
     // 3. 루트 지갑 TRX 잔액 확인
-    const tronRoot = new TronWeb({ fullHost: 'https://api.trongrid.io', headers: { 'TRON-PRO-API-KEY': TRON_KEY }, privateKey: rootPrivKey });
     const rootTrxSun = await tronRoot.trx.getBalance(rootAddress);
     const rootTrxBalance = rootTrxSun / 1e6;
     if (rootTrxBalance < TRX_FOR_ENERGY + 5) {
@@ -259,13 +260,13 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
 
     // 4. 입금 주소로 TRX 선송금
     console.log(`[AUTO-SWEEP] ${depositAddress}에 ${TRX_FOR_ENERGY} TRX 전송 중...`);
-    await tronRoot.trx.sendTransaction(depositAddress, tronRoot.toSun(TRX_FOR_ENERGY));
+    await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(TRX_FOR_ENERGY));
 
     // 5. TRX 확인 대기
     await new Promise(r => setTimeout(r, TRX_CONFIRM_WAIT_MS));
 
     // 6. 입금 주소로 USDT sweep
-    const tronDeposit = new TronWeb({ fullHost: 'https://api.trongrid.io', headers: { 'TRON-PRO-API-KEY': TRON_KEY }, privateKey: depositPrivKey });
+    const tronDeposit = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey: depositPrivKey });
     const contract = await tronDeposit.contract().at(USDT_CONTRACT);
     const balanceRaw = await contract.balanceOf(depositAddress).call();
     const sweepAmount = Number(balanceRaw) / 1e6;
@@ -1775,13 +1776,9 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
       return res.status(400).json({ error: e.message });
     }
 
-    // 3. TronWeb으로 USDT sweep
+    // 3. TronWeb으로 USDT sweep (API 키 없이 사용 — 키 있으면 오히려 401 발생)
     const { TronWeb } = require('tronweb');
-    const tronWeb = new TronWeb({
-      fullHost: 'https://api.trongrid.io',
-      headers: { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' },
-      privateKey,
-    });
+    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey });
 
     const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // TRC20 USDT
     const contract = await tronWeb.contract().at(USDT_CONTRACT);

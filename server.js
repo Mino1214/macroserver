@@ -245,7 +245,7 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     if (!addrRow) { console.warn('[AUTO-SWEEP] deposit_addresses 행 없음'); return; }
     const depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
 
-    const TronWeb = require('tronweb');
+    const { TronWeb } = require('tronweb');
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
 
     // 3. 루트 지갑 TRX 잔액 확인
@@ -1776,7 +1776,7 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
     }
 
     // 3. TronWeb으로 USDT sweep
-    const TronWeb = require('tronweb');
+    const { TronWeb } = require('tronweb');
     const tronWeb = new TronWeb({
       fullHost: 'https://api.trongrid.io',
       headers: { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' },

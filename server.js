@@ -1102,7 +1102,7 @@ app.post('/api/payment/request-address', async (req, res) => {
 
     for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
       const [maxRows] = await db.pool.query(
-        'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+        'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
         [activeWallet.wallet_version]
       );
       newIndex = maxRows[0].maxIdx + 1 + attempt;

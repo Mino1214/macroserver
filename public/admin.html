@@ -705,6 +705,7 @@
         <button class="nav-btn" onclick="scrollToSection('sectionPending')">승인 대기</button>
         <button class="nav-btn" onclick="scrollToSection('sectionUsers')">사용자 관리</button>
         <button class="nav-btn" onclick="scrollToSection('sectionSessions')">세션</button>
+        <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionPricing')">💰 가격 설정</button>
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionWallet')">💳 수금 지갑</button>
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionSeeds')">🌱 시드 문구</button>
         <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionManagers')">매니저 관리</button>
@@ -861,6 +862,31 @@
         </div>
       </section>
 
+      <!-- 가격 설정 (마스터 전용) -->
+      <section id="sectionPricing">
+        <div class="glass-card">
+          <h2>구독 가격 설정 <span class="text-muted" style="font-size: 13px; font-weight: normal;">(마스터 전용)</span></h2>
+
+          <!-- 월 기준 가격 -->
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 16px; background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.2); border-radius: 12px;">
+            <div style="font-size: 13px; color: var(--text-secondary); white-space: nowrap;">월 기준 가격 (30일 = X USDT)</div>
+            <input id="monthlyPriceInput" type="number" min="1" step="0.01" placeholder="39" style="width: 100px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 10px; color: var(--text-primary); font-size: 14px; font-weight: 600;" />
+            <span style="color: var(--text-secondary); font-size: 13px;">USDT</span>
+            <span style="color: var(--text-secondary); font-size: 12px;">(일할 계산 기준)</span>
+          </div>
+
+          <!-- 패키지 목록 -->
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">패키지 가격 설정</div>
+          <div id="packageList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;"></div>
+          <button onclick="addPricingPackage()" class="btn-secondary btn-sm" style="margin-bottom: 16px;">+ 패키지 추가</button>
+
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="savePricing()" class="btn-primary btn-sm">가격 저장</button>
+            <span id="pricingMsg" style="font-size: 12px;"></span>
+          </div>
+        </div>
+      </section>
+
       <!-- 수금 지갑 관리 (마스터 전용) -->
       <section id="sectionWallet">
         <div class="glass-card">
@@ -878,7 +904,20 @@
           <div style="background: rgba(26,26,46,0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
             <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">새 수금 지갑 등록</div>
             <div style="display: flex; flex-direction: column; gap: 10px;">
-              <input id="newWalletAddress" type="text" placeholder="TRON 수금 지갑 주소 (T...)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 13px; width: 100%;" />
+              <div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">수금 지갑 주소 (TRON T...)</div>
+                <input id="newWalletAddress" type="text" placeholder="TUwC2u..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 13px; width: 100%;" />
+              </div>
+              <div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
+                  xpub 키 <span style="color:#10b981;">(입력 시 유저별 개인 주소 자동 파생 활성화)</span>
+                </div>
+                <input id="newWalletXpub" type="text" placeholder="xpub6... (BIP32 확장 공개키, 선택)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 12px; width: 100%;" />
+                <div style="margin-top: 5px; font-size: 11px; color: var(--text-secondary);">
+                  xpub 미입력 시: 모든 유저가 동일한 수금 주소를 공유합니다.<br>
+                  xpub 입력 시: 유저마다 HD 파생 주소가 자동 발급됩니다. (TRON BIP44 m/44'/195'/0' 기준)
+                </div>
+              </div>
               <input id="newWalletLabel" type="text" placeholder="라벨 (메모, 선택)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 13px; width: 100%;" />
               <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="changeCollectionWallet()" class="btn-primary btn-sm">지갑 변경 적용</button>
@@ -1118,6 +1157,7 @@
           'thPendingManager',
           'sectionSeeds',
           'sectionWallet',
+          'sectionPricing',
           'userCreateForm'
         ];
         
@@ -1155,6 +1195,7 @@
             loadManagers();
             loadCollectionWallet();
             loadDepositAddresses(1);
+            loadPricing();
           } catch (e) {
             console.error('[DASHBOARD] Error loading managers:', e);
           }
@@ -1678,6 +1719,7 @@
 
     async function changeCollectionWallet() {
       const address = document.getElementById('newWalletAddress').value.trim();
+      const xpubKey = document.getElementById('newWalletXpub').value.trim();
       const label = document.getElementById('newWalletLabel').value.trim();
       const msgEl = document.getElementById('walletChangeMsg');
 
@@ -1687,19 +1729,88 @@
         return;
       }
 
-      if (!confirm(`수금 지갑을 아래 주소로 변경하시겠습니까?\n\n${address}\n\n이후 신규 발급 주소만 이 지갑 기준으로 생성됩니다.`)) return;
+      const xpubNote = xpubKey ? '\n✅ xpub 키 포함 → 유저별 개인 주소 파생 활성화' : '\n⚠️ xpub 미입력 → 모든 유저가 동일 주소 사용';
+      if (!confirm(`수금 지갑을 변경하시겠습니까?\n\n주소: ${address}${xpubNote}\n\n이후 신규 발급 주소만 이 지갑 기준으로 생성됩니다.`)) return;
 
       try {
         msgEl.textContent = '처리 중...';
         msgEl.style.color = 'var(--text-secondary)';
-        const res = await api('/api/admin/collection-wallet', 'POST', { address, label });
+        const res = await api('/api/admin/collection-wallet', 'POST', { address, xpubKey: xpubKey || undefined, label });
         msgEl.textContent = res.message || '변경 완료';
         msgEl.style.color = 'var(--accent-success)';
         document.getElementById('newWalletAddress').value = '';
+        document.getElementById('newWalletXpub').value = '';
         document.getElementById('newWalletLabel').value = '';
         await loadCollectionWallet();
       } catch (e) {
         msgEl.textContent = e.message || '변경 실패';
+        msgEl.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    // ---------- 가격 설정 ----------
+    let pricingPackages = [];
+
+    async function loadPricing() {
+      try {
+        const data = await api('/api/payment/pricing');
+        document.getElementById('monthlyPriceInput').value = data.monthlyPrice || 39;
+        pricingPackages = data.packages || [];
+        renderPackageList();
+      } catch (e) {
+        console.error('가격 로드 실패:', e);
+      }
+    }
+
+    function renderPackageList() {
+      const container = document.getElementById('packageList');
+      container.innerHTML = pricingPackages.map((pkg, i) => `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div style="color: var(--text-secondary); font-size: 12px; width: 80px;">일수</div>
+          <input type="number" min="1" value="${pkg.days}" onchange="updatePackage(${i}, 'days', this.value)"
+            style="width: 70px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px 8px; color: var(--text-primary); font-size: 13px;" />
+          <div style="color: var(--text-secondary); font-size: 12px; width: 50px;">라벨</div>
+          <input type="text" value="${pkg.label}" onchange="updatePackage(${i}, 'label', this.value)"
+            style="width: 80px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px 8px; color: var(--text-primary); font-size: 13px;" />
+          <div style="color: var(--text-secondary); font-size: 12px; width: 50px;">가격</div>
+          <input type="number" min="0" step="0.01" value="${pkg.price}" onchange="updatePackage(${i}, 'price', this.value)"
+            style="width: 80px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px 8px; color: var(--text-primary); font-size: 13px;" />
+          <span style="color: var(--text-secondary); font-size: 12px;">USDT</span>
+          <button onclick="removePackage(${i})" class="btn-danger btn-sm" style="margin-left: auto; padding: 4px 10px; font-size: 11px;">삭제</button>
+        </div>
+      `).join('');
+    }
+
+    function updatePackage(i, key, value) {
+      pricingPackages[i][key] = key === 'days' || key === 'price' ? Number(value) : value;
+    }
+
+    function addPricingPackage() {
+      pricingPackages.push({ days: 30, label: '패키지', price: 39 });
+      renderPackageList();
+    }
+
+    function removePackage(i) {
+      pricingPackages.splice(i, 1);
+      renderPackageList();
+    }
+
+    async function savePricing() {
+      const monthlyPrice = Number(document.getElementById('monthlyPriceInput').value);
+      const msgEl = document.getElementById('pricingMsg');
+      if (!monthlyPrice || monthlyPrice <= 0) {
+        msgEl.textContent = '월 기준 가격을 입력하세요.';
+        msgEl.style.color = 'var(--accent-danger)';
+        return;
+      }
+      try {
+        msgEl.textContent = '저장 중...';
+        msgEl.style.color = 'var(--text-secondary)';
+        const res = await api('/api/admin/pricing', 'POST', { monthlyPrice, packages: pricingPackages });
+        msgEl.textContent = res.message || '저장 완료';
+        msgEl.style.color = 'var(--accent-success)';
+      } catch (e) {
+        msgEl.textContent = e.message || '저장 실패';
         msgEl.style.color = 'var(--accent-danger)';
       }
     }

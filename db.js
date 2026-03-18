@@ -365,19 +365,28 @@ const collectionWalletDB = {
   },
 
   // 신규 지갑 등록 (기존 active → inactive, 새 버전 active)
-  async activate(rootWalletAddress, label) {
-    // 현재 버전 번호 계산
+  async activate(rootWalletAddress, xpubKey, label) {
     const [maxRows] = await pool.query('SELECT COALESCE(MAX(wallet_version), 0) AS maxVer FROM collection_wallets');
     const newVersion = maxRows[0].maxVer + 1;
 
     // 기존 active → inactive
     await pool.query('UPDATE collection_wallets SET status = "inactive" WHERE status = "active"');
 
-    // 신규 버전 추가
-    await pool.query(
-      'INSERT INTO collection_wallets (wallet_version, root_wallet_address, label, status, activated_at) VALUES (?, ?, ?, "active", NOW())',
-      [newVersion, rootWalletAddress, label || '']
-    );
+    // xpub_key 컬럼이 없으면 무시 (ALTER TABLE 전 호환)
+    try {
+      await pool.query(
+        'INSERT INTO collection_wallets (wallet_version, root_wallet_address, xpub_key, label, status, activated_at) VALUES (?, ?, ?, ?, "active", NOW())',
+        [newVersion, rootWalletAddress, xpubKey || null, label || '']
+      );
+    } catch (e) {
+      // xpub_key 컬럼이 아직 없는 경우 fallback
+      if (e.code === 'ER_BAD_FIELD_ERROR') {
+        await pool.query(
+          'INSERT INTO collection_wallets (wallet_version, root_wallet_address, label, status, activated_at) VALUES (?, ?, ?, "active", NOW())',
+          [newVersion, rootWalletAddress, label || '']
+        );
+      } else throw e;
+    }
 
     return newVersion;
   },

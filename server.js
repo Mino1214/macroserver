@@ -3,8 +3,38 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
-const ethers = require('ethers');
+const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
+
+// ---------- TRON HD 주소 파생 유틸 ----------
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function base58Encode(buf) {
+  let num = BigInt('0x' + buf.toString('hex'));
+  const base = BigInt(58);
+  let result = '';
+  while (num > 0n) {
+    result = BASE58_ALPHABET[Number(num % base)] + result;
+    num = num / base;
+  }
+  for (let i = 0; i < buf.length && buf[i] === 0; i++) result = '1' + result;
+  return result;
+}
+
+function ethAddressToTron(ethAddress) {
+  const hex = ethAddress.replace('0x', '').toLowerCase();
+  const raw = Buffer.from('41' + hex, 'hex');
+  const h1 = crypto.createHash('sha256').update(raw).digest();
+  const h2 = crypto.createHash('sha256').update(h1).digest();
+  return base58Encode(Buffer.concat([raw, h2.slice(0, 4)]));
+}
+
+// xpub 키로 index번째 자식 TRON 주소 파생
+function deriveTronAddress(xpub, index) {
+  const node = HDNodeWallet.fromExtendedKey(xpub);
+  const child = node.deriveChild(index);
+  return ethAddressToTron(child.address);
+}
 
 // MariaDB 연결
 const db = require('./db');
@@ -995,25 +1025,26 @@ app.post('/api/payment/request-address', async (req, res) => {
       });
     }
 
-    // 신규 주소 발급: 현재 active wallet의 derivation_index 기반 주소 생성
-    // 실제 운영 환경에서는 HD wallet derivation을 사용해야 하지만,
-    // 현재는 root_wallet_address 기반으로 index를 포함한 고유 주소를 생성합니다.
-    // (실제 TRON HD 주소 파생은 별도 라이브러리 연동 필요)
+    // 신규 주소 발급: xpub 기반 HD 파생 또는 root 주소 직접 사용
     const [maxRows] = await db.pool.query(
       'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
       [activeWallet.wallet_version]
     );
     const newIndex = maxRows[0].maxIdx + 1;
 
-    // 임시 주소 생성 (실제 환경에서는 HD wallet 파생 주소 사용)
-    // 주소 = root 주소 + version + index 기반 해시의 앞 6자리를 붙인 형태
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha256')
-      .update(`${activeWallet.root_wallet_address}_v${activeWallet.wallet_version}_i${newIndex}`)
-      .digest('hex')
-      .substring(0, 6)
-      .toUpperCase();
-    const newAddress = `${activeWallet.root_wallet_address.substring(0, 28)}${hash}`;
+    let newAddress;
+    if (activeWallet.xpub_key) {
+      // xpub 있을 때: HD wallet 파생으로 사용자별 고유 TRON 주소 생성
+      try {
+        newAddress = deriveTronAddress(activeWallet.xpub_key, newIndex);
+      } catch (e) {
+        console.error('HD 주소 파생 오류:', e);
+        return res.status(500).json({ error: 'xpub 키가 올바르지 않습니다. 관리자에게 문의하세요.' });
+      }
+    } else {
+      // xpub 없을 때: root 주소를 그대로 반환 (모든 사용자 동일 주소)
+      newAddress = activeWallet.root_wallet_address;
+    }
 
     await db.depositAddressDB.create({
       userId: resolvedUserId,
@@ -1063,10 +1094,23 @@ app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req,
 // POST /api/admin/collection-wallet — 새 수금 지갑 등록 (기존 버전 비활성화)
 app.post('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const { address, label } = req.body || {};
+    const { address, xpubKey, label } = req.body || {};
     if (!address?.trim()) return res.status(400).json({ error: 'TRON 수금 지갑 주소를 입력하세요.' });
 
-    const newVersion = await db.collectionWalletDB.activate(address.trim(), label?.trim() || '');
+    // xpub 유효성 검증 (입력된 경우)
+    if (xpubKey?.trim()) {
+      try {
+        HDNodeWallet.fromExtendedKey(xpubKey.trim());
+      } catch {
+        return res.status(400).json({ error: 'xpub 키 형식이 올바르지 않습니다.' });
+      }
+    }
+
+    const newVersion = await db.collectionWalletDB.activate(
+      address.trim(),
+      xpubKey?.trim() || null,
+      label?.trim() || ''
+    );
     res.json({ ok: true, walletVersion: newVersion, message: `수금 지갑이 v${newVersion}으로 변경되었습니다.` });
   } catch (error) {
     console.error('수금 지갑 변경 오류:', error);
@@ -1087,6 +1131,47 @@ app.get('/api/admin/deposit-addresses', requireAdmin, requireMaster, async (req,
     res.json(result);
   } catch (error) {
     console.error('입금주소 목록 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// ---------- 가격 설정 API ----------
+
+// GET /api/payment/pricing — 클라이언트가 가격 조회 (인증 불필요)
+app.get('/api/payment/pricing', async (req, res) => {
+  try {
+    const raw = await db.settingDB.get('subscription_packages');
+    const monthlyRaw = await db.settingDB.get('monthly_price_usdt');
+    const packages = raw ? JSON.parse(raw) : [
+      { days: 30,  label: '1개월',  price: 39 },
+      { days: 60,  label: '2개월',  price: 75 },
+      { days: 90,  label: '3개월',  price: 110 },
+      { days: 180, label: '6개월',  price: 210 },
+      { days: 365, label: '12개월', price: 390 },
+    ];
+    const monthlyPrice = monthlyRaw ? Number(monthlyRaw) : 39;
+    res.json({ monthlyPrice, packages });
+  } catch (error) {
+    console.error('가격 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// POST /api/admin/pricing — 가격 패키지 저장 (마스터 전용)
+app.post('/api/admin/pricing', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { monthlyPrice, packages } = req.body || {};
+    if (monthlyPrice == null || isNaN(Number(monthlyPrice))) {
+      return res.status(400).json({ error: '월 기준 가격(USDT)을 입력하세요.' });
+    }
+    if (!Array.isArray(packages) || packages.length === 0) {
+      return res.status(400).json({ error: '패키지 목록이 필요합니다.' });
+    }
+    await db.settingDB.set('monthly_price_usdt', String(Number(monthlyPrice)));
+    await db.settingDB.set('subscription_packages', JSON.stringify(packages));
+    res.json({ ok: true, message: '가격이 저장되었습니다.' });
+  } catch (error) {
+    console.error('가격 저장 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });

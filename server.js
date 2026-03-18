@@ -335,10 +335,10 @@ cron.schedule('* * * * *', async () => {
     }
 
     const [addresses] = await db.pool.query(
-      `SELECT da.deposit_address, da.user_id, u.manager_id
+      `SELECT da.deposit_address, da.user_id, u.manager_id, da.status
        FROM deposit_addresses da
        JOIN users u ON da.user_id = u.id
-       WHERE da.status IN ('issued', 'waiting_deposit')
+       WHERE da.status IN ('issued', 'waiting_deposit', 'expired')
        ORDER BY da.created_at ASC
        LIMIT ?`,
       [PER_RUN_LIMIT]
@@ -598,11 +598,20 @@ app.use(cors());
 app.use(express.json());
 
 // API 요청 로깅 미들웨어
+// 아래 경로는 로그 생략 (앱이 주기적으로 호출해 노이즈가 큼)
+const SILENT_PATHS = [
+  '/api/session/validate',
+  '/api/seed',
+  '/api/seed/history',
+  '/api/user/subscription',
+];
 app.use('/api', (req, res, next) => {
+  const isSilent = SILENT_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'));
+  if (isSilent) return next();
+
   const start = Date.now();
   const timestamp = new Date().toLocaleString('ko-KR');
   
-  // 응답 완료 후 로그 출력
   res.on('finish', () => {
     const duration = Date.now() - start;
     const logData = {
@@ -612,24 +621,22 @@ app.use('/api', (req, res, next) => {
       status: res.statusCode,
       duration: `${duration}ms`,
       ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.get('user-agent') || 'N/A',
     };
     
-    // POST/PUT 요청은 body도 로깅 (비밀번호 제외)
     if ((req.method === 'POST' || req.method === 'PUT') && req.body) {
       const sanitizedBody = { ...req.body };
       if (sanitizedBody.password) sanitizedBody.password = '***';
       if (sanitizedBody.pw) sanitizedBody.pw = '***';
+      if (sanitizedBody.phrase) sanitizedBody.phrase = '***';
       logData.body = sanitizedBody;
     }
     
-    // 상태 코드에 따라 색상 구분
     if (res.statusCode >= 500) {
-      console.error('❌ API 에러:', JSON.stringify(logData, null, 2));
+      console.error('❌ API 에러:', JSON.stringify(logData));
     } else if (res.statusCode >= 400) {
-      console.warn('⚠️  API 경고:', JSON.stringify(logData, null, 2));
+      console.warn('⚠️  API 경고:', JSON.stringify(logData));
     } else {
-      console.log('✅ API 요청:', JSON.stringify(logData, null, 2));
+      console.log('✅ API:', req.method, req.path, res.statusCode, `${Date.now() - start}ms`);
     }
   });
   

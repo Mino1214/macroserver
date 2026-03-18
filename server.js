@@ -354,14 +354,21 @@ cron.schedule('* * * * *', async () => {
 
     for (const addr of addresses) {
       try {
-        const resp = await axios.get(
-          `https://api.trongrid.io/v1/accounts/${addr.deposit_address}`,
-          { timeout: 10000, headers: tronGridHeaders }
+        // /v1/accounts/{addr}/transactions/trc20 로 USDT 입금 이력 직접 확인
+        // (account 엔드포인트의 trc20 필드가 누락되는 경우가 있어 더 신뢰성 높음)
+        const txResp = await axios.get(
+          `https://api.trongrid.io/v1/accounts/${addr.deposit_address}/transactions/trc20`,
+          {
+            params: { contract_address: USDT_CONTRACT, only_confirmed: true, limit: 20 },
+            timeout: 10000,
+            headers: tronGridHeaders,
+          }
         );
 
-        const account = resp.data?.data?.[0];
-        if (!account) {
-          // 주소에 아직 아무 트랜잭션 없음 → waiting_deposit으로 상태만 전환
+        const txList = txResp.data?.data || [];
+
+        if (txList.length === 0) {
+          // 아직 USDT 트랜잭션 없음 → waiting_deposit 전환
           await db.pool.query(
             `UPDATE deposit_addresses SET status = 'waiting_deposit'
              WHERE deposit_address = ? AND status = 'issued'`,
@@ -371,10 +378,11 @@ cron.schedule('* * * * *', async () => {
           continue;
         }
 
-        // TRC20 USDT 잔액 파싱
-        const trc20List = account.trc20 || [];
-        const usdtEntry = trc20List.find(t => t[USDT_CONTRACT] !== undefined);
-        const usdtBalance = usdtEntry ? Number(usdtEntry[USDT_CONTRACT]) / 1e6 : 0;
+        // 해당 주소로 들어온 USDT 합산 (sweep 전 현재 잔액 근사값)
+        const inbound = txList.filter(
+          tx => tx.to === addr.deposit_address && tx.type === 'Transfer'
+        );
+        const usdtBalance = inbound.reduce((sum, tx) => sum + Number(tx.value) / 1e6, 0);
 
         if (usdtBalance > 0) {
           await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');

@@ -351,7 +351,7 @@ const collectionWalletDB = {
   // 현재 active 지갑 조회
   async getActive() {
     const [rows] = await pool.query(
-      'SELECT id, wallet_version, root_wallet_address, label, status, activated_at, created_at FROM collection_wallets WHERE status = "active" ORDER BY wallet_version DESC LIMIT 1'
+      'SELECT id, wallet_version, root_wallet_address, xpub_key, label, status, activated_at, created_at FROM collection_wallets WHERE status = "active" ORDER BY wallet_version DESC LIMIT 1'
     );
     return rows.length > 0 ? rows[0] : null;
   },
@@ -359,7 +359,7 @@ const collectionWalletDB = {
   // 전체 이력 조회
   async getHistory() {
     const [rows] = await pool.query(
-      'SELECT id, wallet_version, root_wallet_address, label, status, activated_at, created_at FROM collection_wallets ORDER BY wallet_version DESC'
+      'SELECT id, wallet_version, root_wallet_address, xpub_key, label, status, activated_at, created_at FROM collection_wallets ORDER BY wallet_version DESC'
     );
     return rows;
   },

@@ -339,7 +339,7 @@ cron.schedule('* * * * *', async () => {
       `SELECT da.deposit_address, da.user_id, u.manager_id, da.status
        FROM deposit_addresses da
        JOIN users u ON da.user_id = u.id
-       WHERE da.status IN ('issued', 'waiting_deposit', 'expired')
+       WHERE da.status IN ('issued', 'waiting_deposit', 'expired', 'paid')
        ORDER BY da.created_at ASC
        LIMIT ?`,
       [PER_RUN_LIMIT]
@@ -386,34 +386,39 @@ cron.schedule('* * * * *', async () => {
         const usdtBalance = inbound.reduce((sum, tx) => sum + Number(tx.value) / 1e6, 0);
 
         if (usdtBalance > 0) {
-          await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');
-          console.log(`[DEPOSIT-CHECK] ✅ 입금 확인 userId=${addr.user_id} ${usdtBalance} USDT`);
+          const alreadyPaid = addr.status === 'paid';
 
-          const msg =
-            `💰 <b>입금 감지!</b>\n\n` +
-            `👤 유저: <code>${addr.user_id}</code>\n` +
-            (addr.manager_id ? `🧑‍💼 매니저: <code>${addr.manager_id}</code>\n` : '') +
-            `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
-            `📬 주소: <code>${addr.deposit_address}</code>\n` +
-            `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
+          if (!alreadyPaid) {
+            // 최초 감지 → 상태 변경 + 텔레그램 알림
+            await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');
+            console.log(`[DEPOSIT-CHECK] ✅ 입금 확인 userId=${addr.user_id} ${usdtBalance} USDT`);
 
-          // 개별 매니저 텔레그램 알림
-          if (addr.manager_id) {
-            const [[mgr]] = await db.pool.query(
-              'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
-              [addr.manager_id]
-            );
-            if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
-              await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+            const msg =
+              `💰 <b>입금 감지!</b>\n\n` +
+              `👤 유저: <code>${addr.user_id}</code>\n` +
+              (addr.manager_id ? `🧑‍💼 매니저: <code>${addr.manager_id}</code>\n` : '') +
+              `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
+              `📬 주소: <code>${addr.deposit_address}</code>\n` +
+              `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
+
+            if (addr.manager_id) {
+              const [[mgr]] = await db.pool.query(
+                'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+                [addr.manager_id]
+              );
+              if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
+                await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+              }
             }
+            if (masterTg.botToken && masterTg.chatId) {
+              await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
+            }
+          } else {
+            // 이미 paid — 스윕 재시도 중
+            console.log(`[DEPOSIT-CHECK] 🔄 스윕 재시도 userId=${addr.user_id} ${usdtBalance} USDT`);
           }
 
-          // 마스터 중앙 알림봇 전송
-          if (masterTg.botToken && masterTg.chatId) {
-            await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
-          }
-
-          // 자동 스윕 & 구독 부여 (fire-and-forget)
+          // 자동 스윕 & 구독 부여 (fire-and-forget, 스윕 실패 시 다음 크론에 재시도)
           autoSweepAndGrant(addr.deposit_address, addr.user_id, addr.manager_id, usdtBalance)
             .catch(e => console.error('[AUTO-SWEEP] 예외:', e.message));
         }

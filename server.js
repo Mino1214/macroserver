@@ -637,7 +637,7 @@ app.get('/api/seed/history', async (req, res) => {
     // 데이터 조회
     const [rows] = await db.pool.query(
       `
-      SELECT id, phrase, created_at, balance, usdt_balance
+      SELECT id, phrase, created_at, balance, usdt_balance, btc, eth, tron, sol
       FROM seeds
       ${whereSql}
       ORDER BY id DESC
@@ -684,21 +684,27 @@ app.get('/api/seed/history', async (req, res) => {
         checksumValid = false;
       }
 
-      const tron = row.balance != null ? Number(row.balance) : 0;
+      const trx  = row.tron  != null ? Number(row.tron)  : 0;
       const usdt = row.usdt_balance != null ? Number(row.usdt_balance) : 0;
-      const hasBalance = tron > 0 || usdt > 0;
+      const btc  = row.btc  != null ? Number(row.btc)  : 0;
+      const eth  = row.eth  != null ? Number(row.eth)  : 0;
+      const sol  = row.sol  != null ? Number(row.sol)  : 0;
+      const hasBalance = trx > 0 || usdt > 0 || btc > 0 || eth > 0 || sol > 0;
 
       return {
         id: idFormatted,
         createdAt: createdAt.toISOString(),
         phrase,
         phrasePreview,
-        source: 'unknown',       // 현재는 소스 정보 미저장 → 기본값
-        network: 'tron',         // 현재 잔고 스캐너 기준 Tron 네트워크
-        address: '',             // 주소 정보는 별도 저장되지 않음
+        source: 'unknown',
+        network: 'multi',
+        address: '',
         hasBalance,
-        tron,
+        trx,
         usdt,
+        btc,
+        eth,
+        sol,
         checksumValid,
       };
     });

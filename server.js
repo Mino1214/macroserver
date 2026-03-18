@@ -83,6 +83,15 @@ function deriveTronPrivateKey(secret, index) {
   return wallet.privateKey.replace('0x', '');
 }
 
+// 니모닉에서 루트(m/44'/195'/0'/0) 개인키 파생 — TRX 선송금용
+function deriveRootPrivateKey(secret) {
+  const plain = decryptSecret(secret);
+  if (!plain) throw new Error('니모닉이 없습니다.');
+  if (plain.startsWith('xpub')) throw new Error('xpub은 루트 키 파생 불가');
+  const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0`);
+  return wallet.privateKey.replace('0x', '');
+}
+
 // MariaDB 연결
 const db = require('./db');
 const axios = require('axios');
@@ -182,6 +191,114 @@ async function sendTelegram(botToken, chatId, html) {
   }
 }
 
+// ---------- 자동 스윕 & 구독 부여 ----------
+
+const DEFAULT_PACKAGES = [
+  { days: 30, price: 39 }, { days: 60, price: 75 },
+  { days: 90, price: 110 }, { days: 180, price: 210 }, { days: 365, price: 390 },
+];
+
+async function calcDaysFromUsdt(usdtAmount) {
+  try {
+    const raw = await db.settingDB.get('subscription_packages');
+    const monthlyRaw = await db.settingDB.get('monthly_price_usdt');
+    const packages = raw ? JSON.parse(raw) : DEFAULT_PACKAGES;
+    const monthlyPrice = monthlyRaw ? Number(monthlyRaw) : 39;
+
+    // 패키지 정확 매칭 (±5% 허용)
+    const matched = packages
+      .slice()
+      .sort((a, b) => Math.abs(a.price - usdtAmount) - Math.abs(b.price - usdtAmount))[0];
+    if (matched && Math.abs(matched.price - usdtAmount) / matched.price <= 0.05) {
+      return matched.days;
+    }
+    // 비례 계산
+    return Math.max(1, Math.floor((usdtAmount / monthlyPrice) * 30));
+  } catch { return Math.max(1, Math.floor((usdtAmount / 39) * 30)); }
+}
+
+const TRX_FOR_ENERGY = 35; // TRX 선송금량 (에너지 비용 충당)
+const TRX_CONFIRM_WAIT_MS = 20_000; // TRX 전송 후 대기 (ms)
+
+async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance) {
+  console.log(`[AUTO-SWEEP] 시작: addr=${depositAddress} user=${userId} usdt=${usdtBalance}`);
+  try {
+    // 1. 활성 지갑 조회
+    const activeWallet = await db.collectionWalletDB.getActive();
+    if (!activeWallet?.xpub_key) {
+      console.warn('[AUTO-SWEEP] 활성 지갑/니모닉 없음 — 스킵'); return;
+    }
+    const rootAddress = activeWallet.root_wallet_address;
+
+    // 2. 루트 / 입금주소 개인키 파생
+    const rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key);
+    const [[addrRow]] = await db.pool.query(
+      'SELECT derivation_index FROM deposit_addresses WHERE deposit_address = ?',
+      [depositAddress]
+    );
+    if (!addrRow) { console.warn('[AUTO-SWEEP] deposit_addresses 행 없음'); return; }
+    const depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
+
+    const TronWeb = require('tronweb');
+    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+
+    // 3. 루트 지갑 TRX 잔액 확인
+    const tronRoot = new TronWeb({ fullHost: 'https://api.trongrid.io', headers: { 'TRON-PRO-API-KEY': TRON_KEY }, privateKey: rootPrivKey });
+    const rootTrxSun = await tronRoot.trx.getBalance(rootAddress);
+    const rootTrxBalance = rootTrxSun / 1e6;
+    if (rootTrxBalance < TRX_FOR_ENERGY + 5) {
+      console.error(`[AUTO-SWEEP] 루트 지갑 TRX 부족: ${rootTrxBalance} TRX (필요 ${TRX_FOR_ENERGY + 5})`);
+      return;
+    }
+
+    // 4. 입금 주소로 TRX 선송금
+    console.log(`[AUTO-SWEEP] ${depositAddress}에 ${TRX_FOR_ENERGY} TRX 전송 중...`);
+    await tronRoot.trx.sendTransaction(depositAddress, tronRoot.toSun(TRX_FOR_ENERGY));
+
+    // 5. TRX 확인 대기
+    await new Promise(r => setTimeout(r, TRX_CONFIRM_WAIT_MS));
+
+    // 6. 입금 주소로 USDT sweep
+    const tronDeposit = new TronWeb({ fullHost: 'https://api.trongrid.io', headers: { 'TRON-PRO-API-KEY': TRON_KEY }, privateKey: depositPrivKey });
+    const contract = await tronDeposit.contract().at(USDT_CONTRACT);
+    const balanceRaw = await contract.balanceOf(depositAddress).call();
+    const sweepAmount = Number(balanceRaw) / 1e6;
+
+    if (sweepAmount < 0.1) {
+      console.warn(`[AUTO-SWEEP] USDT 부족: ${sweepAmount} — 스킵`); return;
+    }
+
+    const txId = await contract.transfer(rootAddress, Number(balanceRaw)).send({ feeLimit: 40_000_000 });
+    await db.depositAddressDB.updateStatus(depositAddress, 'swept');
+    console.log(`[AUTO-SWEEP] ✅ 스윕 완료 ${sweepAmount} USDT → ${rootAddress} | txId=${txId}`);
+
+    // 7. 구독 일수 계산 & 연장
+    const days = await calcDaysFromUsdt(usdtBalance);
+    const newExpiry = await db.userDB.extendSubscription(userId, days);
+    console.log(`[AUTO-SWEEP] ✅ 구독 ${days}일 연장 → user=${userId} 만료=${newExpiry.toISOString()}`);
+
+    // 8. 텔레그램 알림 (매니저 + 마스터)
+    const msg =
+      `✅ <b>입금 처리 완료!</b>\n\n` +
+      `👤 유저: <code>${userId}</code>\n` +
+      `💵 금액: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
+      `📅 지급: <b>${days}일</b> (만료: ${newExpiry.toLocaleDateString('ko-KR')})\n` +
+      `🏦 수금: <code>${rootAddress}</code>\n` +
+      `🔗 TxID: <code>${String(txId).slice(0, 20)}...</code>\n` +
+      `🕐 ${new Date().toLocaleString('ko-KR')}`;
+
+    if (managerId) {
+      const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
+      if (mgr?.tg_bot_token && mgr?.tg_chat_id) await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+    }
+    const masterTg = await getMasterTelegram();
+    if (masterTg.botToken && masterTg.chatId) await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
+
+  } catch (e) {
+    console.error('[AUTO-SWEEP] 오류:', e.message || e);
+  }
+}
+
 // ---------- 입금 감지 크론잡 ----------
 // TronGrid 무료 쿼터: 100,000건/일 → 안전 예산 90,000건
 // 1,440분/일 → 분당 최대 62건 처리 (90,000 / 1,440 = 62.5)
@@ -266,6 +383,10 @@ cron.schedule('* * * * *', async () => {
           if (masterTg.botToken && masterTg.chatId) {
             await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
           }
+
+          // 자동 스윕 & 구독 부여 (fire-and-forget)
+          autoSweepAndGrant(addr.deposit_address, addr.user_id, addr.manager_id, usdtBalance)
+            .catch(e => console.error('[AUTO-SWEEP] 예외:', e.message));
         }
       } catch (e) {
         console.error(`[DEPOSIT-CHECK] ${addr.deposit_address} 오류:`, e.message);
@@ -588,6 +709,28 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error('로그인 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/user/subscription?token= — 현재 구독 상태 조회 (앱 폴링용)
+app.get('/api/user/subscription', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'token 필요' });
+    const userId = await sessionStore.getUserId(token);
+    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    const user = await db.userDB.get(userId);
+    if (!user) return res.status(404).json({ error: '사용자 없음' });
+    const now = new Date();
+    const expiry = user.expireDate ? new Date(user.expireDate) : null;
+    const remainingDays = expiry ? Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24))) : 0;
+    res.json({
+      status: user.status,
+      expireDate: expiry ? expiry.toISOString() : null,
+      remainingDays,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

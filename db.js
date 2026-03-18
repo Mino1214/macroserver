@@ -176,7 +176,7 @@ const userDB = {
     );
   },
 
-  // 사용기간 설정
+  // 사용기간 설정 (오늘 기준)
   async setSubscription(id, days) {
     const expireDate = new Date();
     expireDate.setDate(expireDate.getDate() + days);
@@ -185,6 +185,23 @@ const userDB = {
       'UPDATE users SET subscription_days = ?, expire_date = ?, status = "approved" WHERE id = ?',
       [days, expireDate, id.toLowerCase()]
     );
+  },
+
+  // 사용기간 연장 (남은 만료일이 있으면 거기서 +days, 없거나 만료됐으면 오늘부터 +days)
+  async extendSubscription(id, days) {
+    const [[user]] = await pool.query(
+      'SELECT expire_date FROM users WHERE id = ?',
+      [id.toLowerCase()]
+    );
+    const now = new Date();
+    const currentExpiry = user?.expire_date ? new Date(user.expire_date) : null;
+    const base = (currentExpiry && currentExpiry > now) ? currentExpiry : now;
+    const newExpiry = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    await pool.query(
+      'UPDATE users SET expire_date = ?, status = "approved" WHERE id = ?',
+      [newExpiry, id.toLowerCase()]
+    );
+    return newExpiry;
   },
 
   // 사용자 정지/활성화

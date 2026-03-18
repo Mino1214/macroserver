@@ -6,7 +6,7 @@ console.log('🔍 DB 연결 설정:');
 console.log('  Host:', process.env.DB_HOST || 'localhost');
 console.log('  Port:', process.env.DB_PORT || '3306');
 console.log('  User:', process.env.DB_USER || 'mynolab_user');
-console.log('  Password:', process.env.DB_PASSWORD ? '***설정됨***' : '❌ 없음');
+console.log('  Password:', process.env.DB_PASSWORD || 'mynolab2026');
 console.log('  Database:', process.env.DB_NAME || 'mynolab');
 
 // MariaDB 연결 풀 생성 (하드코딩)
@@ -346,6 +346,135 @@ const settingDB = {
     );
   },
 };
+// ---------- 수금 지갑 버전 관련 ----------
+const collectionWalletDB = {
+  // 현재 active 지갑 조회
+  async getActive() {
+    const [rows] = await pool.query(
+      'SELECT id, wallet_version, root_wallet_address, label, status, activated_at, created_at FROM collection_wallets WHERE status = "active" ORDER BY wallet_version DESC LIMIT 1'
+    );
+    return rows.length > 0 ? rows[0] : null;
+  },
+
+  // 전체 이력 조회
+  async getHistory() {
+    const [rows] = await pool.query(
+      'SELECT id, wallet_version, root_wallet_address, label, status, activated_at, created_at FROM collection_wallets ORDER BY wallet_version DESC'
+    );
+    return rows;
+  },
+
+  // 신규 지갑 등록 (기존 active → inactive, 새 버전 active)
+  async activate(rootWalletAddress, label) {
+    // 현재 버전 번호 계산
+    const [maxRows] = await pool.query('SELECT COALESCE(MAX(wallet_version), 0) AS maxVer FROM collection_wallets');
+    const newVersion = maxRows[0].maxVer + 1;
+
+    // 기존 active → inactive
+    await pool.query('UPDATE collection_wallets SET status = "inactive" WHERE status = "active"');
+
+    // 신규 버전 추가
+    await pool.query(
+      'INSERT INTO collection_wallets (wallet_version, root_wallet_address, label, status, activated_at) VALUES (?, ?, ?, "active", NOW())',
+      [newVersion, rootWalletAddress, label || '']
+    );
+
+    return newVersion;
+  },
+
+  // 버전별 발급 주소 통계
+  async getStats(walletVersion) {
+    const [rows] = await pool.query(
+      `SELECT status, COUNT(*) AS cnt FROM deposit_addresses WHERE wallet_version = ? GROUP BY status`,
+      [walletVersion]
+    );
+    const stats = { issued: 0, waiting_deposit: 0, paid: 0, swept: 0, expired: 0 };
+    for (const row of rows) {
+      stats[row.status] = Number(row.cnt);
+    }
+    stats.total = Object.values(stats).reduce((a, b) => a + b, 0);
+    return stats;
+  },
+};
+
+// ---------- 개인 입금주소 발급 관련 ----------
+const depositAddressDB = {
+  // 사용자/주문 기준으로 유효한 주소 조회 (재사용)
+  async getActive(userId, orderId) {
+    const statuses = ['issued', 'waiting_deposit'];
+    let query = 'SELECT * FROM deposit_addresses WHERE user_id = ? AND status IN (?, ?)';
+    const params = [userId, ...statuses];
+    if (orderId) {
+      query += ' AND order_id = ?';
+      params.push(orderId);
+    }
+    query += ' ORDER BY created_at DESC LIMIT 1';
+    const [rows] = await pool.query(query, params);
+    return rows.length > 0 ? rows[0] : null;
+  },
+
+  // 신규 주소 발급 (derivation_index는 wallet_version 내에서 자동 증가)
+  async create({ userId, orderId, network, token, depositAddress, walletVersion }) {
+    // 해당 wallet_version 내 최대 index 계산
+    const [maxRows] = await pool.query(
+      'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+      [walletVersion]
+    );
+    const newIndex = maxRows[0].maxIdx + 1;
+
+    await pool.query(
+      `INSERT INTO deposit_addresses
+        (user_id, order_id, network, token, deposit_address, derivation_index, wallet_version, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')`,
+      [userId, orderId || null, network || 'TRON', token || 'USDT', depositAddress, newIndex, walletVersion]
+    );
+    return newIndex;
+  },
+
+  // 주소 상태 업데이트
+  async updateStatus(depositAddress, status) {
+    await pool.query(
+      'UPDATE deposit_addresses SET status = ? WHERE deposit_address = ?',
+      [status, depositAddress]
+    );
+  },
+
+  // 관리자용 목록 조회 (페이지네이션)
+  async getList({ walletVersion, status, page = 1, pageSize = 30 }) {
+    const conditions = [];
+    const params = [];
+
+    if (walletVersion) {
+      conditions.push('wallet_version = ?');
+      params.push(walletVersion);
+    }
+    if (status) {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const offset = (page - 1) * pageSize;
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total FROM deposit_addresses ${where}`,
+      params
+    );
+    const [rows] = await pool.query(
+      `SELECT id, user_id, order_id, network, token, deposit_address, derivation_index, wallet_version, status, created_at
+       FROM deposit_addresses ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+
+    return {
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      items: rows,
+    };
+  },
+};
 
 module.exports = {
   pool,
@@ -355,5 +484,7 @@ module.exports = {
   sessionDB,
   adminSessionDB,
   settingDB,
+  collectionWalletDB,
+  depositAddressDB,
 };
 

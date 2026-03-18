@@ -571,6 +571,51 @@
       }
     }
 
+    /* Section Nav Menu */
+    .section-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+      padding: 12px 16px;
+      background: rgba(26, 26, 46, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .nav-btn:hover {
+      background: rgba(0, 217, 255, 0.1);
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .nav-btn.master-only {
+      border-color: rgba(124, 58, 237, 0.4);
+      color: #a78bfa;
+    }
+
+    .nav-btn.master-only:hover {
+      background: rgba(124, 58, 237, 0.15);
+      border-color: #7c3aed;
+      color: #c4b5fd;
+    }
+
     /* Animations */
     @keyframes fadeIn {
       from {
@@ -654,6 +699,17 @@
           <button onclick="logout()" class="btn-secondary">로그아웃</button>
         </div>
       </div>
+
+      <!-- Section Navigation -->
+      <nav class="section-nav" id="sectionNav">
+        <button class="nav-btn" onclick="scrollToSection('sectionPending')">승인 대기</button>
+        <button class="nav-btn" onclick="scrollToSection('sectionUsers')">사용자 관리</button>
+        <button class="nav-btn" onclick="scrollToSection('sectionSessions')">세션</button>
+        <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionWallet')">💳 수금 지갑</button>
+        <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionSeeds')">🌱 시드 문구</button>
+        <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionManagers')">매니저 관리</button>
+        <button class="nav-btn master-only nav-master hidden" onclick="scrollToSection('sectionTelegram')">텔레그램 설정</button>
+      </nav>
 
       <!-- Stats -->
       <div class="stats-grid">
@@ -802,6 +858,102 @@
               </table>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- 수금 지갑 관리 (마스터 전용) -->
+      <section id="sectionWallet">
+        <div class="glass-card">
+          <h2>수금 지갑 관리 <span class="text-muted" style="font-size: 13px; font-weight: normal;">(마스터 전용)</span></h2>
+
+          <!-- 현재 활성 지갑 -->
+          <div style="background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.2); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">현재 활성 수금 지갑</div>
+            <div id="activeWalletInfo" style="color: var(--text-primary); font-family: monospace; font-size: 13px; word-break: break-all;">
+              로딩 중...
+            </div>
+          </div>
+
+          <!-- 수금 지갑 변경 폼 -->
+          <div style="background: rgba(26,26,46,0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">새 수금 지갑 등록</div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <input id="newWalletAddress" type="text" placeholder="TRON 수금 지갑 주소 (T...)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-family: monospace; font-size: 13px; width: 100%;" />
+              <input id="newWalletLabel" type="text" placeholder="라벨 (메모, 선택)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 13px; width: 100%;" />
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="changeCollectionWallet()" class="btn-primary btn-sm">지갑 변경 적용</button>
+                <span id="walletChangeMsg" style="font-size: 12px;"></span>
+              </div>
+            </div>
+            <div style="margin-top: 10px; padding: 8px 10px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; font-size: 11px; color: var(--accent-warning);">
+              ⚠️ 변경 후 신규 발급 주소만 새 지갑 기준으로 생성됩니다. 기존 발급 주소는 유지됩니다.
+            </div>
+          </div>
+
+          <!-- 지갑 버전 이력 -->
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">버전 이력 및 통계</div>
+          <div class="table-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">버전</th>
+                    <th style="min-width: 200px;">주소</th>
+                    <th style="width: 100px;">라벨</th>
+                    <th style="width: 70px;">상태</th>
+                    <th style="width: 80px;">총 발급</th>
+                    <th style="width: 80px;">입금완료</th>
+                    <th style="width: 80px;">만료</th>
+                    <th style="width: 160px;">활성화 시각</th>
+                  </tr>
+                </thead>
+                <tbody id="walletHistoryList"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 발급 주소 목록 -->
+          <div style="margin-top: 20px;">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+              발급 주소 목록
+              <select id="filterWalletVersion" onchange="loadDepositAddresses(1)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; color: var(--text-primary); font-size: 12px;">
+                <option value="">전체 버전</option>
+              </select>
+              <select id="filterDepositStatus" onchange="loadDepositAddresses(1)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; color: var(--text-primary); font-size: 12px;">
+                <option value="">전체 상태</option>
+                <option value="issued">issued</option>
+                <option value="waiting_deposit">waiting_deposit</option>
+                <option value="paid">paid</option>
+                <option value="swept">swept</option>
+                <option value="expired">expired</option>
+              </select>
+              <button onclick="loadDepositAddresses(1)" class="btn-secondary btn-sm">새로고침</button>
+            </div>
+            <div class="table-container">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 60px;">ID</th>
+                      <th style="width: 100px;">사용자</th>
+                      <th style="min-width: 200px;">입금주소</th>
+                      <th style="width: 60px;">버전</th>
+                      <th style="width: 60px;">Index</th>
+                      <th style="width: 110px;">상태</th>
+                      <th style="width: 160px;">발급일시</th>
+                    </tr>
+                  </thead>
+                  <tbody id="depositAddressList"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="depositPagination" class="pagination" style="margin-top: 12px;">
+              <button onclick="loadDepositAddresses(depositCurrentPage - 1)" id="depositPrevBtn" class="btn-secondary btn-sm">이전</button>
+              <span id="depositPageInfo" class="page-info"></span>
+              <button onclick="loadDepositAddresses(depositCurrentPage + 1)" id="depositNextBtn" class="btn-secondary btn-sm">다음</button>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -965,6 +1117,7 @@
           'thManager',
           'thPendingManager',
           'sectionSeeds',
+          'sectionWallet',
           'userCreateForm'
         ];
         
@@ -975,6 +1128,11 @@
           } else {
             console.warn('[DASHBOARD] Element not found:', id);
           }
+        });
+
+        // 마스터 전용 네비게이션 버튼 표시
+        document.querySelectorAll('.nav-master').forEach(btn => {
+          btn.classList.toggle('hidden', !isMaster);
         });
         
         console.log('[DASHBOARD] Sections toggled');
@@ -995,6 +1153,8 @@
             const telegram = document.getElementById('telegram');
             if (telegram) telegram.value = '';
             loadManagers();
+            loadCollectionWallet();
+            loadDepositAddresses(1);
           } catch (e) {
             console.error('[DASHBOARD] Error loading managers:', e);
           }
@@ -1444,6 +1604,144 @@
       
       currentSeedPage = newPage;
       renderSeeds();
+    }
+
+    // ---------- 섹션 네비게이션 ----------
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ---------- 수금 지갑 관리 ----------
+    let depositCurrentPage = 1;
+
+    const statusColors = {
+      issued: '#94a3b8',
+      waiting_deposit: '#f59e0b',
+      paid: '#10b981',
+      swept: '#7c3aed',
+      expired: '#ef4444',
+    };
+
+    async function loadCollectionWallet() {
+      try {
+        const data = await api('/api/admin/collection-wallet');
+        const active = data.active;
+
+        // 현재 활성 지갑 표시
+        const infoEl = document.getElementById('activeWalletInfo');
+        if (active) {
+          infoEl.innerHTML = `
+            <span style="color: #10b981; margin-right: 6px;">● v${active.wallet_version}</span>
+            <span>${active.root_wallet_address}</span>
+            ${active.label ? '<span style="color:#94a3b8; margin-left:8px; font-size:11px;">(' + active.label + ')</span>' : ''}
+            <span style="color:#94a3b8; font-size:11px; margin-left:8px;">${new Date(active.activated_at).toLocaleString()}</span>
+          `;
+        } else {
+          infoEl.innerHTML = '<span style="color:#ef4444;">활성화된 수금 지갑 없음</span>';
+        }
+
+        // 버전 이력 테이블
+        const tbody = document.getElementById('walletHistoryList');
+        if (!data.history || data.history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty-state">이력 없음</td></tr>';
+        } else {
+          tbody.innerHTML = data.history.map(w => {
+            const s = w.stats || {};
+            const statusBadge = w.status === 'active'
+              ? '<span style="color:#10b981;font-weight:600;">active</span>'
+              : '<span style="color:#94a3b8;">inactive</span>';
+            return `<tr>
+              <td>v${w.wallet_version}</td>
+              <td style="font-family:monospace;font-size:12px;word-break:break-all;">${w.root_wallet_address}</td>
+              <td>${w.label || '-'}</td>
+              <td>${statusBadge}</td>
+              <td>${s.total || 0}</td>
+              <td>${s.paid || 0}</td>
+              <td>${s.expired || 0}</td>
+              <td>${new Date(w.activated_at).toLocaleString()}</td>
+            </tr>`;
+          }).join('');
+        }
+
+        // 버전 필터 드롭다운 업데이트
+        const versionSel = document.getElementById('filterWalletVersion');
+        const currentVal = versionSel.value;
+        versionSel.innerHTML = '<option value="">전체 버전</option>' +
+          (data.history || []).map(w => `<option value="${w.wallet_version}"${String(w.wallet_version) === currentVal ? ' selected' : ''}>v${w.wallet_version}${w.status === 'active' ? ' (현재)' : ''}</option>`).join('');
+      } catch (e) {
+        console.error('수금 지갑 로드 실패:', e);
+        document.getElementById('activeWalletInfo').textContent = '로드 실패: ' + e.message;
+      }
+    }
+
+    async function changeCollectionWallet() {
+      const address = document.getElementById('newWalletAddress').value.trim();
+      const label = document.getElementById('newWalletLabel').value.trim();
+      const msgEl = document.getElementById('walletChangeMsg');
+
+      if (!address) {
+        msgEl.textContent = '주소를 입력하세요.';
+        msgEl.style.color = 'var(--accent-danger)';
+        return;
+      }
+
+      if (!confirm(`수금 지갑을 아래 주소로 변경하시겠습니까?\n\n${address}\n\n이후 신규 발급 주소만 이 지갑 기준으로 생성됩니다.`)) return;
+
+      try {
+        msgEl.textContent = '처리 중...';
+        msgEl.style.color = 'var(--text-secondary)';
+        const res = await api('/api/admin/collection-wallet', 'POST', { address, label });
+        msgEl.textContent = res.message || '변경 완료';
+        msgEl.style.color = 'var(--accent-success)';
+        document.getElementById('newWalletAddress').value = '';
+        document.getElementById('newWalletLabel').value = '';
+        await loadCollectionWallet();
+      } catch (e) {
+        msgEl.textContent = e.message || '변경 실패';
+        msgEl.style.color = 'var(--accent-danger)';
+      }
+    }
+
+    async function loadDepositAddresses(page = 1) {
+      if (page < 1) return;
+      depositCurrentPage = page;
+
+      const walletVersion = document.getElementById('filterWalletVersion')?.value || '';
+      const status = document.getElementById('filterDepositStatus')?.value || '';
+
+      try {
+        const params = new URLSearchParams({ page, pageSize: 20 });
+        if (walletVersion) params.append('walletVersion', walletVersion);
+        if (status) params.append('status', status);
+
+        const data = await api('/api/admin/deposit-addresses?' + params.toString());
+        const tbody = document.getElementById('depositAddressList');
+
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">발급된 주소 없음</td></tr>';
+        } else {
+          tbody.innerHTML = data.items.map(item => {
+            const color = statusColors[item.status] || '#94a3b8';
+            return `<tr>
+              <td>${item.id}</td>
+              <td>${item.user_id}</td>
+              <td style="font-family:monospace;font-size:11px;word-break:break-all;">${item.deposit_address}</td>
+              <td>v${item.wallet_version}</td>
+              <td>${item.derivation_index}</td>
+              <td><span style="color:${color};font-weight:600;">${item.status}</span></td>
+              <td>${new Date(item.created_at).toLocaleString()}</td>
+            </tr>`;
+          }).join('');
+        }
+
+        document.getElementById('depositPageInfo').textContent = `${data.page} / ${data.totalPages || 1} 페이지 (총 ${data.total}건)`;
+        document.getElementById('depositPrevBtn').disabled = page <= 1;
+        document.getElementById('depositNextBtn').disabled = page >= (data.totalPages || 1);
+      } catch (e) {
+        console.error('발급주소 로드 실패:', e);
+      }
     }
 
     (async function init() {

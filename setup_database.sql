@@ -96,6 +96,41 @@ INSERT INTO settings (key_name, value)
 VALUES ('telegram', '@문의')
 ON DUPLICATE KEY UPDATE value = value;
 
+-- 수금 지갑 버전 테이블
+CREATE TABLE IF NOT EXISTS collection_wallets (
+  id INT AUTO_INCREMENT PRIMARY KEY COMMENT '내부 ID',
+  wallet_version INT NOT NULL UNIQUE COMMENT '버전 번호 (1부터 증가)',
+  root_wallet_address VARCHAR(100) NOT NULL COMMENT 'TRON 수금 지갑 주소',
+  label VARCHAR(100) DEFAULT '' COMMENT '지갑 라벨(메모)',
+  status ENUM('active', 'inactive') NOT NULL DEFAULT 'active' COMMENT '활성 여부',
+  activated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '활성화 시각',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+  INDEX idx_status (status),
+  INDEX idx_version (wallet_version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='수금 지갑 버전 관리';
+
+-- 사용자별 개인 입금주소 발급 테이블
+CREATE TABLE IF NOT EXISTS deposit_addresses (
+  id INT AUTO_INCREMENT PRIMARY KEY COMMENT '내부 ID',
+  user_id VARCHAR(50) NOT NULL COMMENT '사용자 ID',
+  order_id VARCHAR(100) DEFAULT NULL COMMENT '주문/결제 ID (선택)',
+  network VARCHAR(20) NOT NULL DEFAULT 'TRON' COMMENT '네트워크',
+  token VARCHAR(20) NOT NULL DEFAULT 'USDT' COMMENT '토큰 종류',
+  deposit_address VARCHAR(100) NOT NULL COMMENT '발급된 입금 주소',
+  derivation_index INT NOT NULL COMMENT '파생 인덱스',
+  wallet_version INT NOT NULL COMMENT '발급 당시 wallet_version',
+  status ENUM('issued','waiting_deposit','paid','swept','expired') NOT NULL DEFAULT 'issued' COMMENT '입금 상태',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '발급일시',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정일시',
+  INDEX idx_user (user_id),
+  INDEX idx_wallet_version (wallet_version),
+  INDEX idx_status (status),
+  INDEX idx_address (deposit_address),
+  UNIQUE KEY uniq_address (deposit_address)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='사용자별 개인 입금주소 발급 내역';
+
 -- 결과 확인
 SELECT '✅ 데이터베이스 생성 완료!' AS Status;
 SHOW TABLES;

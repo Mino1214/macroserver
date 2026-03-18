@@ -958,6 +958,139 @@ app.get('/api/admin/seeds', requireAdmin, requireMaster, async (req, res) => {
   }
 });
 
+// ---------- 개인 입금주소 발급 API ----------
+
+// POST /api/payment/request-address
+// 사용자가 QR 화면 진입 시 서버에서 개인 입금주소 발급 (또는 기존 재사용)
+app.post('/api/payment/request-address', async (req, res) => {
+  try {
+    const { token, userId, orderId, network, tokenType } = req.body || {};
+
+    if (!token?.trim()) return res.status(401).json({ error: '세션 토큰이 필요합니다.' });
+
+    // 세션 검증
+    const sessionUserId = await sessionStore.getUserId(token.trim());
+    if (!sessionUserId) return res.status(401).json({ error: '유효하지 않은 세션입니다.' });
+
+    const resolvedUserId = (userId?.trim() || sessionUserId).toLowerCase();
+
+    // 현재 active 수금 지갑 조회
+    const activeWallet = await db.collectionWalletDB.getActive();
+    if (!activeWallet) {
+      return res.status(503).json({ error: '현재 활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
+    }
+
+    // 기존 유효 주소 재사용 여부 확인
+    const existing = await db.depositAddressDB.getActive(resolvedUserId, orderId || null);
+
+    if (existing) {
+      // 기존 주소가 현재 wallet_version과 다르면 invalidated 플래그 설정
+      const invalidated = existing.wallet_version !== activeWallet.wallet_version;
+      return res.json({
+        address: existing.deposit_address,
+        walletVersion: existing.wallet_version,
+        status: existing.status,
+        invalidated,
+        isNew: false,
+      });
+    }
+
+    // 신규 주소 발급: 현재 active wallet의 derivation_index 기반 주소 생성
+    // 실제 운영 환경에서는 HD wallet derivation을 사용해야 하지만,
+    // 현재는 root_wallet_address 기반으로 index를 포함한 고유 주소를 생성합니다.
+    // (실제 TRON HD 주소 파생은 별도 라이브러리 연동 필요)
+    const [maxRows] = await db.pool.query(
+      'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+      [activeWallet.wallet_version]
+    );
+    const newIndex = maxRows[0].maxIdx + 1;
+
+    // 임시 주소 생성 (실제 환경에서는 HD wallet 파생 주소 사용)
+    // 주소 = root 주소 + version + index 기반 해시의 앞 6자리를 붙인 형태
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256')
+      .update(`${activeWallet.root_wallet_address}_v${activeWallet.wallet_version}_i${newIndex}`)
+      .digest('hex')
+      .substring(0, 6)
+      .toUpperCase();
+    const newAddress = `${activeWallet.root_wallet_address.substring(0, 28)}${hash}`;
+
+    await db.depositAddressDB.create({
+      userId: resolvedUserId,
+      orderId: orderId || null,
+      network: network || 'TRON',
+      token: tokenType || 'USDT',
+      depositAddress: newAddress,
+      walletVersion: activeWallet.wallet_version,
+    });
+
+    res.json({
+      address: newAddress,
+      walletVersion: activeWallet.wallet_version,
+      status: 'issued',
+      invalidated: false,
+      isNew: true,
+    });
+  } catch (error) {
+    console.error('입금주소 발급 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// ---------- 관리자 - 수금 지갑 관리 ----------
+
+// GET /api/admin/collection-wallet — 현재 active 지갑 + 전체 이력
+app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const active = await db.collectionWalletDB.getActive();
+    const history = await db.collectionWalletDB.getHistory();
+
+    // 버전별 통계 추가
+    const historyWithStats = await Promise.all(
+      history.map(async (w) => {
+        const stats = await db.collectionWalletDB.getStats(w.wallet_version);
+        return { ...w, stats };
+      })
+    );
+
+    res.json({ active, history: historyWithStats });
+  } catch (error) {
+    console.error('수금 지갑 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// POST /api/admin/collection-wallet — 새 수금 지갑 등록 (기존 버전 비활성화)
+app.post('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { address, label } = req.body || {};
+    if (!address?.trim()) return res.status(400).json({ error: 'TRON 수금 지갑 주소를 입력하세요.' });
+
+    const newVersion = await db.collectionWalletDB.activate(address.trim(), label?.trim() || '');
+    res.json({ ok: true, walletVersion: newVersion, message: `수금 지갑이 v${newVersion}으로 변경되었습니다.` });
+  } catch (error) {
+    console.error('수금 지갑 변경 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/admin/deposit-addresses — 발급 주소 목록 조회
+app.get('/api/admin/deposit-addresses', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { walletVersion, status, page = 1, pageSize = 30 } = req.query;
+    const result = await db.depositAddressDB.getList({
+      walletVersion: walletVersion ? Number(walletVersion) : undefined,
+      status: status || undefined,
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('입금주소 목록 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // 메인 페이지(/)를 관리자 페이지로 리다이렉트
 app.get('/', (req, res) => {
   res.redirect('/admin.html');

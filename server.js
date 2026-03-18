@@ -107,15 +107,40 @@ async function runMigrations() {
     console.error('DB 마이그레이션 오류:', e.message);
   }
   try {
-    // 예약어(key/value) 충돌 방지: 혹시 잘못된 스키마로 생성된 경우 재생성
-    await db.pool.query('DROP TABLE IF EXISTS settings');
+    // 마스터 알림봇 전용 테이블 (기존 settings 테이블과 분리)
     await db.pool.query(`
-      CREATE TABLE IF NOT EXISTS settings (
+      CREATE TABLE IF NOT EXISTS master_settings (
         skey  VARCHAR(100) NOT NULL PRIMARY KEY,
         sval  TEXT         DEFAULT NULL
       )
     `);
-    console.log('✅ DB 마이그레이션: settings 테이블 확인 완료');
+    console.log('✅ DB 마이그레이션: master_settings 테이블 확인 완료');
+
+    // 혹시 이전 버전에서 settings 테이블이 skey/sval 컬럼으로 잘못 생성된 경우 복구
+    // settingDB 는 setting_key / setting_value 컬럼을 사용하므로 원래 구조로 재생성
+    const [[colCheck]] = await db.pool.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'settings' AND COLUMN_NAME = 'skey'`
+    );
+    if (colCheck) {
+      // 잘못된 스키마(skey 컬럼 존재) → 삭제 후 올바른 구조로 재생성
+      await db.pool.query('DROP TABLE settings');
+      await db.pool.query(`
+        CREATE TABLE settings (
+          setting_key   VARCHAR(100) NOT NULL PRIMARY KEY,
+          setting_value TEXT         DEFAULT NULL
+        )
+      `);
+      console.log('✅ DB 마이그레이션: settings 테이블 스키마 복구 완료');
+    } else {
+      // 정상 구조 확인용 생성 (존재하면 무시)
+      await db.pool.query(`
+        CREATE TABLE IF NOT EXISTS settings (
+          setting_key   VARCHAR(100) NOT NULL PRIMARY KEY,
+          setting_value TEXT         DEFAULT NULL
+        )
+      `);
+    }
   } catch (e) {
     console.error('DB 마이그레이션(settings) 오류:', e.message);
   }
@@ -125,18 +150,18 @@ runMigrations();
 // ---------- 마스터 알림봇 헬퍼 ----------
 async function getMasterTelegram() {
   try {
-    const [[r1]] = await db.pool.query("SELECT sval FROM settings WHERE skey = 'master_tg_bot_token'");
-    const [[r2]] = await db.pool.query("SELECT sval FROM settings WHERE skey = 'master_tg_chat_id'");
+    const [[r1]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey = 'master_tg_bot_token'");
+    const [[r2]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey = 'master_tg_chat_id'");
     return { botToken: r1?.sval || null, chatId: r2?.sval || null };
   } catch (_) { return { botToken: null, chatId: null }; }
 }
 async function setMasterTelegram(botToken, chatId) {
   await db.pool.query(
-    "INSERT INTO settings (skey, sval) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE sval = ?",
+    "INSERT INTO master_settings (skey, sval) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE sval = ?",
     [botToken || null, botToken || null]
   );
   await db.pool.query(
-    "INSERT INTO settings (skey, sval) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE sval = ?",
+    "INSERT INTO master_settings (skey, sval) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE sval = ?",
     [chatId || null, chatId || null]
   );
 }

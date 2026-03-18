@@ -568,18 +568,50 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/session/validate', async (req, res) => {
   try {
-  const token = req.query.token;
+    const token = req.query.token;
     if (!token) return res.status(401).json({ error: 'token 필요' });
-    
-    const isValid = await sessionStore.isValid(token);
-    if (isValid) {
-      return res.json({ ok: true });
+
+    const [rows] = await db.pool.query(
+      'SELECT user_id, last_activity, kicked FROM sessions WHERE token = ?',
+      [token]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'expired', kicked: false });
     }
-    
-  res.status(401).json({ error: 'kicked' });
+
+    const session = rows[0];
+
+    // 다른 기기 로그인으로 강제 종료된 경우
+    if (session.kicked) {
+      return res.status(401).json({ error: 'kicked', kicked: true });
+    }
+
+    // 24시간 타임아웃 확인
+    const lastActivity = new Date(session.last_activity).getTime();
+    if (Date.now() - lastActivity > SESSION_TIMEOUT) {
+      await db.pool.query('DELETE FROM sessions WHERE token = ?', [token]);
+      return res.status(401).json({ error: 'expired', kicked: false });
+    }
+
+    // 슬라이딩 세션 갱신
+    await db.pool.query('UPDATE sessions SET last_activity = NOW() WHERE token = ?', [token]);
+    return res.json({ ok: true });
   } catch (error) {
     console.error('세션 검증 오류:', error);
     res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// POST /api/logout — 앱 종료 시 세션 명시적 삭제
+app.post('/api/logout', async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'token 필요' });
+    await db.pool.query('DELETE FROM sessions WHERE token = ?', [token]);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

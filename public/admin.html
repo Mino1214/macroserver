@@ -2,325 +2,1448 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>관리자</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#0f0f23">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <!-- Version: 2026-03-03-DISPLAY-FULL-SEED -->
+  <title>Admin Dashboard</title>
+  <script>
+    // Force reload if old version is cached
+    const CURRENT_VERSION = '2026-03-03-DISPLAY-FULL-SEED';
+    const CACHE_KEY = 'admin_version';
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached && cached !== CURRENT_VERSION) {
+      console.log('[VERSION] Old version detected, forcing hard reload...');
+      localStorage.setItem(CACHE_KEY, CURRENT_VERSION);
+      window.location.reload(true);
+    } else if (!cached) {
+      localStorage.setItem(CACHE_KEY, CURRENT_VERSION);
+    }
+  </script>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', sans-serif; background: #1e1e1e; color: #d4d4d4; margin: 20px; }
-    h1 { color: #4ec9b0; }
-    h2 { color: #8ab4b0; font-size: 1.1rem; margin-top: 0; }
-    section { background: #2d2d30; padding: 16px; margin: 16px 0; border-radius: 8px; max-width: 900px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
-    input, button, select { padding: 8px 12px; margin: 4px; border-radius: 4px; border: 1px solid #555; background: #3c3c3c; color: #d4d4d4; }
-    button { cursor: pointer; background: #4ec9b0; color: #1e1e1e; border: none; }
-    button.danger { background: #c55858; color: #fff; }
-    button.secondary { background: #5a5a5c; color: #d4d4d4; }
-    .error { color: #f55; }
-    .ok { color: #4ec9b0; }
-    #loginBox { max-width: 320px; margin: 40px auto; }
-    #loginBox input { width: 100%; margin: 6px 0; }
-    #loginBox button { width: 100%; margin-top: 8px; }
-    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-    .role-badge { font-size: 12px; color: #8ab4b0; }
-    .hidden { display: none !important; }
-    tr.mgr-row { cursor: pointer; }
-    tr.mgr-row:hover { background: #383838; }
-    tr.mgr-detail td { background: #252526; padding: 12px 16px; border-left: 3px solid #4ec9b0; }
-    .mgr-detail-users { list-style: none; margin: 0; padding: 0; }
-    .mgr-detail-users li { padding: 4px 0; }
+    :root {
+      --bg-primary: #0f0f23;
+      --bg-secondary: #1a1a2e;
+      --bg-card: rgba(26, 26, 46, 0.6);
+      --bg-card-hover: rgba(26, 26, 46, 0.8);
+      --accent-primary: #00d9ff;
+      --accent-secondary: #7c3aed;
+      --accent-success: #10b981;
+      --accent-danger: #ef4444;
+      --accent-warning: #f59e0b;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(148, 163, 184, 0.1);
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+      background-attachment: fixed;
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Glassmorphism Cards */
+    .glass-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow-lg);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .glass-card:hover {
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-xl);
+    }
+
+    /* Login Page */
+    #loginBox {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .login-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 48px 32px;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .login-logo h1 {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .login-logo p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    select {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 15px;
+      transition: all 0.2s;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+    }
+
+    /* Buttons */
+    button {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      outline: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      color: white;
+      width: 100%;
+      box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-success {
+      background: var(--accent-success);
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--accent-danger);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-sm {
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Dashboard Layout */
+    #dashboard {
+      display: none;
+    }
+
+    .dashboard-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Header */
+    .dashboard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-title h1 {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 4px;
+    }
+
+    .header-title .subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+    }
+
+    .user-badge .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .role-badge {
+      padding: 4px 12px;
+      background: rgba(124, 58, 237, 0.1);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 20px;
+      color: var(--accent-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    /* Section */
+    section {
+      margin-bottom: 32px;
+    }
+
+    section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    section h2::before {
+      content: '';
+      width: 4px;
+      height: 20px;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      border-radius: 2px;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-xl);
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-trend {
+      font-size: 12px;
+      color: var(--accent-success);
+      margin-top: 8px;
+    }
+
+    /* Table */
+    .table-container {
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-card);
+    }
+
+    thead {
+      background: rgba(0, 217, 255, 0.05);
+    }
+
+    th {
+      padding: 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 16px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+    }
+
+    tbody tr {
+      transition: background 0.2s;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Status Badges */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-pending {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--accent-warning);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .status-approved {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-suspended {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--accent-danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* Form */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .pagination button {
+      min-width: 100px;
+    }
+
+    .pagination .page-info {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Utilities */
+    .hidden {
+      display: none !important;
+    }
+
+    .error {
+      color: var(--accent-danger);
+    }
+
+    .success {
+      color: var(--accent-success);
+    }
+
+    .text-muted {
+      color: var(--text-secondary);
+    }
+
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-container {
+        padding: 16px;
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .header-title h1 {
+        font-size: 24px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .glass-card {
+        padding: 16px;
+      }
+
+      table {
+        font-size: 13px;
+      }
+
+      th, td {
+        padding: 12px 8px;
+      }
+
+      button {
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+
+      .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+
+      .login-card {
+        padding: 32px 24px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .user-badge {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .header-actions {
+        width: 100%;
+        flex-direction: column;
+      }
+
+      .header-actions button {
+        width: 100%;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    section {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.5);
+    }
   </style>
 </head>
 <body>
-  <div id="loginBox" class="hidden">
-    <h1>관리자 로그인</h1>
-    <section>
-      <input type="text" id="loginId" placeholder="아이디" autocomplete="username">
-      <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
-      <button onclick="doLogin()">로그인</button>
-      <p id="loginError" class="error" style="margin:8px 0 0;display:none;"></p>
-    </section>
+
+  <!-- Login Page -->
+  <div id="loginBox">
+    <div class="login-container">
+      <div class="login-card">
+        <div class="login-logo">
+          <h1>Admin Dashboard</h1>
+          <p>관리자 로그인</p>
+        </div>
+        <form onsubmit="login(event)">
+          <div class="form-group">
+            <label class="form-label">아이디</label>
+            <input type="text" id="loginId" placeholder="아이디를 입력하세요" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label">비밀번호</label>
+            <input type="password" id="loginPw" placeholder="비밀번호를 입력하세요" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn-primary">로그인</button>
+          <p id="loginError" class="error text-muted" style="margin-top: 16px; text-align: center; font-size: 14px;"></p>
+        </form>
+      </div>
+    </div>
   </div>
 
-  <div id="dashboard" class="hidden">
-    <div class="header">
-      <h1>관리자 페이지</h1>
-      <span class="role-badge" id="roleBadge"></span>
-      <button class="secondary" onclick="doLogout()">로그아웃</button>
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <div class="dashboard-container">
+      
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-title">
+          <h1>Admin Dashboard</h1>
+          <p class="subtitle">시스템 관리 및 모니터링</p>
+        </div>
+        <div class="header-actions">
+          <div class="user-badge">
+            <div class="avatar">A</div>
+            <div>
+              <div style="font-size: 14px; font-weight: 600;" id="adminName">관리자</div>
+              <div class="role-badge" id="adminRole">MASTER</div>
+            </div>
+          </div>
+          <button onclick="logout()" class="btn-secondary">로그아웃</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">전체 사용자</div>
+          <div class="stat-value" id="statTotalUsers">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">승인 대기</div>
+          <div class="stat-value" id="statPendingUsers">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">활성 세션</div>
+          <div class="stat-value" id="statActiveSessions">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">수신 시드</div>
+          <div class="stat-value" id="statTotalSeeds">0</div>
+        </div>
+      </div>
+
+      <!-- Telegram Setting -->
+      <section id="sectionTelegram" class="hidden">
+        <div class="glass-card">
+          <h2>텔레그램 설정</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">닉네임</label>
+              <input type="text" id="telegram" placeholder="@username">
+            </div>
+            <div>
+              <button onclick="saveTelegram()" class="btn-success" style="margin-top: 28px;">저장</button>
+            </div>
+          </div>
+          <p id="telegramMsg" class="text-muted" style="margin-top: 8px; font-size: 14px;"></p>
+        </div>
+      </section>
+
+      <!-- Managers -->
+      <section id="sectionManagers" class="hidden">
+        <div class="glass-card">
+          <h2>매니저 관리</h2>
+          <div class="form-grid">
+            <input type="text" id="mgrId" placeholder="매니저 아이디">
+            <input type="password" id="mgrPw" placeholder="비밀번호">
+            <input type="text" id="mgrTelegram" placeholder="텔레그램 (선택)">
+            <input type="text" id="mgrMemo" placeholder="메모 (선택)">
+            <button onclick="addManager()" class="btn-success">매니저 추가</button>
+          </div>
+          <div class="table-container" style="margin-top: 24px;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>아이디</th>
+                    <th>텔레그램</th>
+                    <th>메모</th>
+                    <th>생성일</th>
+                    <th>작업</th>
+                  </tr>
+                </thead>
+                <tbody id="managersList"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pending Users -->
+      <section id="sectionPending">
+        <div class="glass-card">
+          <h2>승인 대기 목록</h2>
+          <div class="table-container">
+            <div class="table-wrapper">
+              <table id="tablePending">
+                <thead>
+                  <tr>
+                    <th>아이디</th>
+                    <th id="thPendingManager">매니저</th>
+                    <th>텔레그램</th>
+                    <th>신청일</th>
+                    <th>작업</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <p id="msgPending" class="empty-state">승인 대기 중인 사용자가 없습니다.</p>
+        </div>
+      </section>
+
+      <!-- Users -->
+      <section id="sectionUsers">
+        <div class="glass-card">
+          <h2 id="usersTitle">승인된 사용자</h2>
+          
+          <!-- User Creation Form -->
+          <div id="userCreateForm" class="hidden" style="margin-bottom: 24px;">
+            <div class="form-grid">
+              <input type="text" id="newUserId" placeholder="아이디">
+              <input type="password" id="newUserPw" placeholder="비밀번호">
+              <select id="newUserManager">
+                <option value="">(매니저 선택)</option>
+              </select>
+              <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
+              <button onclick="addUser()" class="btn-success">직접 생성 (마스터 전용)</button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>아이디</th>
+                    <th id="thManager" class="hidden">매니저</th>
+                    <th>텔레그램</th>
+                    <th>상태</th>
+                    <th>사용기간</th>
+                    <th>조치</th>
+                  </tr>
+                </thead>
+                <tbody id="userList"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sessions -->
+      <section id="sectionSessions">
+        <div class="glass-card">
+          <h2>활성 세션</h2>
+          <div class="table-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>사용자</th>
+                    <th>토큰</th>
+                    <th>작업</th>
+                  </tr>
+                </thead>
+                <tbody id="sessions"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Seeds -->
+      <section id="sectionSeeds">
+        <div class="glass-card">
+          <h2>수신 시드 문구 <span id="seedTotal" class="text-muted" style="font-size: 14px; font-weight: normal;"></span></h2>
+          <div style="margin-bottom: 16px;">
+            <button onclick="loadSeeds()" class="btn-secondary btn-sm">새로고침</button>
+          </div>
+          <div class="table-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">No</th>
+                    <th style="min-width: 400px;">시드 문구</th>
+                    <th style="width: 120px;">사용자</th>
+                    <th style="width: 150px;">밸런스</th>
+                    <th style="width: 180px;">시각</th>
+                  </tr>
+                </thead>
+                <tbody id="seeds"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="seedPagination" class="pagination">
+            <button onclick="changeSeedPage(-1)" id="seedPrevBtn" class="btn-secondary btn-sm">이전</button>
+            <span id="seedPageInfo" class="page-info"></span>
+            <button onclick="changeSeedPage(1)" id="seedNextBtn" class="btn-secondary btn-sm">다음</button>
+          </div>
+        </div>
+      </section>
+
     </div>
-
-    <!-- 마스터 전용: 텔레그램 -->
-    <section id="sectionTelegram" class="hidden">
-      <h2>텔레그램 문의 (로그인 화면 표시)</h2>
-      <input type="text" id="telegram" placeholder="@문의" style="width: 260px;">
-      <button onclick="saveTelegram()">저장</button>
-      <span id="telegramMsg"></span>
-    </section>
-
-    <!-- 마스터 전용: 매니저 관리 -->
-    <section id="sectionManagers" class="hidden">
-      <h2>매니저 관리</h2>
-      <p>매니저 아이디 · 비밀번호 · 텔레그램 · 메모(주석) 로 계정 생성/수정. 행을 클릭하면 소속 유저가 펼쳐집니다.</p>
-      <input type="text" id="mgrId" placeholder="매니저 아이디">
-      <input type="password" id="mgrPw" placeholder="비밀번호">
-      <input type="text" id="mgrTelegram" placeholder="텔레그램 아이디">
-      <input type="text" id="mgrMemo" placeholder="메모 (주석, 선택)">
-      <button onclick="saveManager()">저장</button>
-      <table>
-        <thead><tr><th></th><th>아이디</th><th>텔레그램</th><th>메모</th><th>소속 유저 수</th><th>조치</th></tr></thead>
-        <tbody id="managersList"></tbody>
-      </table>
-    </section>
-
-    <!-- 유저 관리 (마스터=전체+매니저명, 매니저=내 유저만) -->
-    <section id="sectionUsers">
-      <h2 id="usersTitle">사용자 관리</h2>
-      <input type="text" id="newUserId" placeholder="아이디">
-      <input type="password" id="newUserPw" placeholder="비밀번호">
-      <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
-      <select id="newUserManager" class="hidden"></select>
-      <button onclick="addUser()">저장</button>
-      <table>
-        <thead><tr><th>아이디</th><th id="thManager" class="hidden">매니저</th><th>텔레그램</th><th>조치</th></tr></thead>
-        <tbody id="userList"></tbody>
-      </table>
-    </section>
-
-    <!-- 세션 -->
-    <section id="sectionSessions">
-      <h2>접속 중인 세션</h2>
-      <button onclick="loadSessions()">새로고침</button>
-      <table>
-        <thead><tr><th>사용자</th><th>토큰(앞 8자)</th><th>조치</th></tr></thead>
-        <tbody id="sessions"></tbody>
-      </table>
-    </section>
-
-    <!-- 시드 -->
-    <section id="sectionSeeds">
-      <h2>수신 시드 문구</h2>
-      <label><input type="checkbox" id="masked" checked> 마스킹</label>
-      <button onclick="loadSeeds()">새로고침</button>
-      <table>
-        <thead><tr><th>No</th><th>사용자</th><th>문구</th><th>시각</th></tr></thead>
-        <tbody id="seeds"></tbody>
-      </table>
-    </section>
   </div>
 
   <script>
+    // Developer tools protection
+    (function() {
+      'use strict';
+      const originalFetch = window.fetch;
+      window.fetch = function(...args) {
+        const url = args[0];
+        if (typeof url === 'string' && url.includes('/api/')) {
+          const urlObj = new URL(url, window.location.origin);
+          const path = urlObj.pathname;
+          const obfuscated = btoa(path);
+        }
+        return originalFetch.apply(this, args);
+      };
+
+      const originalConsoleLog = console.log;
+      console.log = function(...args) {
+        if (args.some(arg => typeof arg === 'string' && arg.includes('/api/'))) {
+          return;
+        }
+        return originalConsoleLog.apply(console, args);
+      };
+
+      window.addEventListener('devtoolschange', (e) => {
+        if (e.detail.isOpen) {
+          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:24px;color:#ef4444;">Developer tools detected</div>';
+        }
+      });
+    })();
+
     const API = '';
     let adminToken = localStorage.getItem('adminToken') || '';
-    let me = { role: '', id: '' };
+    let me = null;
     let allUsers = [];
+    let allSeeds = [];
+    let currentSeedPage = 1;
+    const SEEDS_PER_PAGE = 10;
 
     function authHeaders() {
-      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken };
+      return adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {};
     }
-    async function api(path, opts = {}) {
-      const r = await fetch(API + path, { ...opts, headers: { ...authHeaders(), ...opts.headers } });
+
+    async function api(path, method = 'GET', body = null) {
+      const encodedPath = btoa(path);
+      const decodedPath = atob(encodedPath);
+      
+      const opts = {
+        method: method,
+        headers: { ...authHeaders() },
+        cache: 'no-store'
+      };
+      
+      if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      
+      const r = await fetch(API + decodedPath, opts);
+      
       if (r.status === 401) {
         adminToken = '';
         localStorage.removeItem('adminToken');
         showLogin();
         throw new Error('로그인이 필요합니다.');
       }
-      return r.ok ? r.json() : Promise.reject(await r.text());
+      
+      if (!r.ok) {
+        let errorMsg = '요청 실패';
+        try {
+          const errorText = await r.text();
+          const errorJson = JSON.parse(errorText);
+          errorMsg = errorJson.error || errorText;
+        } catch (e) {
+          errorMsg = await r.text() || `서버 오류 (${r.status})`;
+        }
+        throw new Error(errorMsg);
+      }
+      
+      return r.json();
     }
 
     function showLogin() {
-      document.getElementById('loginBox').classList.remove('hidden');
-      document.getElementById('dashboard').classList.add('hidden');
-    }
-    function showDashboard() {
-      document.getElementById('loginBox').classList.add('hidden');
-      document.getElementById('dashboard').classList.remove('hidden');
-      const isMaster = me.role === 'master';
-      document.getElementById('sectionTelegram').classList.toggle('hidden', !isMaster);
-      document.getElementById('sectionManagers').classList.toggle('hidden', !isMaster);
-      document.getElementById('thManager').classList.toggle('hidden', !isMaster);
-      document.getElementById('newUserManager').classList.toggle('hidden', !isMaster);
-      document.getElementById('usersTitle').textContent = isMaster ? '사용자 관리 (전체)' : '내 사용자';
-      document.getElementById('roleBadge').textContent = isMaster ? '마스터' : '매니저: ' + me.id;
-      loadAll();
+      document.getElementById('loginBox').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
     }
 
-    async function doLogin() {
-      const id = document.getElementById('loginId').value.trim();
-      const pw = document.getElementById('loginPw').value;
-      document.getElementById('loginError').style.display = 'none';
-      if (!id || !pw) {
-        document.getElementById('loginError').textContent = '아이디와 비밀번호를 입력하세요.';
-        document.getElementById('loginError').style.display = 'block';
-        return;
-      }
+    function showDashboard() {
+      console.log('[DASHBOARD] === STARTING SHOW DASHBOARD ===');
+      console.log('[DASHBOARD] me:', me);
+      
       try {
-        const r = await fetch(API + '/api/admin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, password: pw }),
+        const loginBox = document.getElementById('loginBox');
+        const dashboard = document.getElementById('dashboard');
+        
+        console.log('[DASHBOARD] loginBox element:', loginBox);
+        console.log('[DASHBOARD] dashboard element:', dashboard);
+        
+        if (!loginBox || !dashboard) {
+          throw new Error('Required elements not found!');
+        }
+        
+        // 강제로 표시 변경
+        loginBox.style.display = 'none';
+        loginBox.style.visibility = 'hidden';
+        dashboard.style.display = 'block';
+        dashboard.style.visibility = 'visible';
+        
+        console.log('[DASHBOARD] Display changed - loginBox: none, dashboard: block');
+        console.log('[DASHBOARD] loginBox computed display:', window.getComputedStyle(loginBox).display);
+        console.log('[DASHBOARD] dashboard computed display:', window.getComputedStyle(dashboard).display);
+        
+        if (!me) {
+          console.error('[DASHBOARD] me is null or undefined!');
+          return;
+        }
+        
+        const isMaster = me && me.role === 'master';
+        console.log('[DASHBOARD] isMaster:', isMaster);
+        
+        // 섹션 토글
+        const sections = [
+          'sectionTelegram',
+          'sectionManagers', 
+          'thManager',
+          'thPendingManager',
+          'sectionSeeds',
+          'userCreateForm'
+        ];
+        
+        sections.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.classList.toggle('hidden', !isMaster);
+          } else {
+            console.warn('[DASHBOARD] Element not found:', id);
+          }
         });
-        const data = r.ok ? await r.json() : null;
-        if (!r.ok) throw new Error(data?.error || await r.text());
-        adminToken = data.token;
-        me = { role: data.role, id: data.id };
-        localStorage.setItem('adminToken', adminToken);
-        showDashboard();
-      } catch (e) {
-        document.getElementById('loginError').textContent = e.message || '로그인 실패';
-        document.getElementById('loginError').style.display = 'block';
+        
+        console.log('[DASHBOARD] Sections toggled');
+        
+        // 텍스트 업데이트
+        const adminName = document.getElementById('adminName');
+        const adminRole = document.getElementById('adminRole');
+        const usersTitle = document.getElementById('usersTitle');
+        
+        if (adminName) adminName.textContent = me.id || '관리자';
+        if (adminRole) adminRole.textContent = me.role === 'master' ? 'MASTER' : 'MANAGER';
+        if (usersTitle) usersTitle.textContent = isMaster ? '승인된 사용자 (전체)' : '내 사용자';
+        
+        console.log('[DASHBOARD] Text content updated');
+        
+        if (isMaster) {
+          try {
+            const telegram = document.getElementById('telegram');
+            if (telegram) telegram.value = '';
+            loadManagers();
+          } catch (e) {
+            console.error('[DASHBOARD] Error loading managers:', e);
+          }
+        }
+        
+        console.log('[DASHBOARD] Loading all data...');
+        loadAll().catch(err => {
+          console.error('[DASHBOARD] Error in loadAll:', err);
+        });
+        
+        console.log('[DASHBOARD] === DASHBOARD SHOWN SUCCESSFULLY ===');
+        
+        // 최종 확인
+        setTimeout(() => {
+          console.log('[DASHBOARD] Final check - loginBox display:', loginBox.style.display);
+          console.log('[DASHBOARD] Final check - dashboard display:', dashboard.style.display);
+        }, 500);
+        
+      } catch (error) {
+        console.error('[DASHBOARD] CRITICAL ERROR:', error);
+        alert('대시보드 표시 중 오류 발생:\n' + error.message + '\n\n콘솔(F12)을 확인해주세요.');
       }
     }
-    async function doLogout() {
-      try { await fetch(API + '/api/admin/logout', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ token: adminToken }) }); } catch (_) {}
+
+    async function login(e) {
+      e.preventDefault();
+      const id = document.getElementById('loginId').value.trim();
+      const password = document.getElementById('loginPw').value.trim();
+      const errorEl = document.getElementById('loginError');
+      
+      console.log('[LOGIN] Starting login...', { id });
+      
+      errorEl.textContent = '';
+      errorEl.className = 'text-muted';
+      
+      try {
+        console.log('[LOGIN] Calling API...');
+        const data = await api('/api/admin/login', 'POST', { id, password });
+        console.log('[LOGIN] API response:', data);
+        
+        if (!data || !data.token) {
+          throw new Error('Invalid API response');
+        }
+        
+        adminToken = data.token;
+        localStorage.setItem('adminToken', adminToken);
+        me = data;
+        
+        console.log('[LOGIN] Token saved:', adminToken.substring(0, 20) + '...');
+        console.log('[LOGIN] User data:', me);
+        console.log('[LOGIN] Calling showDashboard...');
+        
+        // 강제로 페이지 전환
+        setTimeout(() => {
+          showDashboard();
+          console.log('[LOGIN] showDashboard called!');
+          
+          // 추가 확인
+          console.log('[LOGIN] loginBox display:', document.getElementById('loginBox').style.display);
+          console.log('[LOGIN] dashboard display:', document.getElementById('dashboard').style.display);
+        }, 100);
+        
+      } catch (err) {
+        console.error('[LOGIN] Error:', err);
+        errorEl.textContent = err.message || '로그인 실패';
+        errorEl.className = 'error';
+        alert('로그인 오류: ' + (err.message || '알 수 없는 오류'));
+      }
+    }
+
+    function logout() {
+      if (!confirm('로그아웃 하시겠습니까?')) return;
       adminToken = '';
       localStorage.removeItem('adminToken');
       showLogin();
     }
 
     async function loadAll() {
-      if (me.role === 'master') {
-        loadTelegram();
-        await loadUsers();
-        loadManagers();
-      } else {
-        loadUsers();
-      }
-      loadSessions();
-      loadSeeds();
-    }
-    async function loadTelegram() {
+      console.log('[LOADALL] Starting to load all data...');
       try {
-        const d = await fetch(API + '/api/admin/telegram').then(r => r.json());
-        document.getElementById('telegram').value = d.nickname || '';
-      } catch (_) {}
+        await Promise.all([
+          loadPendingUsers(),
+          loadUsers(),
+          loadSessions(),
+          loadSeeds(),
+          loadStats()
+        ]);
+        console.log('[LOADALL] All data loaded successfully');
+      } catch (error) {
+        console.error('[LOADALL] Error loading data:', error);
+      }
     }
+
+    async function loadStats() {
+      try {
+        const [users, pending, sessions, seeds] = await Promise.all([
+          api('/api/admin/users'),
+          api('/api/admin/pending-users'),
+          api('/api/admin/sessions'),
+          me.role === 'master' ? api('/api/admin/seeds') : Promise.resolve([])
+        ]);
+        
+        document.getElementById('statTotalUsers').textContent = users.length;
+        document.getElementById('statPendingUsers').textContent = pending.length;
+        document.getElementById('statActiveSessions').textContent = sessions.length;
+        document.getElementById('statTotalSeeds').textContent = seeds.length;
+      } catch (e) {
+        console.error('통계 로드 실패:', e);
+      }
+    }
+
     async function saveTelegram() {
       const nick = document.getElementById('telegram').value.trim();
       try {
-        await api('/api/admin/telegram', { method: 'POST', body: JSON.stringify({ nickname: nick }) });
-        document.getElementById('telegramMsg').textContent = ' 저장됨';
-        document.getElementById('telegramMsg').className = 'ok';
+        await api('/api/admin/telegram', 'POST', { nickname: nick });
+        document.getElementById('telegramMsg').textContent = '저장되었습니다.';
+        document.getElementById('telegramMsg').className = 'success';
       } catch (e) {
-        document.getElementById('telegramMsg').textContent = ' 실패';
+        document.getElementById('telegramMsg').textContent = e.message || '실패';
         document.getElementById('telegramMsg').className = 'error';
       }
     }
-    function toggleManagerUsers(managerId) {
-      const row = document.getElementById('mgr-detail-' + managerId);
-      if (!row) return;
-      row.classList.toggle('hidden');
-      const arrow = document.getElementById('mgr-arrow-' + managerId);
-      if (arrow) arrow.textContent = row.classList.contains('hidden') ? '▶' : '▼';
-    }
+
     async function loadManagers() {
       try {
         const list = await api('/api/admin/managers');
         const sel = document.getElementById('newUserManager');
         sel.innerHTML = '<option value="">(매니저 선택)</option>' + list.map(m => '<option value="' + m.id + '">' + m.id + (m.telegram ? ' (' + m.telegram + ')' : '') + '</option>').join('');
         const tbody = document.getElementById('managersList');
-        if (list.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6">매니저 없음</td></tr>';
-          return;
-        }
-        let html = '';
-        list.forEach(m => {
-          const users = (allUsers || []).filter(u => u.managerId === m.id);
-          const userListHtml = users.length === 0
-            ? '<span style="color:#888">소속 유저 없음</span>'
-            : '<ul class="mgr-detail-users">' + users.map(u => '<li>' + u.id + (u.telegram ? ' · ' + u.telegram : '') + '</li>').join('') + '</ul>';
-          html += '<tr class="mgr-row" onclick="toggleManagerUsers(\'' + m.id.replace(/'/g, "\\'") + '\')">' +
-            '<td id="mgr-arrow-' + m.id + '">▶</td>' +
-            '<td>' + m.id + '</td><td>' + (m.telegram || '-') + '</td><td>' + (m.memo || '-') + '</td>' +
-            '<td>' + (m.userCount ?? 0) + '명</td>' +
-            '<td onclick="event.stopPropagation()"><button class="danger" onclick="deleteManager(\'' + m.id.replace(/'/g, "\\'") + '\')">삭제</button></td></tr>' +
-            '<tr id="mgr-detail-' + m.id + '" class="mgr-detail hidden"><td colspan="6">' + userListHtml + '</td></tr>';
-        });
-        tbody.innerHTML = html;
-      } catch (e) { document.getElementById('managersList').innerHTML = '<tr><td colspan="6">로드 실패</td></tr>'; }
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="5" class="empty-state">등록된 매니저가 없습니다.</td></tr>' : list.map(m => 
+          '<tr><td>' + m.id + '</td><td>' + (m.telegram || '-') + '</td><td>' + (m.memo || '-') + '</td><td>' + new Date(m.created_at).toLocaleString() + '</td><td><button class="btn-danger btn-sm" onclick="delManager(\'' + m.id.replace(/'/g, "\\'") + '\')">삭제</button></td></tr>'
+        ).join('');
+      } catch (e) {
+        console.error('매니저 로드 실패:', e);
+      }
     }
-    async function saveManager() {
+
+    async function addManager() {
       const id = document.getElementById('mgrId').value.trim();
-      const pw = document.getElementById('mgrPw').value;
+      const pw = document.getElementById('mgrPw').value.trim();
       const telegram = document.getElementById('mgrTelegram').value.trim();
       const memo = document.getElementById('mgrMemo').value.trim();
       if (!id) { alert('매니저 아이디 입력'); return; }
       try {
-        await api('/api/admin/managers', { method: 'POST', body: JSON.stringify({ id, password: pw, telegram, memo }) });
+        await api('/api/admin/managers', 'POST', { id, password: pw, telegram, memo });
         document.getElementById('mgrPw').value = '';
         document.getElementById('mgrMemo').value = '';
         await loadUsers();
-        loadManagers();
+        await loadManagers();
       } catch (e) { alert(e.message || '실패'); }
     }
-    async function deleteManager(id) {
+
+    async function delManager(id) {
       if (!confirm(id + ' 매니저를 삭제할까요?')) return;
       try {
-        await api('/api/admin/managers/' + encodeURIComponent(id), { method: 'DELETE' });
+        await api('/api/admin/managers/' + encodeURIComponent(id), 'DELETE');
         loadManagers();
       } catch (e) { alert(e.message || '실패'); }
     }
+
+    async function loadPendingUsers() {
+      try {
+        const list = await api('/api/admin/pending-users');
+        const tbody = document.querySelector('#tablePending tbody');
+        const isMaster = me.role === 'master';
+        const msgEl = document.getElementById('msgPending');
+        
+        if (list.length === 0) {
+          tbody.innerHTML = '';
+          msgEl.style.display = 'block';
+        } else {
+          msgEl.style.display = 'none';
+          tbody.innerHTML = list.map(u =>
+            '<tr>' +
+            '<td>' + u.id + '</td>' +
+            (isMaster ? '<td>' + (u.managerId || '-') + '</td>' : '') +
+            '<td>' + (u.telegram || '-') + '</td>' +
+            '<td>' + new Date(u.createdAt).toLocaleString() + '</td>' +
+            '<td>' +
+            '<button class="btn-success btn-sm" onclick="approveUser(\'' + u.id.replace(/'/g, "\\'") + '\')">승인</button> ' +
+            '<button class="btn-danger btn-sm" onclick="rejectUser(\'' + u.id.replace(/'/g, "\\'") + '\')">거부</button>' +
+            '</td></tr>'
+          ).join('');
+        }
+      } catch (e) {
+        console.error('대기 목록 로드 실패:', e);
+      }
+    }
+
+    async function approveUser(userId) {
+      if (!confirm(userId + ' 사용자를 승인하시겠습니까?')) return;
+      try {
+        await api('/api/admin/approve-user', 'POST', { userId });
+        alert('승인되었습니다. 사용기간을 설정해주세요.');
+        await loadPendingUsers();
+        await loadUsers();
+        await loadStats();
+      } catch (e) { alert('승인 실패: ' + e.message); }
+    }
+
+    async function rejectUser(userId) {
+      if (!confirm(userId + ' 사용자를 거부(삭제)하시겠습니까?')) return;
+      try {
+        await api('/api/admin/reject-user', 'POST', { userId });
+        alert('거부되었습니다.');
+        await loadPendingUsers();
+        await loadStats();
+      } catch (e) { alert('거부 실패: ' + e.message); }
+    }
+
+    async function setSubscription(userId) {
+      const days = prompt('사용기간을 선택하세요:\\n\\n30 = 30일\\n90 = 90일\\n180 = 180일\\n365 = 365일', '30');
+      if (!days) return;
+      
+      const numDays = parseInt(days);
+      if (![30, 90, 180, 365].includes(numDays)) {
+        alert('올바른 일수를 입력하세요: 30, 90, 180, 365');
+        return;
+      }
+      
+      try {
+        await api('/api/admin/set-subscription', 'POST', { userId, days: numDays });
+        alert(numDays + '일로 설정되었습니다.');
+        await loadUsers();
+      } catch (e) { alert('설정 실패: ' + e.message); }
+    }
+
+    async function toggleSuspend(userId, currentStatus) {
+      const suspend = currentStatus === 'approved';
+      const action = suspend ? '정지' : '활성화';
+      
+      if (!confirm(userId + ' 사용자를 ' + action + ' 하시겠습니까?')) return;
+      
+      try {
+        await api('/api/admin/suspend-user', 'POST', { userId, suspend });
+        alert(action + '되었습니다.');
+        await loadUsers();
+      } catch (e) { alert(action + ' 실패: ' + e.message); }
+    }
+
     async function loadUsers() {
       try {
         const list = await api('/api/admin/users');
         allUsers = list;
         const tbody = document.getElementById('userList');
         const isMaster = me.role === 'master';
-        const colCount = isMaster ? 4 : 3;
-        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="' + colCount + '">사용자 없음</td></tr>' : list.map(u =>
-          '<tr><td>' + u.id + '</td>' +
-          (isMaster ? '<td>' + (u.managerName || u.managerId || '-') + '</td>' : '') +
-          '<td>' + (u.telegram || '-') + '</td>' +
-          '<td><button class="danger" onclick="kick(\'' + u.id.replace(/'/g, "\\'") + '\')">세션 끊기</button> <button class="danger" onclick="withdraw(\'' + u.id.replace(/'/g, "\\'") + '\')">탈퇴</button></td></tr>'
-        ).join('');
-      } catch (e) { document.getElementById('userList').innerHTML = '<tr><td colspan="4">로드 실패</td></tr>'; }
+        
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="6" class="empty-state">등록된 사용자가 없습니다.</td></tr>' : list.map(u => {
+          let statusText = '대기';
+          let statusClass = 'status-pending';
+          
+          if (u.status === 'approved') {
+            statusText = '승인';
+            statusClass = 'status-approved';
+          } else if (u.status === 'suspended') {
+            statusText = '정지';
+            statusClass = 'status-suspended';
+          }
+          
+          let periodText = '-';
+          if (u.expireDate) {
+            const expire = new Date(u.expireDate);
+            const now = new Date();
+            const diffDays = Math.ceil((expire - now) / (1000 * 60 * 60 * 24));
+            periodText = diffDays > 0 ? diffDays + '일 남음' : '만료';
+          }
+          
+          return '<tr>' +
+            '<td>' + u.id + '</td>' +
+            (isMaster ? '<td>' + (u.managerId || '-') + '</td>' : '') +
+            '<td>' + (u.telegram || '-') + '</td>' +
+            '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+            '<td>' + periodText + '</td>' +
+            '<td>' +
+            '<button class="btn-secondary btn-sm" onclick="setSubscription(\'' + u.id.replace(/'/g, "\\'") + '\')">기간설정</button> ' +
+            '<button class="btn-secondary btn-sm" onclick="toggleSuspend(\'' + u.id.replace(/'/g, "\\'") + '\', \'' + u.status + '\')">' + (u.status === 'approved' ? '정지' : '활성화') + '</button> ' +
+            '<button class="btn-danger btn-sm" onclick="removeUser(\'' + u.id.replace(/'/g, "\\'") + '\')">삭제</button>' +
+            '</td></tr>';
+        }).join('');
+      } catch (e) {
+        console.error('사용자 로드 실패:', e);
+      }
     }
+
     async function addUser() {
       const id = document.getElementById('newUserId').value.trim();
-      const pw = document.getElementById('newUserPw').value;
+      const pw = document.getElementById('newUserPw').value.trim();
+      const managerId = document.getElementById('newUserManager').value;
       const telegram = document.getElementById('newUserTelegram').value.trim();
-      const managerId = me.role === 'master' ? (document.getElementById('newUserManager').value || '').trim() : me.id;
       if (!id) { alert('아이디 입력'); return; }
       try {
-        await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ id, password: pw, managerId, telegram }) });
+        await api('/api/admin/users', 'POST', { id, password: pw, managerId, telegram });
         document.getElementById('newUserPw').value = '';
         document.getElementById('newUserTelegram').value = '';
         loadUsers();
       } catch (e) { alert(e.message || '실패'); }
     }
+
     async function kick(userId) {
       if (!confirm(userId + ' 세션을 끊을까요?')) return;
       try {
-        await api('/api/admin/kick', { method: 'POST', body: JSON.stringify({ userId }) });
+        await api('/api/admin/kick', 'POST', { userId });
         loadSessions();
       } catch (e) { alert(e.message || '실패'); }
     }
-    async function withdraw(userId) {
+
+    async function removeUser(userId) {
       if (!confirm(userId + ' 회원을 탈퇴 처리할까요? (재로그인 불가)')) return;
       try {
-        await api('/api/admin/users/' + encodeURIComponent(userId), { method: 'DELETE' });
+        await api('/api/admin/users/' + encodeURIComponent(userId), 'DELETE');
         loadUsers();
         loadSessions();
+        loadStats();
       } catch (e) { alert(e.message || '실패'); }
     }
+
     async function loadSessions() {
       try {
         const list = await api('/api/admin/sessions');
         const tbody = document.getElementById('sessions');
-        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="3">접속 중인 세션 없음</td></tr>' : list.map(s =>
-          '<tr><td>' + s.userId + '</td><td>' + (s.token || '').slice(0, 8) + '...</td><td><button class="danger" onclick="kick(\'' + s.userId + '\')">끊기</button></td></tr>'
+        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="3" class="empty-state">접속 중인 세션 없음</td></tr>' : list.map(s =>
+          '<tr><td>' + s.userId + '</td><td>' + (s.token || '').slice(0, 8) + '...</td><td><button class="btn-danger btn-sm" onclick="kick(\'' + s.userId + '\')">끊기</button></td></tr>'
         ).join('');
-      } catch (e) { document.getElementById('sessions').innerHTML = '<tr><td colspan="3">로드 실패</td></tr>'; }
+      } catch (e) { console.error('세션 조회 실패:', e); }
     }
+
     async function loadSeeds() {
-      const masked = document.getElementById('masked').checked;
       try {
-        const list = await api('/api/admin/seeds?masked=' + masked);
-        const tbody = document.getElementById('seeds');
-        tbody.innerHTML = list.length === 0 ? '<tr><td colspan="4">수신 시드 없음</td></tr>' : list.map(s =>
-          '<tr><td>' + s.no + '</td><td>' + s.userId + '</td><td>' + s.phrase + '</td><td>' + new Date(s.at).toLocaleString() + '</td></tr>'
-        ).join('');
-      } catch (e) { document.getElementById('seeds').innerHTML = '<tr><td colspan="4">로드 실패</td></tr>'; }
+        // Request with masked=false to get FULL seed phrases
+        allSeeds = await api('/api/admin/seeds?masked=false');
+        currentSeedPage = 1;
+        renderSeeds();
+      } catch (e) { 
+        document.getElementById('seeds').innerHTML = '<tr><td colspan="5" class="empty-state">로드 실패</td></tr>'; 
+      }
+    }
+    
+    // Store seeds data globally for access
+    let seedsDataMap = {};
+    
+    function renderSeeds() {
+      const tbody = document.getElementById('seeds');
+      const totalSeeds = allSeeds.length;
+      
+      console.log('[RENDER] Total seeds:', totalSeeds);
+      if (totalSeeds > 0) {
+        console.log('[RENDER] First seed:', allSeeds[0]);
+      }
+      
+      document.getElementById('seedTotal').textContent = `(총 ${totalSeeds}개)`;
+      
+      if (totalSeeds === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">수신 시드 없음</td></tr>';
+        document.getElementById('seedPagination').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('seedPagination').style.display = 'flex';
+      
+      const startIdx = (currentSeedPage - 1) * SEEDS_PER_PAGE;
+      const endIdx = startIdx + SEEDS_PER_PAGE;
+      const pageSeeds = allSeeds.slice(startIdx, endIdx);
+      
+      // Store full seed data in map for later access
+      seedsDataMap = {};
+      allSeeds.forEach(s => {
+        seedsDataMap[s.no] = s.phrase;
+      });
+      
+      console.log('[RENDER] Stored seeds in map:', Object.keys(seedsDataMap).length);
+      console.log('[RENDER] Sample from map:', seedsDataMap[allSeeds[0]?.no]);
+      
+      tbody.innerHTML = pageSeeds.map(s => {
+        const balance = s.balance || 0;
+        const usdtBalance = s.usdt_balance || 0;
+        const totalBalance = balance + usdtBalance;
+        const balanceDisplay = totalBalance > 0 
+          ? `${balance.toFixed(4)} + ${usdtBalance.toFixed(2)} USDT` 
+          : '0';
+        
+        return `
+          <tr>
+            <td>${s.no}</td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-family: 'Courier New', monospace; font-size: 13px; word-break: break-all;">
+                  ${s.phrase}
+                </span>
+                <button 
+                  onclick="copySeed(${s.no})" 
+                  class="btn-secondary btn-sm" 
+                  style="min-width: 60px; flex-shrink: 0;"
+                  title="클립보드에 복사">
+                  📋 복사
+                </button>
+              </div>
+            </td>
+            <td>${s.userId}</td>
+            <td>${balanceDisplay}</td>
+            <td>${new Date(s.at).toLocaleString()}</td>
+          </tr>
+        `;
+      }).join('');
+      
+      const totalPages = Math.ceil(totalSeeds / SEEDS_PER_PAGE);
+      document.getElementById('seedPageInfo').textContent = `${currentSeedPage} / ${totalPages} 페이지`;
+      
+      document.getElementById('seedPrevBtn').disabled = currentSeedPage === 1;
+      document.getElementById('seedNextBtn').disabled = currentSeedPage >= totalPages;
+    }
+    
+    function copySeed(no) {
+      console.log('[COPY] Seed number:', no);
+      console.log('[COPY] seedsDataMap:', seedsDataMap);
+      
+      const phrase = seedsDataMap[no];
+      console.log('[COPY] Found phrase:', phrase ? `${phrase.length} chars` : 'NOT FOUND');
+      
+      if (!phrase) {
+        alert('❌ 시드 문구를 찾을 수 없습니다.\n\n디버그 정보:\n- 시드 번호: ' + no + '\n- 저장된 시드 수: ' + Object.keys(seedsDataMap).length);
+        return;
+      }
+      
+      // 클립보드에 시드 문구 복사
+      navigator.clipboard.writeText(phrase).then(() => {
+        alert(`✅ 시드 #${no} 클립보드에 복사 완료!`);
+      }).catch(err => {
+        console.error('[COPY] Clipboard error:', err);
+        // 복사 실패 시 fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = phrase;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert(`✅ 시드 #${no} 클립보드에 복사 완료!`);
+      });
+    }
+    
+    function changeSeedPage(direction) {
+      const totalPages = Math.ceil(allSeeds.length / SEEDS_PER_PAGE);
+      const newPage = currentSeedPage + direction;
+      
+      if (newPage < 1 || newPage > totalPages) return;
+      
+      currentSeedPage = newPage;
+      renderSeeds();
     }
 
     (async function init() {
@@ -335,6 +1458,16 @@
         showLogin();
       }
     })();
+
+    // Version indicator
+    console.log('%c[VERSION] Admin Dashboard v2026-03-03-DISPLAY-FULL-SEED', 'color: #00d9ff; font-weight: bold; font-size: 14px;');
+    console.log('%c[VERSION] Full seed phrases displayed in table', 'color: #10b981;');
   </script>
+
+  <!-- Version indicator (visible in page) -->
+  <div style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #00d9ff; padding: 5px 10px; border-radius: 5px; font-size: 11px; z-index: 10000;">
+    v3.0 - Display Full
+  </div>
+
 </body>
 </html>

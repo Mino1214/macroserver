@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Login Test</title>
+</head>
+<body>
+  <h1>Login Test</h1>
+  <button onclick="testLogin()">Test Login (master666/master666)</button>
+  <pre id="result"></pre>
+
+  <script>
+    async function testLogin() {
+      const resultEl = document.getElementById('result');
+      resultEl.textContent = 'Testing...';
+      
+      try {
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: 'master666',
+            password: 'master666'
+          })
+        });
+        
+        const data = await response.json();
+        resultEl.textContent = 'Success!\n\n' + JSON.stringify(data, null, 2);
+      } catch (error) {
+        resultEl.textContent = 'Error: ' + error.message;
+      }
+    }
+  </script>
+</body>
+</html>
+

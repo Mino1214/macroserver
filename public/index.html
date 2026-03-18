@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>MynoLab - 매크로 서비스</title>
+  <style>
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #333;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px 30px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      animation: fadeIn 0.5s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    h1 {
+      color: #667eea;
+      font-size: clamp(2rem, 5vw, 2.5rem);
+      margin-bottom: 16px;
+      font-weight: 700;
+      line-height: 1.2;
+      word-break: keep-all;
+    }
+    
+    p {
+      color: #666;
+      font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+      line-height: 1.6;
+      margin-bottom: 32px;
+      word-break: keep-all;
+    }
+    
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .btn {
+      padding: 16px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: clamp(1rem, 2.5vw, 1.1rem);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: block;
+      width: 100%;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+    
+    .footer {
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      color: #999;
+      font-size: clamp(0.85rem, 2vw, 0.9rem);
+    }
+    
+    .telegram-link {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 8px;
+      display: inline-block;
+      touch-action: manipulation;
+    }
+    
+    .telegram-link:active {
+      opacity: 0.7;
+    }
+    
+    /* 모바일 최적화 */
+    @media (max-width: 480px) {
+      body {
+        padding: 16px;
+      }
+      
+      .container {
+        padding: 32px 24px;
+        border-radius: 20px;
+      }
+      
+      h1 {
+        margin-bottom: 12px;
+      }
+      
+      p {
+        margin-bottom: 24px;
+      }
+      
+      .btn {
+        padding: 14px 20px;
+      }
+      
+      .footer {
+        margin-top: 24px;
+        padding-top: 16px;
+      }
+    }
+    
+    /* 작은 모바일 (iPhone SE 등) */
+    @media (max-width: 375px) {
+      body {
+        padding: 12px;
+      }
+      
+      .container {
+        padding: 28px 20px;
+      }
+    }
+    
+    /* 태블릿 */
+    @media (min-width: 768px) {
+      .container {
+        padding: 50px 40px;
+      }
+      
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+      }
+      
+      .telegram-link:hover {
+        text-decoration: underline;
+      }
+    }
+    
+    /* 다크모드 대응 */
+    @media (prefers-color-scheme: dark) {
+      .container {
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+      
+      p {
+        color: #b0b0b0;
+      }
+      
+      .footer {
+        color: #808080;
+        border-top-color: #333;
+      }
+    }
+    
+    /* 접근성 개선 */
+    .btn:focus-visible {
+      outline: 3px solid #667eea;
+      outline-offset: 2px;
+    }
+    
+    /* 로딩 애니메이션 */
+    .loading {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #667eea;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 MynoLab</h1>
+    <p>매크로 서비스에 오신 것을 환영합니다.<br>관리자 로그인은 아래 버튼을 클릭하세요.</p>
+    
+    <div class="button-group">
+      <a href="/admin.html" class="btn btn-primary" role="button" aria-label="관리자 로그인 페이지로 이동">
+        관리자 로그인
+      </a>
+    </div>
+
+    <div class="footer" id="telegram-info">
+      <p>문의: <a href="#" class="telegram-link" id="telegram-link" rel="noopener noreferrer" target="_blank">
+        <span class="loading"></span>
+      </a></p>
+    </div>
+  </div>
+
+  <script>
+    // 성능 최적화: DOM Content Loaded 후 실행
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPage);
+    } else {
+      initPage();
+    }
+    
+    function initPage() {
+      // 텔레그램 정보 가져오기
+      fetchTelegramInfo();
+      
+      // 버튼 터치 피드백 개선
+      const btn = document.querySelector('.btn-primary');
+      if (btn) {
+        btn.addEventListener('touchstart', function() {
+          this.style.opacity = '0.8';
+        }, { passive: true });
+        
+        btn.addEventListener('touchend', function() {
+          this.style.opacity = '1';
+        }, { passive: true });
+      }
+    }
+    
+    async function fetchTelegramInfo() {
+      const link = document.getElementById('telegram-link');
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
+        
+        const response = await fetch('/api/admin/telegram', {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) throw new Error('Failed to fetch');
+        
+        const data = await response.json();
+        const telegram = data.nickname || '@문의';
+        
+        link.innerHTML = telegram;
+        link.setAttribute('aria-label', telegram + '로 문의하기');
+        
+        if (telegram.startsWith('@')) {
+          link.href = 'https://t.me/' + telegram.substring(1);
+        } else {
+          link.href = '#';
+          link.style.cursor = 'default';
+          link.removeAttribute('target');
+        }
+      } catch (error) {
+        // 에러 발생 시 기본값 표시
+        link.innerHTML = '@문의';
+        link.href = '#';
+        link.style.cursor = 'default';
+        link.removeAttribute('target');
+        
+        // 콘솔에는 에러 기록 (개발용)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          console.warn('텔레그램 정보를 불러올 수 없습니다:', error.message);
+        }
+      }
+    }
+    
+    // PWA 지원을 위한 서비스 워커 등록 (선택사항)
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+      // 추후 PWA 구현 시 활성화
+      // navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    
+    // iOS Safari의 100vh 버그 수정
+    function setViewportHeight() {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', setViewportHeight, { passive: true });
+  </script>
+</body>
+</html>
+
+
+
+

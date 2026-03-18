@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Login Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: sans-serif;
+      background: #0f0f23;
+      color: white;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .box {
+      background: #1a1a2e;
+      padding: 30px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      background: #2a2a3e;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: white;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #00d9ff;
+      border: none;
+      border-radius: 5px;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover { opacity: 0.8; }
+    .log {
+      background: #1a1a2e;
+      padding: 20px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .log div { margin: 5px 0; }
+    .success { color: #10b981; }
+    .error { color: #ef4444; }
+    .info { color: #00d9ff; }
+    #loginPage { display: block; }
+    #dashboardPage { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Login Page -->
+  <div id="loginPage">
+    <div class="box">
+      <h1 style="margin-bottom: 20px;">간단 로그인 테스트</h1>
+      <input type="text" id="username" placeholder="아이디" value="master666">
+      <input type="password" id="password" placeholder="비밀번호" value="master666">
+      <button onclick="doLogin()">로그인</button>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div id="dashboardPage">
+    <div class="box">
+      <h1 style="color: #10b981;">✅ 로그인 성공!</h1>
+      <p style="margin: 20px 0;">환영합니다, <span id="userName"></span>님!</p>
+      <p>역할: <span id="userRole"></span></p>
+      <button onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('testToken');
+    let userData = null;
+
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message);
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      log('로그인 시작...', 'info');
+      log(`사용자: ${username}`, 'info');
+
+      try {
+        log('API 호출 중...', 'info');
+        
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: username, password: password })
+        });
+
+        log(`응답 상태: ${response.status} ${response.statusText}`, 'info');
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`로그인 실패: ${errorText}`);
+        }
+
+        const data = await response.json();
+        log('API 응답 성공!', 'success');
+        log(`토큰: ${data.token.substring(0, 20)}...`, 'info');
+        log(`역할: ${data.role}`, 'info');
+        log(`ID: ${data.id}`, 'info');
+
+        // 저장
+        token = data.token;
+        userData = data;
+        localStorage.setItem('testToken', token);
+        localStorage.setItem('testUser', JSON.stringify(data));
+
+        log('로컬 스토리지 저장 완료', 'success');
+        log('페이지 전환 시작...', 'info');
+
+        // 페이지 전환
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('dashboardPage').style.display = 'block';
+        document.getElementById('userName').textContent = data.id;
+        document.getElementById('userRole').textContent = data.role;
+
+        log('페이지 전환 완료!', 'success');
+
+      } catch (error) {
+        log(`❌ 오류 발생: ${error.message}`, 'error');
+        console.error('Login error:', error);
+      }
+    }
+
+    function doLogout() {
+      localStorage.removeItem('testToken');
+      localStorage.removeItem('testUser');
+      location.reload();
+    }
+
+    // 초기화 시 토큰 확인
+    if (token) {
+      try {
+        userData = JSON.parse(localStorage.getItem('testUser'));
+        if (userData) {
+          log('저장된 토큰 발견!', 'success');
+          document.getElementById('loginPage').style.display = 'none';
+          document.getElementById('dashboardPage').style.display = 'block';
+          document.getElementById('userName').textContent = userData.id;
+          document.getElementById('userRole').textContent = userData.role;
+        }
+      } catch (e) {
+        localStorage.clear();
+      }
+    } else {
+      log('테스트 페이지 로드 완료', 'info');
+      log('master666 / master666 로 로그인 해보세요', 'info');
+    }
+  </script>
+
+</body>
+</html>
+

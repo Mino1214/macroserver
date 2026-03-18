@@ -3,3 +3,30 @@ data/
 .env
 .env.local
 *.log
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# Backups
+*.backup.*
+
+# Balances data
+balances/
+
+# Temporary files
+*.tmp
+
+# Nginx configs (may contain sensitive info)
+nginx_backup/
+
+# Terminal files
+terminals/
+
+# Nested git repositories
+macroBot/

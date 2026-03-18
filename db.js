@@ -408,17 +408,21 @@ const collectionWalletDB = {
 
 // ---------- 개인 입금주소 발급 관련 ----------
 const depositAddressDB = {
-  // 사용자/주문 기준으로 유효한 주소 조회 (재사용)
-  async getActive(userId, orderId) {
-    const statuses = ['issued', 'waiting_deposit'];
-    let query = 'SELECT * FROM deposit_addresses WHERE user_id = ? AND status IN (?, ?)';
-    const params = [userId, ...statuses];
-    if (orderId) {
-      query += ' AND order_id = ?';
-      params.push(orderId);
-    }
-    query += ' ORDER BY created_at DESC LIMIT 1';
-    const [rows] = await pool.query(query, params);
+  // 특정 유저+지갑버전의 레코드 조회 (상태 무관 — upsert용)
+  async findByUserAndVersion(userId, walletVersion) {
+    const [rows] = await pool.query(
+      'SELECT * FROM deposit_addresses WHERE user_id = ? AND wallet_version = ? ORDER BY created_at DESC LIMIT 1',
+      [userId, walletVersion]
+    );
+    return rows.length > 0 ? rows[0] : null;
+  },
+
+  // 구버전 레코드 조회 (invalidated 여부 확인용)
+  async findOldVersion(userId, currentWalletVersion) {
+    const [rows] = await pool.query(
+      'SELECT * FROM deposit_addresses WHERE user_id = ? AND wallet_version != ? ORDER BY created_at DESC LIMIT 1',
+      [userId, currentWalletVersion]
+    );
     return rows.length > 0 ? rows[0] : null;
   },
 

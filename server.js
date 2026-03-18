@@ -1063,23 +1063,33 @@ app.post('/api/payment/request-address', async (req, res) => {
       return res.status(503).json({ error: '현재 활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
     }
 
-    // 기존 유효 주소 재사용 여부 확인
-    const existing = await db.depositAddressDB.getActive(resolvedUserId, orderId || null);
+    // 현재 지갑 버전으로 발급된 기존 레코드 조회 (상태 무관 — upsert)
+    const existing = await db.depositAddressDB.findByUserAndVersion(resolvedUserId, activeWallet.wallet_version);
     console.log('[REQUEST-ADDR] 기존 주소 ▶', existing
       ? { address: existing.deposit_address, index: existing.derivation_index, status: existing.status }
       : '없음 (신규 발급)'
     );
 
     if (existing) {
-      const invalidated = existing.wallet_version !== activeWallet.wallet_version;
-      console.log('[REQUEST-ADDR] 기존 주소 반환 ▶', { address: existing.deposit_address, invalidated });
+      // 기존 레코드 status → issued 리셋 (업서트)
+      if (existing.status !== 'issued' && existing.status !== 'waiting_deposit') {
+        await db.depositAddressDB.updateStatus(existing.deposit_address, 'issued');
+        console.log('[REQUEST-ADDR] 상태 리셋 → issued ▶', existing.deposit_address);
+      }
       return res.json({
         address: existing.deposit_address,
         walletVersion: existing.wallet_version,
-        status: existing.status,
-        invalidated,
+        status: 'issued',
+        invalidated: false,
         isNew: false,
       });
+    }
+
+    // 구버전 레코드 존재 여부 (invalidated 경고용 — 신규 발급 진행)
+    const oldRecord = await db.depositAddressDB.findOldVersion(resolvedUserId, activeWallet.wallet_version);
+    const wasInvalidated = !!oldRecord;
+    if (wasInvalidated) {
+      console.log('[REQUEST-ADDR] 구버전 레코드 있음 → 새 버전으로 신규 발급 ▶ oldVersion:', oldRecord.wallet_version);
     }
 
     // 신규 주소 발급: 니모닉 기반 HD 파생 또는 root 주소 직접 사용
@@ -1142,7 +1152,7 @@ app.post('/api/payment/request-address', async (req, res) => {
       address: newAddress,
       walletVersion: activeWallet.wallet_version,
       status: 'issued',
-      invalidated: false,
+      invalidated: wasInvalidated,
       isNew: true,
     });
   } catch (error) {

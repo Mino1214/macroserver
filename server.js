@@ -1042,27 +1042,37 @@ app.get('/api/admin/seeds', requireAdmin, requireMaster, async (req, res) => {
 app.post('/api/payment/request-address', async (req, res) => {
   try {
     const { token, userId, orderId, network, tokenType } = req.body || {};
+    console.log('[REQUEST-ADDR] 요청 수신 ▶', { userId, network, tokenType, hasToken: !!token?.trim() });
 
     if (!token?.trim()) return res.status(401).json({ error: '세션 토큰이 필요합니다.' });
 
     // 세션 검증
     const sessionUserId = await sessionStore.getUserId(token.trim());
+    console.log('[REQUEST-ADDR] 세션 유저 ▶', sessionUserId);
     if (!sessionUserId) return res.status(401).json({ error: '유효하지 않은 세션입니다.' });
 
     const resolvedUserId = (userId?.trim() || sessionUserId).toLowerCase();
 
     // 현재 active 수금 지갑 조회
     const activeWallet = await db.collectionWalletDB.getActive();
+    console.log('[REQUEST-ADDR] active 지갑 ▶', activeWallet
+      ? { version: activeWallet.wallet_version, address: activeWallet.root_wallet_address, hasSecret: !!activeWallet.xpub_key }
+      : 'null (미등록)'
+    );
     if (!activeWallet) {
       return res.status(503).json({ error: '현재 활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
     }
 
     // 기존 유효 주소 재사용 여부 확인
     const existing = await db.depositAddressDB.getActive(resolvedUserId, orderId || null);
+    console.log('[REQUEST-ADDR] 기존 주소 ▶', existing
+      ? { address: existing.deposit_address, index: existing.derivation_index, status: existing.status }
+      : '없음 (신규 발급)'
+    );
 
     if (existing) {
-      // 기존 주소가 현재 wallet_version과 다르면 invalidated 플래그 설정
       const invalidated = existing.wallet_version !== activeWallet.wallet_version;
+      console.log('[REQUEST-ADDR] 기존 주소 반환 ▶', { address: existing.deposit_address, invalidated });
       return res.json({
         address: existing.deposit_address,
         walletVersion: existing.wallet_version,
@@ -1072,27 +1082,27 @@ app.post('/api/payment/request-address', async (req, res) => {
       });
     }
 
-    // 신규 주소 발급: xpub 기반 HD 파생 또는 root 주소 직접 사용
+    // 신규 주소 발급: 니모닉 기반 HD 파생 또는 root 주소 직접 사용
     const [maxRows] = await db.pool.query(
       'SELECT COALESCE(MAX(derivation_index), -1) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
       [activeWallet.wallet_version]
     );
     const newIndex = maxRows[0].maxIdx + 1;
+    console.log('[REQUEST-ADDR] 신규 index ▶', newIndex);
 
     let newAddress;
-    const secret = activeWallet.xpub_key; // xpub_key 컬럼에 암호화된 니모닉 or xpub 저장
+    const secret = activeWallet.xpub_key;
     if (secret) {
-      // 니모닉 or xpub 있을 때: HD wallet 파생으로 사용자별 고유 TRON 주소 생성
-      // f(니모닉, index) = 항상 동일한 TRON 주소 → private key 저장 불필요
       try {
         newAddress = deriveTronAddress(secret, newIndex);
+        console.log('[REQUEST-ADDR] HD 파생 주소 ▶', newAddress);
       } catch (e) {
-        console.error('HD 주소 파생 오류:', e);
+        console.error('[REQUEST-ADDR] HD 주소 파생 오류 ▶', e.message);
         return res.status(500).json({ error: '주소 파생 오류. 관리자에게 문의하세요.' });
       }
     } else {
-      // 니모닉 미등록: root 주소를 그대로 반환 (모든 사용자 동일 주소)
       newAddress = activeWallet.root_wallet_address;
+      console.log('[REQUEST-ADDR] 니모닉 없음 → root 주소 사용 ▶', newAddress);
     }
 
     await db.depositAddressDB.create({
@@ -1103,6 +1113,7 @@ app.post('/api/payment/request-address', async (req, res) => {
       depositAddress: newAddress,
       walletVersion: activeWallet.wallet_version,
     });
+    console.log('[REQUEST-ADDR] DB 저장 완료 ▶ userId:', resolvedUserId);
 
     res.json({
       address: newAddress,

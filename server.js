@@ -1359,6 +1359,28 @@ app.get('/api/admin/telegram-errors', requireAdmin, requireMaster, (req, res) =>
   res.json({ errors: _tgErrorLog });
 });
 
+// GET /api/admin/python-diag — Python/pymysql 환경 진단 (마스터 전용)
+app.get('/api/admin/python-diag', requireAdmin, requireMaster, (req, res) => {
+  const { execFile } = require('child_process');
+  const results = {};
+  const cmds = [
+    ['which python3', 'bash', ['-lc', 'which python3']],
+    ['which python', 'bash', ['-lc', 'which python']],
+    ['python3 pymysql check', 'bash', ['-lc', 'python3 -c "import pymysql; import sys; print(sys.executable)"']],
+    ['pip3 show pymysql', 'bash', ['-lc', 'pip3 show pymysql 2>&1 | head -5']],
+    ['node user', 'bash', ['-lc', 'whoami']],
+    ['PATH', 'bash', ['-lc', 'echo $PATH']],
+  ];
+  let done = 0;
+  cmds.forEach(([label, cmd, args]) => {
+    execFile(cmd, args, { timeout: 8000 }, (err, stdout, stderr) => {
+      results[label] = { out: (stdout || '').trim(), err: (err ? err.message : '') || (stderr || '').trim() };
+      done++;
+      if (done === cmds.length) res.json(results);
+    });
+  });
+});
+
 // GET /api/admin/managers/:id/telegram-bot — 봇 설정 조회 (마스터 또는 본인만)
 app.get('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) => {
   const targetId = req.params.id;

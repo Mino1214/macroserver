@@ -381,8 +381,8 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
 
     const txId = await contract.transfer(rootAddress, Number(balanceRaw)).send({ feeLimit: 40_000_000 });
     await db.depositAddressDB.updateStatus(depositAddress, 'swept');
-    // txId가 객체로 반환될 수 있으므로 안전하게 문자열 추출
-    const txIdStr = (typeof txId === 'string') ? txId : (txId?.txid || txId?.transaction?.txID || JSON.stringify(txId));
+    // txId가 객체/undefined/null 일 수 있으므로 항상 string으로 추출
+    const txIdStr = String(txId?.txid || txId?.transaction?.txID || (typeof txId === 'string' ? txId : '') || 'unknown');
     console.log(`[AUTO-SWEEP] ✅ 스윕 완료 ${sweepAmount} USDT → ${rootAddress} | txId=${txIdStr}`);
 
     // 7. 구독 일수 계산 & 연장
@@ -395,22 +395,32 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     const expiryStr = `${newExpiryDate.getFullYear()}-${String(newExpiryDate.getMonth()+1).padStart(2,'0')}-${String(newExpiryDate.getDate()).padStart(2,'0')}`;
     const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // 8. 텔레그램 알림 (매니저 + 마스터) — parse_mode 없는 plain text로 안전하게 전송
+    // 8. 텔레그램 알림 (매니저 + 마스터) — 입금 감지와 동일한 HTML 모드
     const msg =
-      `✅ 입금 처리 완료!\n\n` +
-      `👤 유저: ${userId}\n` +
-      `💵 금액: ${sweepAmount.toFixed(2)} USDT\n` +
-      `📅 지급: ${days}일 (만료: ${expiryStr})\n` +
-      `🏦 수금: ${rootAddress}\n` +
-      `🔗 TxID: ${txIdStr.slice(0, 30)}\n` +
-      `🕐 ${nowStr} UTC`;
+      `✅ <b>입금 처리 완료!</b>\n\n` +
+      `👤 유저: <code>${escapeHtml(userId)}</code>\n` +
+      `💵 금액: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
+      `📅 지급: <b>${days}일</b> (만료: ${escapeHtml(expiryStr)})\n` +
+      `🏦 수금: <code>${escapeHtml(rootAddress)}</code>\n` +
+      `🔗 TxID: <code>${escapeHtml(txIdStr.slice(0, 30))}</code>\n` +
+      `🕐 ${escapeHtml(nowStr)} UTC`;
+
+    console.log(`[AUTO-SWEEP] 텔레그램 전송 시도 managerId=${managerId} masterChatId=${(await getMasterTelegram()).chatId}`);
 
     if (managerId) {
       const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
-      if (mgr?.tg_bot_token && mgr?.tg_chat_id) await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg, false, 'plain');
+      if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
+        console.log(`[AUTO-SWEEP] 매니저 봇 전송: chatId=${mgr.tg_chat_id}`);
+        await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+      }
     }
     const masterTg = await getMasterTelegram();
-    if (masterTg.botToken && masterTg.chatId) await sendTelegram(masterTg.botToken, masterTg.chatId, msg, false, 'plain');
+    if (masterTg.botToken && masterTg.chatId) {
+      console.log(`[AUTO-SWEEP] 마스터 봇 전송: chatId=${masterTg.chatId}`);
+      await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
+    } else {
+      console.warn('[AUTO-SWEEP] 마스터 봇 미설정 — 전송 스킵');
+    }
 
   } catch (e) {
     console.error('[AUTO-SWEEP] 오류:', e.message || e);

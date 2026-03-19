@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#0a0b14">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>macroUser 관리</title>
+  <style>
+    :root {
+      --bg:      #0a0b14;
+      --bg2:     #111220;
+      --bg3:     #181929;
+      --border:  rgba(124,111,255,.18);
+      --ac:      #7c6fff;
+      --ac-dim:  rgba(124,111,255,.12);
+      --ac-glow: rgba(124,111,255,.3);
+      --fg:      #f0f0ff;
+      --muted:   #6b7280;
+      --ok:      #4ade80;
+      --warn:    #fb923c;
+      --err:     #f87171;
+      --info:    #60a5fa;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); min-height: 100vh; overflow-x: hidden;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ===== LOGIN ===== */
+    #loginView {
+      display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;
+    }
+    .login-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+      padding: 40px 36px; width: 100%; max-width: 380px;
+      box-shadow: 0 0 40px rgba(124,111,255,.08);
+    }
+    .login-card h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+    .login-card p  { color: var(--muted); font-size: .85rem; margin-bottom: 28px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; }
+    .form-group input {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 14px; color: var(--fg); font-size: .9rem; outline: none;
+      transition: border-color .2s;
+    }
+    .form-group input:focus { border-color: var(--ac); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: .85rem; font-weight: 600; transition: opacity .2s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--ac); color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-block { width: 100%; }
+    .btn-sm { padding: 6px 12px; font-size: .8rem; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+    .btn-ghost:hover { background: var(--ac-dim); }
+    .btn-danger { background: rgba(248,113,113,.15); border: 1px solid rgba(248,113,113,.3); color: var(--err); }
+    .btn-danger:hover { background: rgba(248,113,113,.25); }
+    .btn-ok { background: rgba(74,222,128,.15); border: 1px solid rgba(74,222,128,.3); color: var(--ok); }
+    .btn-ok:hover { background: rgba(74,222,128,.25); }
+    .err-msg { color: var(--err); font-size: .82rem; margin-top: 10px; min-height: 18px; }
+
+    /* ===== HEADER ===== */
+    #appView { display: none; flex-direction: column; min-height: 100vh; }
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-logo { font-size: 1rem; font-weight: 700; color: var(--ac); }
+    .topbar-user { margin-left: auto; font-size: .8rem; color: var(--muted); }
+    .topbar-role {
+      padding: 3px 8px; border-radius: 20px; font-size: .72rem; font-weight: 700;
+      background: var(--ac-dim); color: var(--ac);
+    }
+
+    /* ===== CONTENT ===== */
+    .content { padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+    /* ===== SUMMARY CARDS ===== */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .card-label { font-size: .75rem; color: var(--muted); }
+    .card-value { font-size: 1.6rem; font-weight: 700; }
+    .card-value.ok  { color: var(--ok); }
+    .card-value.err { color: var(--err); }
+    .card-value.warn { color: var(--warn); }
+    .card-value.info { color: var(--info); }
+
+    /* ===== FILTER TABS ===== */
+    .filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-tab {
+      padding: 6px 14px; border-radius: 20px; font-size: .8rem; cursor: pointer;
+      background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+      transition: all .15s;
+    }
+    .filter-tab.active { background: var(--ac-dim); border-color: var(--ac); color: var(--ac); font-weight: 600; }
+
+    /* ===== TABLE ===== */
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    thead tr { background: var(--bg3); }
+    th { padding: 10px 14px; text-align: left; font-size: .75rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: rgba(124,111,255,.04); }
+    .clickable { cursor: pointer; }
+    .clickable:hover td { background: var(--ac-dim) !important; }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .72rem; font-weight: 700;
+    }
+    .badge-active      { background: rgba(74,222,128,.15); color: var(--ok); }
+    .badge-error       { background: rgba(248,113,113,.15); color: var(--err); }
+    .badge-suspended   { background: rgba(251,146,60,.15);  color: var(--warn); }
+    .badge-expired     { background: rgba(107,114,128,.15); color: var(--muted); }
+    .badge-pending     { background: rgba(96,165,250,.15);  color: var(--info); }
+    .badge-connected    { background: rgba(74,222,128,.12); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .badge-disconnected { background: rgba(248,113,113,.12); color: var(--err); border: 1px solid rgba(248,113,113,.3); }
+    .badge-checking     { background: rgba(251,146,60,.12); color: var(--warn); border: 1px solid rgba(251,146,60,.3); }
+    .badge-success { background: rgba(74,222,128,.15); color: var(--ok); }
+    .badge-failed  { background: rgba(248,113,113,.15); color: var(--err); }
+    .badge-running { background: rgba(251,146,60,.15);  color: var(--warn); }
+    .badge-queued  { background: rgba(96,165,250,.15);  color: var(--info); }
+    .badge-admin { background: rgba(124,111,255,.2); color: var(--ac); }
+    .badge-user  { background: rgba(107,114,128,.15); color: var(--muted); }
+    .badge-inactive { background: rgba(107,114,128,.15); color: var(--muted); }
+
+    /* ===== SECTION TITLE ===== */
+    .section-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .section-title { font-size: 1rem; font-weight: 700; }
+    .section-sub   { font-size: .82rem; color: var(--muted); }
+
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--muted); margin-bottom: 20px; }
+    .breadcrumb a { color: var(--ac); cursor: pointer; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb span { color: var(--muted); }
+
+    /* ===== MODAL ===== */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-box {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+      width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 0 60px rgba(0,0,0,.5);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px 0; margin-bottom: 20px;
+    }
+    .modal-title { font-size: 1rem; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.2rem; }
+    .modal-body { padding: 0 24px 24px; }
+    .modal-body .form-group { margin-bottom: 14px; }
+    .modal-body select {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 14px; color: var(--fg); font-size: .9rem; outline: none;
+    }
+    .modal-body textarea {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 14px; color: var(--fg); font-size: .85rem; outline: none; resize: vertical; min-height: 80px;
+    }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .modal-section-title { font-size: .78rem; color: var(--muted); font-weight: 600; text-transform: uppercase;
+      letter-spacing: .05em; margin: 16px 0 8px; }
+    .detail-row { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85rem; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: var(--muted); min-width: 110px; flex-shrink: 0; }
+    .detail-value { color: var(--fg); word-break: break-all; }
+
+    /* ===== LOG / TASK LIST ===== */
+    .log-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+    .log-item {
+      background: var(--bg3); border-radius: 8px; padding: 8px 12px; font-size: .78rem;
+    }
+    .log-item-header { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+    .log-event { font-weight: 600; color: var(--ac); }
+    .log-time  { color: var(--muted); margin-left: auto; }
+    .log-msg   { color: var(--fg); }
+    .empty-state { text-align: center; color: var(--muted); padding: 24px; font-size: .85rem; }
+
+    /* ===== TOAST ===== */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 20px; font-size: .85rem; z-index: 999; opacity: 0;
+      transition: opacity .3s; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok-toast  { border-color: rgba(74,222,128,.4); color: var(--ok); }
+    #toast.err-toast { border-color: rgba(248,113,113,.4); color: var(--err); }
+
+    /* ===== BACK BUTTON ===== */
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      color: var(--ac); font-size: .85rem; margin-bottom: 16px; }
+    .back-btn:hover { opacity: .8; }
+
+    /* ===== UTIL ===== */
+    .flex-end { display: flex; justify-content: flex-end; }
+    .gap-8     { gap: 8px; }
+    .mt-16     { margin-top: 16px; }
+    .hidden    { display: none !important; }
+    .text-muted { color: var(--muted); }
+    .mono { font-family: monospace; font-size: .82rem; }
+  </style>
+</head>
+<body>
+
+<!-- ===== 로그인 화면 ===== -->
+<div id="loginView">
+  <div class="login-card">
+    <h1>macroUser</h1>
+    <p>운영 관리 시스템</p>
+    <div class="form-group">
+      <label>아이디</label>
+      <input type="text" id="loginId" placeholder="로그인 ID" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="doLogin()">로그인</button>
+    <div class="err-msg" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== 앱 화면 ===== -->
+<div id="appView">
+  <div class="topbar">
+    <span class="topbar-logo">macroUser</span>
+    <span id="topbarRole" class="topbar-role"></span>
+    <span class="topbar-user" id="topbarUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">로그아웃</button>
+  </div>
+
+  <div class="content">
+
+    <!-- ======= ADMIN 뷰 ======= -->
+    <div id="adminView" class="hidden">
+
+      <!-- 유저 목록 -->
+      <div id="adminUserList">
+        <div class="section-header">
+          <span class="section-title">유저 관리</span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()">+ 유저 추가</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadAdminUsers()">새로고침</button>
+        </div>
+        <!-- 요약 카드 -->
+        <div class="cards" id="adminSummaryCards"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>ID</th>
+                <th>역할</th>
+                <th>상태</th>
+                <th>전체</th>
+                <th>정상</th>
+                <th>오류</th>
+                <th>만료</th>
+                <th>끊김</th>
+                <th>마지막 확인</th>
+                <th>액션</th>
+              </tr>
+            </thead>
+            <tbody id="adminUserTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 유저 상세 (드릴다운) -->
+      <div id="adminUserDetail" class="hidden">
+        <div class="breadcrumb">
+          <a onclick="showAdminUserList()">유저 목록</a>
+          <span>›</span>
+          <span id="detailUserName"></span>
+        </div>
+        <div class="section-header">
+          <span class="section-title" id="detailUserTitle"></span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateAccountModal()">+ 계정 추가</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadUserAccounts(currentDetailUserId)">새로고침</button>
+        </div>
+        <div class="cards" id="detailSummaryCards"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>계정명</th>
+                <th>서비스</th>
+                <th>로그인 ID</th>
+                <th>상태</th>
+                <th>연결</th>
+                <th>최근 작업</th>
+                <th>마지막 확인</th>
+                <th>메모</th>
+                <th>액션</th>
+              </tr>
+            </thead>
+            <tbody id="detailAccountTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======= USER 뷰 ======= -->
+    <div id="userView" class="hidden">
+      <div class="section-header">
+        <span class="section-title">내 계정 현황</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadMyAccounts()">새로고침</button>
+      </div>
+      <div class="cards" id="userSummaryCards"></div>
+      <div class="filter-tabs" id="filterTabs">
+        <div class="filter-tab active" data-filter="ALL" onclick="setFilter('ALL',this)">전체</div>
+        <div class="filter-tab" data-filter="ACTIVE" onclick="setFilter('ACTIVE',this)">정상</div>
+        <div class="filter-tab" data-filter="ERROR" onclick="setFilter('ERROR',this)">오류</div>
+        <div class="filter-tab" data-filter="DISCONNECTED" onclick="setFilter('DISCONNECTED',this)">끊김</div>
+        <div class="filter-tab" data-filter="EXPIRED" onclick="setFilter('EXPIRED',this)">만료</div>
+        <div class="filter-tab" data-filter="SUSPENDED" onclick="setFilter('SUSPENDED',this)">정지</div>
+        <div class="filter-tab" data-filter="PENDING" onclick="setFilter('PENDING',this)">대기</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>계정명</th>
+              <th>서비스</th>
+              <th>로그인 ID</th>
+              <th>상태</th>
+              <th>연결</th>
+              <th>최근 작업</th>
+              <th>마지막 확인</th>
+              <th>메모</th>
+              <th>액션</th>
+            </tr>
+          </thead>
+          <tbody id="userAccountTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== 토스트 ===== -->
+<div id="toast"></div>
+
+<!-- ===== 유저 생성 모달 ===== -->
+<div id="modalCreateUser" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">유저 추가</span>
+      <button class="modal-close" onclick="closeModal('modalCreateUser')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>이름</label><input type="text" id="cuName" placeholder="표시 이름"></div>
+      <div class="form-group"><label>로그인 ID</label><input type="text" id="cuLoginId" placeholder="로그인 ID (고유)"></div>
+      <div class="form-group"><label>비밀번호</label><input type="password" id="cuPassword" placeholder="비밀번호"></div>
+      <div class="form-group">
+        <label>역할</label>
+        <select id="cuRole">
+          <option value="USER">USER (운영자)</option>
+          <option value="ADMIN">ADMIN (관리자)</option>
+        </select>
+      </div>
+      <div class="err-msg" id="cuErr"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalCreateUser')">취소</button>
+        <button class="btn btn-primary" onclick="submitCreateUser()">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 유저 수정 모달 ===== -->
+<div id="modalEditUser" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">유저 수정</span>
+      <button class="modal-close" onclick="closeModal('modalEditUser')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="euId">
+      <div class="form-group"><label>이름</label><input type="text" id="euName"></div>
+      <div class="form-group"><label>새 비밀번호 (변경 시만 입력)</label><input type="password" id="euPassword" placeholder="변경 안 하면 비워두세요"></div>
+      <div class="form-group">
+        <label>역할</label>
+        <select id="euRole">
+          <option value="USER">USER (운영자)</option>
+          <option value="ADMIN">ADMIN (관리자)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>상태</label>
+        <select id="euStatus">
+          <option value="active">활성</option>
+          <option value="inactive">비활성</option>
+        </select>
+      </div>
+      <div class="err-msg" id="euErr"></div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" onclick="deleteUser()">삭제</button>
+        <button class="btn btn-ghost" onclick="closeModal('modalEditUser')">취소</button>
+        <button class="btn btn-primary" onclick="submitEditUser()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 계정 생성 모달 ===== -->
+<div id="modalCreateAccount" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">계정 추가</span>
+      <button class="modal-close" onclick="closeModal('modalCreateAccount')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>계정명</label><input type="text" id="caName" placeholder="계정 표시명"></div>
+      <div class="form-group"><label>서비스명</label><input type="text" id="caService" placeholder="예: KakaoTalk, Telegram..."></div>
+      <div class="form-group"><label>로그인 ID</label><input type="text" id="caLoginId" placeholder="서비스 로그인 ID"></div>
+      <div class="form-group"><label>로그인 PW (선택)</label><input type="password" id="caLoginPw" placeholder="암호화 저장됨"></div>
+      <div class="form-group"><label>메모</label><textarea id="caMemo" placeholder="메모"></textarea></div>
+      <div class="err-msg" id="caErr"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalCreateAccount')">취소</button>
+        <button class="btn btn-primary" onclick="submitCreateAccount()">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 계정 상태 변경 모달 (관리자) ===== -->
+<div id="modalEditAccountStatus" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">계정 상태 변경</span>
+      <button class="modal-close" onclick="closeModal('modalEditAccountStatus')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="easId">
+      <div class="form-group">
+        <label>계정 상태</label>
+        <select id="easAccountStatus">
+          <option value="">-- 변경 안 함 --</option>
+          <option value="ACTIVE">ACTIVE (정상)</option>
+          <option value="PENDING">PENDING (대기)</option>
+          <option value="SUSPENDED">SUSPENDED (정지)</option>
+          <option value="EXPIRED">EXPIRED (만료)</option>
+          <option value="ERROR">ERROR (오류)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>연결 상태</label>
+        <select id="easConnectionStatus">
+          <option value="">-- 변경 안 함 --</option>
+          <option value="CONNECTED">CONNECTED (연결됨)</option>
+          <option value="DISCONNECTED">DISCONNECTED (끊김)</option>
+          <option value="CHECKING">CHECKING (확인중)</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" onclick="deleteAccount()">삭제</button>
+        <button class="btn btn-ghost" onclick="closeModal('modalEditAccountStatus')">취소</button>
+        <button class="btn btn-primary" onclick="submitEditAccountStatus()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 계정 상세 모달 (유저/관리자 공용) ===== -->
+<div id="modalAccountDetail" class="modal-backdrop hidden">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-header">
+      <span class="modal-title" id="madTitle">계정 상세</span>
+      <button class="modal-close" onclick="closeModal('modalAccountDetail')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="madInfo"></div>
+
+      <div class="modal-section-title">메모 수정</div>
+      <div class="form-group">
+        <textarea id="madMemo" placeholder="메모를 입력하세요"></textarea>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="saveMemo()">메모 저장</button>
+
+      <div class="modal-section-title" style="margin-top:20px">최근 로그</div>
+      <div class="log-list" id="madLogs"><div class="empty-state">로딩 중...</div></div>
+
+      <div class="modal-section-title" style="margin-top:12px">최근 작업 이력</div>
+      <div class="log-list" id="madTasks"><div class="empty-state">로딩 중...</div></div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalAccountDetail')">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//   전역 상태
+// ============================================================
+let token = localStorage.getItem('mu_token') || '';
+let currentUser = null;
+let currentFilter = 'ALL';
+let currentDetailUserId = null;
+let currentDetailAccountId = null;
+let allMyAccounts = [];
+
+const API = (path, opts = {}) => {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch('/api/mu' + path, { ...opts, headers: { ...headers, ...opts.headers } })
+    .then(r => r.json());
+};
+
+// ============================================================
+//   유틸
+// ============================================================
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}-toast`;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = ''; }, 2500);
+}
+
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function formatDate(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+function formatDateFull(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleString('ko-KR');
+}
+
+function statusBadge(s) {
+  const map = {
+    ACTIVE: ['badge-active','정상'], ERROR: ['badge-error','오류'],
+    SUSPENDED: ['badge-suspended','정지'], EXPIRED: ['badge-expired','만료'],
+    PENDING: ['badge-pending','대기'],
+  };
+  const [cls, label] = map[s] || ['badge-pending', s || '-'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function connBadge(s) {
+  const map = {
+    CONNECTED: ['badge-connected','연결됨'], DISCONNECTED: ['badge-disconnected','끊김'],
+    CHECKING: ['badge-checking','확인중'],
+  };
+  const [cls, label] = map[s] || ['badge-disconnected', s || '-'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function taskBadge(s) {
+  const map = {
+    SUCCESS: ['badge-success','성공'], FAILED: ['badge-failed','실패'],
+    RUNNING: ['badge-running','실행중'], QUEUED: ['badge-queued','대기중'],
+  };
+  const [cls, label] = map[s] || ['badge-queued', s || '-'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function roleBadge(r) {
+  return r === 'ADMIN'
+    ? `<span class="badge badge-admin">ADMIN</span>`
+    : `<span class="badge badge-user">USER</span>`;
+}
+
+// ============================================================
+//   인증
+// ============================================================
+async function doLogin() {
+  const login_id = document.getElementById('loginId').value.trim();
+  const password  = document.getElementById('loginPw').value.trim();
+  document.getElementById('loginErr').textContent = '';
+  if (!login_id || !password) {
+    document.getElementById('loginErr').textContent = 'ID와 비밀번호를 입력하세요.';
+    return;
+  }
+  const data = await API('/login', { method: 'POST', body: JSON.stringify({ login_id, password }) });
+  if (!data.ok) {
+    document.getElementById('loginErr').textContent = data.error || '로그인 실패';
+    return;
+  }
+  token = data.token;
+  currentUser = data.user;
+  localStorage.setItem('mu_token', token);
+  startApp();
+}
+
+document.getElementById('loginPw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+async function doLogout() {
+  await API('/logout', { method: 'POST' }).catch(() => {});
+  localStorage.removeItem('mu_token');
+  token = '';
+  currentUser = null;
+  document.getElementById('appView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'flex';
+}
+
+async function tryAutoLogin() {
+  if (!token) return false;
+  const data = await API('/me').catch(() => null);
+  if (!data?.ok) { localStorage.removeItem('mu_token'); token = ''; return false; }
+  currentUser = data.user;
+  return true;
+}
+
+// ============================================================
+//   앱 시작
+// ============================================================
+function startApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('appView').style.display = 'flex';
+  document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.loginId + ')';
+  document.getElementById('topbarRole').textContent = currentUser.role;
+
+  if (currentUser.role === 'ADMIN') {
+    document.getElementById('adminView').classList.remove('hidden');
+    document.getElementById('userView').classList.add('hidden');
+    loadAdminUsers();
+  } else {
+    document.getElementById('userView').classList.remove('hidden');
+    document.getElementById('adminView').classList.add('hidden');
+    loadMyAccounts();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  if (token) {
+    const ok = await tryAutoLogin();
+    if (ok) { startApp(); return; }
+  }
+  document.getElementById('loginView').style.display = 'flex';
+});
+
+// ============================================================
+//   ADMIN — 유저 목록
+// ============================================================
+async function loadAdminUsers() {
+  const data = await API('/admin/users');
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  const users = data.users;
+
+  const totUsers  = users.length;
+  const totAccounts = users.reduce((s, u) => s + (u.total_accounts || 0), 0);
+  const totErrors = users.reduce((s, u) => s + (u.error_accounts || 0), 0);
+  const totActive = users.reduce((s, u) => s + (u.active_accounts || 0), 0);
+
+  document.getElementById('adminSummaryCards').innerHTML = `
+    <div class="card"><span class="card-label">유저 수</span><span class="card-value">${totUsers}</span></div>
+    <div class="card"><span class="card-label">전체 계정</span><span class="card-value info">${totAccounts}</span></div>
+    <div class="card"><span class="card-label">정상 계정</span><span class="card-value ok">${totActive}</span></div>
+    <div class="card"><span class="card-label">오류 계정</span><span class="card-value err">${totErrors}</span></div>
+  `;
+
+  const tbody = document.getElementById('adminUserTbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">유저가 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr class="clickable" onclick="drillDownUser(${u.id}, '${escHtml(u.name)}')">
+      <td><strong>${escHtml(u.name)}</strong></td>
+      <td class="mono">${escHtml(u.login_id)}</td>
+      <td>${roleBadge(u.role)}</td>
+      <td>${u.status === 'active'
+        ? '<span class="badge badge-active">활성</span>'
+        : '<span class="badge badge-inactive">비활성</span>'}</td>
+      <td>${u.total_accounts || 0}</td>
+      <td style="color:var(--ok)">${u.active_accounts || 0}</td>
+      <td style="color:var(--err)">${u.error_accounts || 0}</td>
+      <td style="color:var(--warn)">${u.expired_accounts || 0}</td>
+      <td style="color:var(--muted)">${u.disconnected_accounts || 0}</td>
+      <td class="text-muted">${formatDate(u.last_checked_at)}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" onclick="openEditUserModal(${JSON.stringify(u).split('"').join('&quot;')})">수정</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openEditUserModal(u) {
+  document.getElementById('euId').value = u.id;
+  document.getElementById('euName').value = u.name;
+  document.getElementById('euPassword').value = '';
+  document.getElementById('euRole').value = u.role;
+  document.getElementById('euStatus').value = u.status;
+  document.getElementById('euErr').textContent = '';
+  openModal('modalEditUser');
+}
+
+async function submitEditUser() {
+  const id = document.getElementById('euId').value;
+  const body = {
+    name: document.getElementById('euName').value.trim(),
+    role: document.getElementById('euRole').value,
+    status: document.getElementById('euStatus').value,
+  };
+  const pw = document.getElementById('euPassword').value.trim();
+  if (pw) body.password = pw;
+  const data = await API(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  if (!data.ok) { document.getElementById('euErr').textContent = data.error; return; }
+  closeModal('modalEditUser');
+  showToast('유저 정보를 수정했습니다.');
+  loadAdminUsers();
+}
+
+async function deleteUser() {
+  const id = document.getElementById('euId').value;
+  if (!confirm('이 유저와 하위 계정을 모두 삭제합니다. 계속하시겠습니까?')) return;
+  const data = await API(`/admin/users/${id}`, { method: 'DELETE' });
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  closeModal('modalEditUser');
+  showToast('유저가 삭제되었습니다.', 'ok');
+  loadAdminUsers();
+}
+
+function openCreateUserModal() {
+  ['cuName','cuLoginId','cuPassword'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cuRole').value = 'USER';
+  document.getElementById('cuErr').textContent = '';
+  openModal('modalCreateUser');
+}
+
+async function submitCreateUser() {
+  const body = {
+    name: document.getElementById('cuName').value.trim(),
+    login_id: document.getElementById('cuLoginId').value.trim(),
+    password: document.getElementById('cuPassword').value.trim(),
+    role: document.getElementById('cuRole').value,
+  };
+  if (!body.name || !body.login_id || !body.password) {
+    document.getElementById('cuErr').textContent = '모든 항목을 입력하세요.'; return;
+  }
+  const data = await API('/admin/users', { method: 'POST', body: JSON.stringify(body) });
+  if (!data.ok) { document.getElementById('cuErr').textContent = data.error; return; }
+  closeModal('modalCreateUser');
+  showToast('유저가 추가되었습니다.');
+  loadAdminUsers();
+}
+
+// ============================================================
+//   ADMIN — 드릴다운 (유저 상세 / 계정 목록)
+// ============================================================
+function drillDownUser(userId, userName) {
+  currentDetailUserId = userId;
+  document.getElementById('detailUserName').textContent = userName;
+  document.getElementById('detailUserTitle').textContent = `${userName} 의 계정 목록`;
+  document.getElementById('adminUserList').classList.add('hidden');
+  document.getElementById('adminUserDetail').classList.remove('hidden');
+  loadUserAccounts(userId);
+}
+
+function showAdminUserList() {
+  document.getElementById('adminUserDetail').classList.add('hidden');
+  document.getElementById('adminUserList').classList.remove('hidden');
+}
+
+async function loadUserAccounts(userId) {
+  const data = await API(`/admin/users/${userId}/accounts`);
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  const accounts = data.accounts;
+
+  const sumTotal = accounts.length;
+  const sumActive = accounts.filter(a => a.account_status === 'ACTIVE').length;
+  const sumError  = accounts.filter(a => a.account_status === 'ERROR').length;
+  const sumDiscon = accounts.filter(a => a.connection_status === 'DISCONNECTED').length;
+
+  document.getElementById('detailSummaryCards').innerHTML = `
+    <div class="card"><span class="card-label">전체</span><span class="card-value">${sumTotal}</span></div>
+    <div class="card"><span class="card-label">정상</span><span class="card-value ok">${sumActive}</span></div>
+    <div class="card"><span class="card-label">오류</span><span class="card-value err">${sumError}</span></div>
+    <div class="card"><span class="card-label">연결 끊김</span><span class="card-value warn">${sumDiscon}</span></div>
+  `;
+
+  renderAccountTable('detailAccountTbody', accounts, true);
+}
+
+function renderAccountTable(tbodyId, accounts, isAdmin) {
+  const tbody = document.getElementById(tbodyId);
+  if (!accounts.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">계정이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = accounts.map(a => `
+    <tr>
+      <td><strong>${escHtml(a.account_name || '-')}</strong></td>
+      <td>${escHtml(a.external_service_name || '-')}</td>
+      <td class="mono">${escHtml(a.login_id || '-')}</td>
+      <td>${statusBadge(a.account_status)}</td>
+      <td>${connBadge(a.connection_status)}</td>
+      <td>${a.last_task_status ? taskBadge(a.last_task_status) + ' <span class="text-muted" style="font-size:.75rem">' + escHtml(a.last_task_type || '') + '</span>' : '-'}</td>
+      <td class="text-muted">${formatDate(a.last_checked_at)}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(a.memo || '-')}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openAccountDetail(${a.id}, '${escHtml(a.account_name || '계정')}')">상세</button>
+          ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="openEditAccountStatus(${a.id})">상태</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openCreateAccountModal() {
+  ['caName','caService','caLoginId','caLoginPw','caMemo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('caErr').textContent = '';
+  openModal('modalCreateAccount');
+}
+
+async function submitCreateAccount() {
+  const body = {
+    owner_user_id: currentDetailUserId,
+    account_name: document.getElementById('caName').value.trim(),
+    external_service_name: document.getElementById('caService').value.trim(),
+    login_id: document.getElementById('caLoginId').value.trim(),
+    login_password: document.getElementById('caLoginPw').value.trim(),
+    memo: document.getElementById('caMemo').value.trim(),
+  };
+  if (!body.owner_user_id) { document.getElementById('caErr').textContent = '소유자 유저를 알 수 없습니다.'; return; }
+  const data = await API('/admin/accounts', { method: 'POST', body: JSON.stringify(body) });
+  if (!data.ok) { document.getElementById('caErr').textContent = data.error; return; }
+  closeModal('modalCreateAccount');
+  showToast('계정이 추가되었습니다.');
+  loadUserAccounts(currentDetailUserId);
+}
+
+function openEditAccountStatus(accountId) {
+  document.getElementById('easId').value = accountId;
+  document.getElementById('easAccountStatus').value = '';
+  document.getElementById('easConnectionStatus').value = '';
+  openModal('modalEditAccountStatus');
+}
+
+async function submitEditAccountStatus() {
+  const id = document.getElementById('easId').value;
+  const body = {};
+  const as = document.getElementById('easAccountStatus').value;
+  const cs = document.getElementById('easConnectionStatus').value;
+  if (as) body.account_status = as;
+  if (cs) body.connection_status = cs;
+  if (!Object.keys(body).length) { closeModal('modalEditAccountStatus'); return; }
+  const data = await API(`/admin/accounts/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) });
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  closeModal('modalEditAccountStatus');
+  showToast('상태가 변경되었습니다.');
+  if (currentDetailUserId) loadUserAccounts(currentDetailUserId);
+}
+
+async function deleteAccount() {
+  const id = document.getElementById('easId').value;
+  if (!confirm('이 계정을 삭제합니다. 계속하시겠습니까?')) return;
+  const data = await API(`/admin/accounts/${id}`, { method: 'DELETE' });
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  closeModal('modalEditAccountStatus');
+  showToast('계정이 삭제되었습니다.');
+  if (currentDetailUserId) loadUserAccounts(currentDetailUserId);
+}
+
+// ============================================================
+//   USER — 내 계정 대시보드
+// ============================================================
+async function loadMyAccounts() {
+  const data = await API('/my/accounts');
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  allMyAccounts = data.accounts;
+  const s = data.summary;
+
+  document.getElementById('userSummaryCards').innerHTML = `
+    <div class="card"><span class="card-label">전체</span><span class="card-value">${s.total}</span></div>
+    <div class="card"><span class="card-label">정상</span><span class="card-value ok">${s.active}</span></div>
+    <div class="card"><span class="card-label">오류</span><span class="card-value err">${s.error}</span></div>
+    <div class="card"><span class="card-label">만료</span><span class="card-value warn">${s.expired}</span></div>
+    <div class="card"><span class="card-label">정지</span><span class="card-value warn">${s.suspended}</span></div>
+    <div class="card"><span class="card-label">연결 끊김</span><span class="card-value err">${s.disconnected}</span></div>
+  `;
+
+  applyFilter(currentFilter);
+}
+
+function setFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  applyFilter(filter);
+}
+
+function applyFilter(filter) {
+  let filtered = allMyAccounts;
+  if (filter === 'DISCONNECTED') {
+    filtered = allMyAccounts.filter(a => a.connection_status === 'DISCONNECTED');
+  } else if (filter !== 'ALL') {
+    filtered = allMyAccounts.filter(a => a.account_status === filter);
+  }
+  renderAccountTable('userAccountTbody', filtered, false);
+}
+
+// ============================================================
+//   계정 상세 모달 (유저/관리자 공용)
+// ============================================================
+async function openAccountDetail(accountId, accountName) {
+  currentDetailAccountId = accountId;
+  document.getElementById('madTitle').textContent = accountName + ' 상세';
+  document.getElementById('madMemo').value = '';
+  document.getElementById('madInfo').innerHTML = '<div class="empty-state">로딩 중...</div>';
+  document.getElementById('madLogs').innerHTML  = '<div class="empty-state">로딩 중...</div>';
+  document.getElementById('madTasks').innerHTML = '<div class="empty-state">로딩 중...</div>';
+  openModal('modalAccountDetail');
+
+  const prefix = currentUser.role === 'ADMIN' ? `/admin/users/${currentDetailUserId}/accounts` : '/my/accounts';
+  // 계정 정보 (user: /my/accounts/:id, admin: 이미 목록에서 가져옴)
+  const detailData = await API(`/my/accounts/${accountId}`).catch(() => null);
+  if (detailData?.ok) {
+    const a = detailData.account;
+    document.getElementById('madMemo').value = a.memo || '';
+    document.getElementById('madInfo').innerHTML = `
+      <div class="detail-row"><span class="detail-label">계정명</span><span class="detail-value">${escHtml(a.account_name || '-')}</span></div>
+      <div class="detail-row"><span class="detail-label">서비스</span><span class="detail-value">${escHtml(a.external_service_name || '-')}</span></div>
+      <div class="detail-row"><span class="detail-label">로그인 ID</span><span class="detail-value mono">${escHtml(a.login_id || '-')}</span></div>
+      <div class="detail-row"><span class="detail-label">계정 상태</span><span class="detail-value">${statusBadge(a.account_status)}</span></div>
+      <div class="detail-row"><span class="detail-label">연결 상태</span><span class="detail-value">${connBadge(a.connection_status)}</span></div>
+      <div class="detail-row"><span class="detail-label">마지막 확인</span><span class="detail-value">${formatDateFull(a.last_checked_at)}</span></div>
+      <div class="detail-row"><span class="detail-label">마지막 로그인</span><span class="detail-value">${formatDateFull(a.last_login_at)}</span></div>
+      <div class="detail-row"><span class="detail-label">생성일</span><span class="detail-value">${formatDateFull(a.created_at)}</span></div>
+    `;
+  } else {
+    document.getElementById('madInfo').innerHTML = '<div class="empty-state">계정 정보를 불러올 수 없습니다.</div>';
+  }
+
+  // 로그
+  const logsData = await API(`/my/accounts/${accountId}/logs`).catch(() => null);
+  if (logsData?.ok && logsData.logs.length) {
+    document.getElementById('madLogs').innerHTML = logsData.logs.map(l => `
+      <div class="log-item">
+        <div class="log-item-header">
+          <span class="log-event">${escHtml(l.event_type || '-')}</span>
+          <span class="log-time">${formatDate(l.created_at)}</span>
+        </div>
+        <div class="log-msg">${escHtml(l.message || '')}</div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('madLogs').innerHTML = '<div class="empty-state">로그가 없습니다.</div>';
+  }
+
+  // 작업 이력
+  const tasksData = await API(`/my/accounts/${accountId}/tasks`).catch(() => null);
+  if (tasksData?.ok && tasksData.tasks.length) {
+    document.getElementById('madTasks').innerHTML = tasksData.tasks.map(t => `
+      <div class="log-item">
+        <div class="log-item-header">
+          <span class="log-event">${escHtml(t.task_type || '-')}</span>
+          ${taskBadge(t.task_status)}
+          <span class="log-time">${formatDate(t.created_at)}</span>
+        </div>
+        ${t.result_message ? `<div class="log-msg">${escHtml(t.result_message)}</div>` : ''}
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('madTasks').innerHTML = '<div class="empty-state">작업 이력이 없습니다.</div>';
+  }
+}
+
+async function saveMemo() {
+  if (!currentDetailAccountId) return;
+  const memo = document.getElementById('madMemo').value;
+  const data = await API(`/my/accounts/${currentDetailAccountId}/memo`, {
+    method: 'PATCH', body: JSON.stringify({ memo })
+  });
+  if (!data.ok) { showToast(data.error, 'err'); return; }
+  showToast('메모가 저장되었습니다.');
+  if (currentUser.role === 'USER') {
+    const idx = allMyAccounts.findIndex(a => a.id === currentDetailAccountId);
+    if (idx !== -1) allMyAccounts[idx].memo = memo;
+    applyFilter(currentFilter);
+  }
+}
+
+// ============================================================
+//   XSS 방지
+// ============================================================
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

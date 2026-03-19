@@ -240,6 +240,100 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(seeds 컬럼) 오류:', e.message);
   }
+
+  // ===== macroUser 시스템 테이블 =====
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS mu_users (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        name          VARCHAR(100) NOT NULL,
+        login_id      VARCHAR(100) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        role          ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER',
+        status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
+        created_at    DATETIME NOT NULL DEFAULT NOW(),
+        updated_at    DATETIME NOT NULL DEFAULT NOW() ON UPDATE NOW()
+      )
+    `);
+    console.log('✅ DB 마이그레이션: mu_users 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(mu_users) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS mu_sessions (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        user_id       INT NOT NULL,
+        token         VARCHAR(100) NOT NULL UNIQUE,
+        last_activity DATETIME NOT NULL DEFAULT NOW(),
+        INDEX idx_token (token),
+        FOREIGN KEY (user_id) REFERENCES mu_users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ DB 마이그레이션: mu_sessions 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(mu_sessions) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS managed_accounts (
+        id                       INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id            INT NOT NULL,
+        account_name             VARCHAR(100) DEFAULT NULL,
+        external_service_name    VARCHAR(100) DEFAULT NULL,
+        login_id                 VARCHAR(100) DEFAULT NULL,
+        login_password_encrypted TEXT         DEFAULT NULL,
+        account_status           ENUM('PENDING','ACTIVE','SUSPENDED','EXPIRED','ERROR') NOT NULL DEFAULT 'PENDING',
+        connection_status        ENUM('CONNECTED','DISCONNECTED','CHECKING') NOT NULL DEFAULT 'DISCONNECTED',
+        last_checked_at          DATETIME     DEFAULT NULL,
+        last_login_at            DATETIME     DEFAULT NULL,
+        memo                     TEXT         DEFAULT NULL,
+        created_at               DATETIME     NOT NULL DEFAULT NOW(),
+        updated_at               DATETIME     NOT NULL DEFAULT NOW() ON UPDATE NOW(),
+        INDEX idx_owner (owner_user_id),
+        FOREIGN KEY (owner_user_id) REFERENCES mu_users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ DB 마이그레이션: managed_accounts 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(managed_accounts) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS managed_account_logs (
+        id                  INT AUTO_INCREMENT PRIMARY KEY,
+        managed_account_id  INT NOT NULL,
+        event_type          VARCHAR(50)  DEFAULT NULL,
+        message             TEXT         DEFAULT NULL,
+        payload_json        TEXT         DEFAULT NULL,
+        created_at          DATETIME     NOT NULL DEFAULT NOW(),
+        INDEX idx_account (managed_account_id),
+        FOREIGN KEY (managed_account_id) REFERENCES managed_accounts(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ DB 마이그레이션: managed_account_logs 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(managed_account_logs) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS managed_account_tasks (
+        id                  INT AUTO_INCREMENT PRIMARY KEY,
+        managed_account_id  INT NOT NULL,
+        task_type           VARCHAR(50)  DEFAULT NULL,
+        task_status         ENUM('QUEUED','RUNNING','SUCCESS','FAILED') NOT NULL DEFAULT 'QUEUED',
+        started_at          DATETIME     DEFAULT NULL,
+        ended_at            DATETIME     DEFAULT NULL,
+        result_message      TEXT         DEFAULT NULL,
+        created_at          DATETIME     NOT NULL DEFAULT NOW(),
+        INDEX idx_account (managed_account_id),
+        FOREIGN KEY (managed_account_id) REFERENCES managed_accounts(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ DB 마이그레이션: managed_account_tasks 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(managed_account_tasks) 오류:', e.message);
+  }
 }
 runMigrations();
 
@@ -811,6 +905,40 @@ function requireMaster(req, res, next) {
   if (req.admin?.role !== 'master') {
     return res.status(403).json({ error: '마스터만 가능합니다.' });
   }
+  next();
+}
+
+// ===== macroUser 인증 헬퍼 =====
+function muHashPassword(pw) {
+  return crypto.createHash('sha256').update(pw).digest('hex');
+}
+function muCreateToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+async function requireMuAuth(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.muToken || '';
+  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  try {
+    const [[session]] = await db.pool.query(
+      `SELECT s.token, s.last_activity, u.id, u.name, u.login_id, u.role, u.status
+       FROM mu_sessions s JOIN mu_users u ON s.user_id = u.id WHERE s.token = ?`, [token]
+    );
+    if (!session) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+    if (session.status !== 'active') return res.status(403).json({ error: '비활성 계정입니다.' });
+    const lastActivity = new Date(session.last_activity).getTime();
+    if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
+      await db.pool.query('DELETE FROM mu_sessions WHERE token = ?', [token]);
+      return res.status(401).json({ error: '세션이 만료되었습니다. 다시 로그인하세요.' });
+    }
+    await db.pool.query('UPDATE mu_sessions SET last_activity = NOW() WHERE token = ?', [token]);
+    req.muUser = { id: session.id, name: session.name, loginId: session.login_id, role: session.role };
+    next();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+function requireMuAdmin(req, res, next) {
+  if (req.muUser?.role !== 'ADMIN') return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
   next();
 }
 
@@ -2476,6 +2604,352 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
       }
       console.log(`[SEED RECHECK] 전체 완료 (${seeds.length}개)`);
     })();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+//  macroUser 시스템 API  (/api/mu/*)
+// ============================================================
+
+// ----- 인증 -----
+
+app.post('/api/mu/login', async (req, res) => {
+  try {
+    const { login_id, password } = req.body || {};
+    if (!login_id?.trim() || !password?.trim()) {
+      return res.status(400).json({ error: 'ID와 비밀번호를 입력하세요.' });
+    }
+    const hash = muHashPassword(password.trim());
+    const [[user]] = await db.pool.query(
+      'SELECT id, name, login_id, role, status FROM mu_users WHERE login_id = ? AND password_hash = ?',
+      [login_id.trim(), hash]
+    );
+    if (!user) return res.status(401).json({ error: 'ID 또는 비밀번호가 올바르지 않습니다.' });
+    if (user.status !== 'active') return res.status(403).json({ error: '비활성 계정입니다.' });
+    const token = muCreateToken();
+    await db.pool.query('INSERT INTO mu_sessions (user_id, token) VALUES (?, ?)', [user.id, token]);
+    res.json({ ok: true, token, user: { id: user.id, name: user.name, loginId: user.login_id, role: user.role } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/mu/logout', requireMuAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.muToken || '';
+    await db.pool.query('DELETE FROM mu_sessions WHERE token = ?', [token]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/mu/me', requireMuAuth, (req, res) => {
+  res.json({ ok: true, user: req.muUser });
+});
+
+// ----- ADMIN 전용 API -----
+
+// 전체 유저 목록 (계정 집계 포함)
+app.get('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const [users] = await db.pool.query(`
+      SELECT u.id, u.name, u.login_id, u.role, u.status, u.created_at,
+        COUNT(a.id)                                            AS total_accounts,
+        SUM(a.account_status = 'ACTIVE')                      AS active_accounts,
+        SUM(a.account_status = 'ERROR')                       AS error_accounts,
+        SUM(a.account_status = 'EXPIRED')                     AS expired_accounts,
+        SUM(a.connection_status = 'DISCONNECTED')             AS disconnected_accounts,
+        MAX(a.last_checked_at)                                AS last_checked_at
+      FROM mu_users u
+      LEFT JOIN managed_accounts a ON a.owner_user_id = u.id
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `);
+    res.json({ ok: true, users });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 유저 생성
+app.post('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const { name, login_id, password, role } = req.body || {};
+    if (!name?.trim() || !login_id?.trim() || !password?.trim()) {
+      return res.status(400).json({ error: '이름, ID, 비밀번호는 필수입니다.' });
+    }
+    const validRole = ['ADMIN', 'USER'].includes(role) ? role : 'USER';
+    const hash = muHashPassword(password.trim());
+    const [result] = await db.pool.query(
+      'INSERT INTO mu_users (name, login_id, password_hash, role) VALUES (?, ?, ?, ?)',
+      [name.trim(), login_id.trim(), hash, validRole]
+    );
+    res.json({ ok: true, id: result.insertId });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '이미 사용 중인 ID입니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 유저 수정/정지
+app.patch('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { name, password, role, status } = req.body || {};
+    const fields = [];
+    const vals = [];
+    if (name?.trim()) { fields.push('name = ?'); vals.push(name.trim()); }
+    if (password?.trim()) { fields.push('password_hash = ?'); vals.push(muHashPassword(password.trim())); }
+    if (['ADMIN', 'USER'].includes(role)) { fields.push('role = ?'); vals.push(role); }
+    if (['active', 'inactive'].includes(status)) { fields.push('status = ?'); vals.push(status); }
+    if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' });
+    vals.push(userId);
+    await db.pool.query(`UPDATE mu_users SET ${fields.join(', ')} WHERE id = ?`, vals);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 유저 삭제
+app.delete('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    await db.pool.query('DELETE FROM mu_users WHERE id = ?', [userId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 특정 유저의 계정 목록
+app.get('/api/mu/admin/users/:userId/accounts', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const [accounts] = await db.pool.query(`
+      SELECT a.*,
+        t.task_type AS last_task_type, t.task_status AS last_task_status, t.ended_at AS last_task_ended_at
+      FROM managed_accounts a
+      LEFT JOIN managed_account_tasks t ON t.id = (
+        SELECT id FROM managed_account_tasks WHERE managed_account_id = a.id ORDER BY created_at DESC LIMIT 1
+      )
+      WHERE a.owner_user_id = ?
+      ORDER BY a.created_at ASC
+    `, [userId]);
+    res.json({ ok: true, accounts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 계정 생성 (관리자)
+app.post('/api/mu/admin/accounts', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const { owner_user_id, account_name, external_service_name, login_id, login_password, memo } = req.body || {};
+    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id는 필수입니다.' });
+    const [result] = await db.pool.query(
+      `INSERT INTO managed_accounts
+        (owner_user_id, account_name, external_service_name, login_id, login_password_encrypted, memo)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [owner_user_id, account_name || null, external_service_name || null,
+       login_id || null, login_password || null, memo || null]
+    );
+    res.json({ ok: true, id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 계정 상태 변경 (관리자)
+app.patch('/api/mu/admin/accounts/:accountId/status', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    const { account_status, connection_status } = req.body || {};
+    const fields = [];
+    const vals = [];
+    const validAS = ['PENDING','ACTIVE','SUSPENDED','EXPIRED','ERROR'];
+    const validCS = ['CONNECTED','DISCONNECTED','CHECKING'];
+    if (validAS.includes(account_status)) { fields.push('account_status = ?'); vals.push(account_status); }
+    if (validCS.includes(connection_status)) { fields.push('connection_status = ?'); vals.push(connection_status); }
+    if (fields.length === 0) return res.status(400).json({ error: '변경할 상태가 없습니다.' });
+    vals.push(accountId);
+    await db.pool.query(`UPDATE managed_accounts SET ${fields.join(', ')} WHERE id = ?`, vals);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 계정 소유자 재할당 (관리자)
+app.patch('/api/mu/admin/accounts/:accountId/reassign', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    const { owner_user_id } = req.body || {};
+    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id는 필수입니다.' });
+    await db.pool.query('UPDATE managed_accounts SET owner_user_id = ? WHERE id = ?', [owner_user_id, accountId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 계정 삭제 (관리자)
+app.delete('/api/mu/admin/accounts/:accountId', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    await db.pool.query('DELETE FROM managed_accounts WHERE id = ?', [accountId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 계정 로그 추가 (관리자)
+app.post('/api/mu/admin/accounts/:accountId/logs', requireMuAuth, requireMuAdmin, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    const { event_type, message, payload_json } = req.body || {};
+    await db.pool.query(
+      'INSERT INTO managed_account_logs (managed_account_id, event_type, message, payload_json) VALUES (?, ?, ?, ?)',
+      [accountId, event_type || null, message || null, payload_json ? JSON.stringify(payload_json) : null]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ----- USER 전용 API -----
+
+// 내 계정 목록
+app.get('/api/mu/my/accounts', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const { status, connection } = req.query;
+    let where = 'WHERE a.owner_user_id = ?';
+    const params = [userId];
+    if (status) { where += ' AND a.account_status = ?'; params.push(status.toUpperCase()); }
+    if (connection) { where += ' AND a.connection_status = ?'; params.push(connection.toUpperCase()); }
+    const [accounts] = await db.pool.query(`
+      SELECT a.*,
+        t.task_type AS last_task_type, t.task_status AS last_task_status, t.ended_at AS last_task_ended_at
+      FROM managed_accounts a
+      LEFT JOIN managed_account_tasks t ON t.id = (
+        SELECT id FROM managed_account_tasks WHERE managed_account_id = a.id ORDER BY created_at DESC LIMIT 1
+      )
+      ${where}
+      ORDER BY FIELD(a.account_status,'ERROR','EXPIRED','SUSPENDED','PENDING','ACTIVE'), a.created_at ASC
+    `, params);
+
+    // 요약 집계
+    const [allAccounts] = await db.pool.query(
+      'SELECT account_status, connection_status FROM managed_accounts WHERE owner_user_id = ?', [userId]
+    );
+    const summary = {
+      total: allAccounts.length,
+      active: allAccounts.filter(a => a.account_status === 'ACTIVE').length,
+      error: allAccounts.filter(a => a.account_status === 'ERROR').length,
+      expired: allAccounts.filter(a => a.account_status === 'EXPIRED').length,
+      suspended: allAccounts.filter(a => a.account_status === 'SUSPENDED').length,
+      pending: allAccounts.filter(a => a.account_status === 'PENDING').length,
+      disconnected: allAccounts.filter(a => a.connection_status === 'DISCONNECTED').length,
+    };
+    res.json({ ok: true, summary, accounts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 내 계정 상세
+app.get('/api/mu/my/accounts/:accountId', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const accountId = parseInt(req.params.accountId);
+    const [[account]] = await db.pool.query(
+      'SELECT * FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
+    );
+    if (!account) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    res.json({ ok: true, account });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 내 계정 메모 수정
+app.patch('/api/mu/my/accounts/:accountId/memo', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const accountId = parseInt(req.params.accountId);
+    const { memo } = req.body || {};
+    const [result] = await db.pool.query(
+      'UPDATE managed_accounts SET memo = ? WHERE id = ? AND owner_user_id = ?',
+      [memo || null, accountId, userId]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 내 계정 로그 조회
+app.get('/api/mu/my/accounts/:accountId/logs', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const accountId = parseInt(req.params.accountId);
+    const [[owns]] = await db.pool.query(
+      'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
+    );
+    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const [logs] = await db.pool.query(
+      'SELECT * FROM managed_account_logs WHERE managed_account_id = ? ORDER BY created_at DESC LIMIT ?',
+      [accountId, limit]
+    );
+    res.json({ ok: true, logs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 내 계정 작업 이력 조회
+app.get('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const accountId = parseInt(req.params.accountId);
+    const [[owns]] = await db.pool.query(
+      'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
+    );
+    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const [tasks] = await db.pool.query(
+      'SELECT * FROM managed_account_tasks WHERE managed_account_id = ? ORDER BY created_at DESC LIMIT ?',
+      [accountId, limit]
+    );
+    res.json({ ok: true, tasks });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 내 계정 작업 추가
+app.post('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) => {
+  try {
+    const userId = req.muUser.id;
+    const accountId = parseInt(req.params.accountId);
+    const [[owns]] = await db.pool.query(
+      'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
+    );
+    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    const { task_type } = req.body || {};
+    const [result] = await db.pool.query(
+      'INSERT INTO managed_account_tasks (managed_account_id, task_type) VALUES (?, ?)',
+      [accountId, task_type || 'manual']
+    );
+    res.json({ ok: true, id: result.insertId });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -729,6 +729,7 @@
         <div class="info-box">저장된 시드를 선택해 특정 유저에게 지급합니다. 클라이언트 앱이 수신 후 다음 회차에 자동 사용됩니다. (🔄 버튼으로 잔고 재확인 가능)</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
           <button onclick="loadGiftableSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
+          <button onclick="debugGiftableSeeds()" class="btn-sm" style="background:#555;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔍 진단</button>
           <button onclick="recheckAllGiftableSeeds()" class="btn-sm" style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고 재확인</button>
           <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
           <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
@@ -1450,7 +1451,7 @@
       const data = await api(`/api/admin/seed-gifts/giftable?page=${page}&pageSize=20`);
       const tbody = document.getElementById('giftableSeedList');
       if (!data.items?.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">저장된 시드 없음 (seeds 테이블에 데이터를 먼저 추가하세요)</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-state">저장된 시드 없음 (total=${data.total}, page=${data.page}/${data.totalPages||0})</td></tr>`;
       } else {
         const hasBalance = s => Number(s.btc||0)+Number(s.eth||0)+Number(s.tron||0)+Number(s.sol||0) > 0;
         tbody.innerHTML = data.items.map(s => {
@@ -1528,6 +1529,26 @@
       loadGiftHistory();
       loadGiftableSeeds(giftablePage);
     } catch (e) { alert('❌ 취소 실패: ' + e.message); }
+  }
+
+  async function debugGiftableSeeds() {
+    const statusEl = document.getElementById('recheckStatus');
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '🔍 진단 중...'; }
+    try {
+      const raw = await fetch(API + '/api/admin/seed-gifts/giftable?page=1&pageSize=5', { headers: authHeaders() });
+      const text = await raw.text();
+      let parsed;
+      try { parsed = JSON.parse(text); } catch(_) { parsed = null; }
+      const msg = parsed
+        ? `status=${raw.status} | total=${parsed.total} | items=${parsed.items?.length} | error=${parsed.error||'없음'}`
+        : `status=${raw.status} | 응답: ${text.slice(0,200)}`;
+      if (statusEl) statusEl.textContent = '🔍 진단결과: ' + msg;
+      alert('🔍 진단결과\n\n' + msg + (parsed?.error ? '\n\n❌ 오류: ' + parsed.error : ''));
+    } catch(e) {
+      const msg = '네트워크 오류: ' + e.message;
+      if (statusEl) statusEl.textContent = '❌ ' + msg;
+      alert(msg);
+    }
   }
 
   async function recheckSeed(seedId) {

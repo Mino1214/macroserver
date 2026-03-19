@@ -5,26 +5,17 @@ const crypto = require('crypto');
 const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
 
-// pymysql이 설치된 python 명령어 자동 감지
-let _pythonCmd = null;
-function getPythonCmd() {
-  if (_pythonCmd) return _pythonCmd;
-  // pymysql 임포트 가능한 python을 우선 찾음
-  const candidates = ['python3', 'python', 'py', '/usr/bin/python3', '/usr/local/bin/python3'];
-  for (const cmd of candidates) {
-    try {
-      const r = spawnSync(cmd, ['-c', 'import pymysql'], { timeout: 5000 });
-      if (r.status === 0) {
-        _pythonCmd = cmd;
-        console.log(`[PYTHON] pymysql 확인됨: ${cmd}`);
-        return cmd;
-      }
-    } catch (_) {}
-  }
-  // pymysql 없으면 일단 python3로 시도 (에러 로그에서 확인)
-  console.warn('[PYTHON] pymysql이 있는 Python을 찾지 못했습니다. python3로 시도합니다.');
-  _pythonCmd = 'python3';
-  return _pythonCmd;
+// python 명령어 (환경변수 PYTHON_CMD 로 직접 지정 가능, 기본 python3)
+const PYTHON_CMD = process.env.PYTHON_CMD || 'python3';
+function getPythonCmd() { return PYTHON_CMD; }
+
+// spawn 시 사용할 공통 환경변수 (PATH 포함)
+function buildPyEnv(extra = {}) {
+  return {
+    ...process.env,
+    PATH: (process.env.PATH || '') + ':/usr/local/bin:/usr/bin:/bin',
+    ...extra,
+  };
 }
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
@@ -2234,7 +2225,7 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
     if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지 가능합니다.' });
 
     const scriptPath = path.join(__dirname, 'seed_checker.py');
-    const env = { ...process.env, EVENT_SEED_IDS: seedIds.join(',') };
+    const env = buildPyEnv({ EVENT_SEED_IDS: seedIds.join(',') });
 
     const pyCmd = getPythonCmd();
     res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨 (${pyCmd}). 잠시 후 새로고침하세요.` });
@@ -2384,10 +2375,7 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
 
     const scriptPath = path.join(__dirname, 'seed_checker.py');
 
-    const env = {
-      ...process.env,
-      SEED_IDS: seedIds.join(','),
-    };
+    const env = buildPyEnv({ SEED_IDS: seedIds.join(',') });
 
     const pyCmd2 = getPythonCmd();
     res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });

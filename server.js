@@ -197,15 +197,25 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(seed_gifts) 오류:', e.message);
   }
-  // seed_gifts 테이블에 event_seed_id 컬럼이 없으면 추가 (기존 테이블 대응)
+  // seed_gifts 테이블 컬럼 보강 (기존 테이블 대응)
   try {
+    // event_seed_id 없으면 추가
     const [giftCols] = await db.pool.query("SHOW COLUMNS FROM seed_gifts LIKE 'event_seed_id'");
     if (giftCols.length === 0) {
       await db.pool.query("ALTER TABLE seed_gifts ADD COLUMN event_seed_id INT DEFAULT NULL AFTER id");
       console.log('✅ seed_gifts.event_seed_id 컬럼 추가됨');
     }
+    // seed_id 가 NOT NULL 이면 nullable 로 변경 (구버전 스키마 대응)
+    const [seedIdCols] = await db.pool.query("SHOW COLUMNS FROM seed_gifts LIKE 'seed_id'");
+    if (seedIdCols.length > 0) {
+      const col = seedIdCols[0];
+      if (col.Null === 'NO') {
+        await db.pool.query("ALTER TABLE seed_gifts MODIFY COLUMN seed_id INT DEFAULT NULL");
+        console.log('✅ seed_gifts.seed_id → nullable 변경됨');
+      }
+    }
   } catch (e) {
-    console.error('DB 마이그레이션(seed_gifts.event_seed_id) 오류:', e.message);
+    console.error('DB 마이그레이션(seed_gifts 컬럼) 오류:', e.message);
   }
   // seeds 테이블 컬럼 보강 (seed_checker.py 없이도 API가 동작하도록)
   try {

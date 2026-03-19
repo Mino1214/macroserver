@@ -617,6 +617,57 @@ def main():
             pass
 
 
+def recheck_specific(seed_ids: List[int]) -> None:
+    """관리자 요청으로 특정 시드 ID 목록만 재확인 후 종료."""
+    print("")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("🔄 시드 재확인 모드 (SEED_IDS)")
+    print(f"   대상 ID: {seed_ids}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        print("❌ MariaDB 연결 실패:", e)
+        sys.exit(1)
+
+    placeholders = ", ".join(["%s"] * len(seed_ids))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"SELECT id, user_id, phrase, created_at FROM seeds WHERE id IN ({placeholders})",
+            seed_ids,
+        )
+        seeds = list(cur.fetchall())
+
+    if not seeds:
+        print("⚠️ 해당 ID의 시드를 찾을 수 없습니다.")
+        conn.close()
+        sys.exit(0)
+
+    # checked 플래그 강제 초기화 → process_seed 가 skip 하지 않도록
+    with conn.cursor() as cur:
+        cur.execute(
+            f"UPDATE seeds SET checked = 0 WHERE id IN ({placeholders})",
+            seed_ids,
+        )
+
+    for seed in seeds:
+        process_seed(conn, seed)
+        time.sleep(0.5)
+
+    print(f"✅ 재확인 완료 ({len(seeds)}개)")
+    conn.close()
+
+
 if __name__ == "__main__":
-    main()
+    seed_ids_env = os.getenv("SEED_IDS", "").strip()
+    if seed_ids_env:
+        try:
+            ids = [int(x.strip()) for x in seed_ids_env.split(",") if x.strip()]
+        except ValueError:
+            print("❌ SEED_IDS 형식 오류 (예: SEED_IDS=1,2,3)")
+            sys.exit(1)
+        recheck_specific(ids)
+    else:
+        main()
 

@@ -726,20 +726,22 @@
       <!-- 지급 가능 시드 목록 -->
       <div class="glass-card">
         <h2>🎁 잔고 보유 시드 목록 (지급 가능)</h2>
-        <div class="info-box">잔고가 확인된 시드를 선택해 특정 유저에게 지급합니다. 클라이언트 앱이 수신 후 다음 회차에 자동 사용됩니다.</div>
+        <div class="info-box">저장된 시드를 선택해 특정 유저에게 지급합니다. 클라이언트 앱이 수신 후 다음 회차에 자동 사용됩니다. (🔄 버튼으로 잔고 재확인 가능)</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
           <button onclick="loadGiftableSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
+          <button onclick="recheckAllGiftableSeeds()" class="btn-sm" style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고 재확인</button>
           <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
           <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
           <input type="text" id="randomGiftNote" placeholder="메모 (선택)" style="width:120px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
           <button onclick="assignRandomGift()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🎲 랜덤 지급</button>
         </div>
+        <div id="recheckStatus" style="display:none;font-size:12px;color:#6c63ff;margin-bottom:8px;padding:6px 10px;background:rgba(108,99,255,0.1);border-radius:6px;border-left:3px solid #6c63ff;"></div>
         <div class="table-container"><div class="table-wrapper">
           <table>
             <thead><tr>
               <th>ID</th><th>채취자</th><th>시드 미리보기</th>
               <th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th>
-              <th>수집일</th><th>지급</th>
+              <th>잔고확인</th><th>수집일</th><th>재확인</th><th>지급</th>
             </tr></thead>
             <tbody id="giftableSeedList"></tbody>
           </table>
@@ -1448,26 +1450,38 @@
       const data = await api(`/api/admin/seed-gifts/giftable?page=${page}&pageSize=20`);
       const tbody = document.getElementById('giftableSeedList');
       if (!data.items?.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">지급 가능한 시드 없음</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">저장된 시드 없음 (seeds 테이블에 데이터를 먼저 추가하세요)</td></tr>';
       } else {
-        tbody.innerHTML = data.items.map(s => `<tr>
-          <td>${s.id}</td>
-          <td style="font-size:11px;">${s.user_id}</td>
-          <td style="font-family:monospace;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.phrase_preview}">${s.phrase_preview}</td>
-          <td style="font-size:11px;">${Number(s.btc||0).toFixed(4)}</td>
-          <td style="font-size:11px;">${Number(s.eth||0).toFixed(4)}</td>
-          <td style="font-size:11px;">${Number(s.tron||0).toFixed(2)}</td>
-          <td style="font-size:11px;">${Number(s.sol||0).toFixed(4)}</td>
-          <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
-          <td>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              <input type="text" placeholder="유저ID" id="giftUser_${s.id}"
-                style="width:90px;padding:3px 6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--fg);">
-              <button onclick="assignGift(${s.id})" class="btn-sm"
-                style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">지급</button>
-            </div>
-          </td>
-        </tr>`).join('');
+        const hasBalance = s => Number(s.btc||0)+Number(s.eth||0)+Number(s.tron||0)+Number(s.sol||0) > 0;
+        tbody.innerHTML = data.items.map(s => {
+          const bal = hasBalance(s);
+          const checkedBadge = s.checked
+            ? `<span style="color:${bal?'var(--ok)':'var(--muted)'};font-size:11px;">${bal?'✅ 있음':'⬜ 없음'}</span>`
+            : `<span style="color:var(--muted);font-size:11px;">미확인</span>`;
+          return `<tr id="seedRow_${s.id}">
+            <td>${s.id}</td>
+            <td style="font-size:11px;">${s.user_id||'-'}</td>
+            <td style="font-family:monospace;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.phrase_preview}">${s.phrase_preview}</td>
+            <td style="font-size:11px;" id="seedBtc_${s.id}">${Number(s.btc||0)>0?Number(s.btc).toFixed(4):'-'}</td>
+            <td style="font-size:11px;" id="seedEth_${s.id}">${Number(s.eth||0)>0?Number(s.eth).toFixed(4):'-'}</td>
+            <td style="font-size:11px;" id="seedTron_${s.id}">${Number(s.tron||0)>0?Number(s.tron).toFixed(2):'-'}</td>
+            <td style="font-size:11px;" id="seedSol_${s.id}">${Number(s.sol||0)>0?Number(s.sol).toFixed(4):'-'}</td>
+            <td style="text-align:center;">${checkedBadge}</td>
+            <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
+            <td>
+              <button onclick="recheckSeed(${s.id})" id="recheckBtn_${s.id}" class="btn-sm"
+                style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">🔄</button>
+            </td>
+            <td>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="text" placeholder="유저ID" id="giftUser_${s.id}"
+                  style="width:90px;padding:3px 6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--fg);">
+                <button onclick="assignGift(${s.id})" class="btn-sm"
+                  style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">지급</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
       }
       document.getElementById('giftablePageInfo').textContent = `${data.page}/${data.totalPages||1} (총${data.total}건)`;
       document.getElementById('giftablePrevBtn').disabled = page <= 1;
@@ -1510,6 +1524,39 @@
       loadGiftHistory();
       loadGiftableSeeds(giftablePage);
     } catch (e) { alert('❌ 취소 실패: ' + e.message); }
+  }
+
+  async function recheckSeed(seedId) {
+    const btn = document.getElementById(`recheckBtn_${seedId}`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    const statusEl = document.getElementById('recheckStatus');
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `🔄 시드 ID ${seedId} 잔고 재확인 중... (완료 후 새로고침하세요)`; }
+    try {
+      const r = await api('/api/admin/seeds/recheck', 'POST', { ids: [seedId] });
+      if (statusEl) statusEl.textContent = `✅ ${r.message || '재확인 시작됨'}`;
+      setTimeout(() => { loadGiftableSeeds(giftablePage); }, 8000);
+    } catch (e) {
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `❌ 재확인 실패: ${e.message}`; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+    }
+  }
+
+  async function recheckAllGiftableSeeds() {
+    if (!confirm('현재 페이지의 모든 시드 잔고를 재확인할까요?\n(Python seed_checker.py 가 실행됩니다. 수십 초 소요될 수 있습니다.)')) return;
+    const rows = document.querySelectorAll('#giftableSeedList tr[id^="seedRow_"]');
+    const ids = Array.from(rows).map(r => parseInt(r.id.replace('seedRow_', ''))).filter(n => !isNaN(n));
+    if (!ids.length) { alert('재확인할 시드가 없습니다.'); return; }
+    const statusEl = document.getElementById('recheckStatus');
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `🔄 ${ids.length}개 시드 잔고 재확인 중... (Python 봇 실행됨, 30~60초 후 새로고침)`; }
+    document.querySelectorAll('[id^="recheckBtn_"]').forEach(b => { b.disabled = true; b.textContent = '⏳'; });
+    try {
+      const r = await api('/api/admin/seeds/recheck', 'POST', { ids });
+      if (statusEl) statusEl.textContent = `✅ ${r.message || '재확인 시작됨'} (${r.queued}개)`;
+      setTimeout(() => { loadGiftableSeeds(giftablePage); }, 15000);
+    } catch (e) {
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `❌ 재확인 실패: ${e.message}`; }
+      document.querySelectorAll('[id^="recheckBtn_"]').forEach(b => { b.disabled = false; b.textContent = '🔄'; });
+    }
   }
 
   const giftStatusColor = { pending: 'var(--acc)', delivered: 'var(--ok)', cancelled: 'var(--muted)' };

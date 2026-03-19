@@ -506,7 +506,9 @@
         <div class="flex wrap gap-8 mt-16">
           <button onclick="saveMasterTgBot()" class="btn-ok">저장</button>
           <button onclick="testMasterTgBot()" class="btn-ac">테스트 전송</button>
+          <button onclick="loadTgErrors()" class="btn-ghost">🔍 전송 오류 확인</button>
         </div>
+        <pre id="tgErrorLog" style="margin-top:12px;font-size:11px;color:var(--err);background:var(--bg3);padding:10px;border-radius:8px;white-space:pre-wrap;word-break:break-all;display:block;min-height:20px;max-height:200px;overflow-y:auto;"></pre>
       </div>
 
       <!-- 매니저 전용: 본인 봇 -->
@@ -1003,6 +1005,17 @@
       await api('/api/admin/master/telegram-bot/test', 'POST');
       msgEl.textContent = '✅ 전송되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
+  }
+  async function loadTgErrors() {
+    const el = document.getElementById('tgErrorLog');
+    el.textContent = '조회 중...';
+    try {
+      const d = await api('/api/admin/telegram-errors');
+      if (!d.errors?.length) { el.textContent = '최근 오류 없음 ✅'; return; }
+      el.textContent = d.errors.map(e =>
+        `[${e.time}]\nchatId: ${e.chatId}\n에러: ${e.error} (code: ${e.code||'-'})`
+      ).join('\n─────────────\n');
+    } catch (err) { el.textContent = '조회 실패: ' + err.message; }
   }
 
   /* 매니저 본인 봇 설정 */

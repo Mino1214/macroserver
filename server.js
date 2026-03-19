@@ -191,6 +191,13 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
+// 최근 Telegram 에러 로그 (최대 20건, 관리자 진단용)
+const _tgErrorLog = [];
+function _pushTgError(entry) {
+  _tgErrorLog.unshift(entry);
+  if (_tgErrorLog.length > 20) _tgErrorLog.pop();
+}
+
 // throwOnError=true 이면 실패 시 예외 발생 (테스트 엔드포인트용)
 // parseMode: 'HTML'(기본) | 'plain' (HTML 파싱 없이 전송)
 async function sendTelegram(botToken, chatId, text, throwOnError = false, parseMode = 'HTML') {
@@ -205,7 +212,9 @@ async function sendTelegram(botToken, chatId, text, throwOnError = false, parseM
     console.log(`[TELEGRAM] 전송 완료 → chatId=${chatId}`);
   } catch (e) {
     const desc = e.response?.data?.description || e.message;
+    const errCode = e.response?.data?.error_code;
     console.error(`[TELEGRAM] 전송 실패 chatId=${chatId}: ${desc}`);
+    _pushTgError({ time: new Date().toISOString(), chatId, error: desc, code: errCode });
     if (throwOnError) throw new Error(`Telegram 오류: ${desc}`);
   }
 }
@@ -1248,6 +1257,11 @@ app.post('/api/admin/master/telegram-bot/test', requireAdmin, requireMaster, asy
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/admin/telegram-errors — 최근 Telegram 전송 실패 로그 (마스터 전용)
+app.get('/api/admin/telegram-errors', requireAdmin, requireMaster, (req, res) => {
+  res.json({ errors: _tgErrorLog });
 });
 
 // GET /api/admin/managers/:id/telegram-bot — 봇 설정 조회 (마스터 또는 본인만)

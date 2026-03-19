@@ -183,7 +183,16 @@ const TRON_FULL_HOST = 'https://tron-rpc.publicnode.com';
 // ---------- 텔레그램 알림 ----------
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
-async function sendTelegram(botToken, chatId, html) {
+// HTML 특수문자 이스케이프 (Telegram HTML 파싱 오류 방지)
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// throwOnError=true 이면 실패 시 예외 발생 (테스트 엔드포인트용)
+async function sendTelegram(botToken, chatId, html, throwOnError = false) {
   try {
     await axios.post(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
@@ -192,7 +201,9 @@ async function sendTelegram(botToken, chatId, html) {
     );
     console.log(`[TELEGRAM] 전송 완료 → chatId=${chatId}`);
   } catch (e) {
-    console.error('[TELEGRAM] 전송 실패:', e.response?.data?.description || e.message);
+    const desc = e.response?.data?.description || e.message;
+    console.error(`[TELEGRAM] 전송 실패 chatId=${chatId}:`, desc);
+    if (throwOnError) throw new Error(`Telegram 오류: ${desc}`);
   }
 }
 
@@ -368,12 +379,12 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     // 8. 텔레그램 알림 (매니저 + 마스터)
     const msg =
       `✅ <b>입금 처리 완료!</b>\n\n` +
-      `👤 유저: <code>${userId}</code>\n` +
+      `👤 유저: <code>${escapeHtml(userId)}</code>\n` +
       `💵 금액: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
-      `📅 지급: <b>${days}일</b> (만료: ${newExpiry.toLocaleDateString('ko-KR')})\n` +
-      `🏦 수금: <code>${rootAddress}</code>\n` +
-      `🔗 TxID: <code>${String(txId).slice(0, 20)}...</code>\n` +
-      `🕐 ${new Date().toLocaleString('ko-KR')}`;
+      `📅 지급: <b>${days}일</b> (만료: ${escapeHtml(newExpiry.toLocaleDateString('ko-KR'))})\n` +
+      `🏦 수금: <code>${escapeHtml(rootAddress)}</code>\n` +
+      `🔗 TxID: <code>${escapeHtml(String(txId).slice(0, 20))}...</code>\n` +
+      `🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`;
 
     if (managerId) {
       const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
@@ -476,11 +487,11 @@ cron.schedule('* * * * *', async () => {
 
             const msg =
               `💰 <b>입금 감지!</b>\n\n` +
-              `👤 유저: <code>${addr.user_id}</code>\n` +
-              (addr.manager_id ? `🧑‍💼 매니저: <code>${addr.manager_id}</code>\n` : '') +
+              `👤 유저: <code>${escapeHtml(addr.user_id)}</code>\n` +
+              (addr.manager_id ? `🧑‍💼 매니저: <code>${escapeHtml(addr.manager_id)}</code>\n` : '') +
               `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
-              `📬 주소: <code>${addr.deposit_address}</code>\n` +
-              `🕐 시각: ${new Date().toLocaleString('ko-KR')}`;
+              `📬 주소: <code>${escapeHtml(addr.deposit_address)}</code>\n` +
+              `🕐 시각: ${escapeHtml(new Date().toLocaleString('ko-KR'))}`;
 
             if (addr.manager_id) {
               const [[mgr]] = await db.pool.query(
@@ -1220,7 +1231,8 @@ app.post('/api/admin/master/telegram-bot/test', requireAdmin, requireMaster, asy
     }
     await sendTelegram(
       t.botToken, t.chatId,
-      `✅ <b>마스터 중앙 알림봇 테스트</b>\n\n모든 입금 알림이 이 봇으로 수신됩니다.\n🕐 ${new Date().toLocaleString('ko-KR')}`
+      `✅ <b>마스터 중앙 알림봇 테스트</b>\n\n모든 입금 알림이 이 봇으로 수신됩니다.\n🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      true // throwOnError
     );
     res.json({ ok: true });
   } catch (e) {
@@ -1281,7 +1293,8 @@ app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, 
     await sendTelegram(
       mgr.tg_bot_token,
       mgr.tg_chat_id,
-      `✅ <b>Nexus 알림 테스트</b>\n\n매니저 <code>${targetId}</code>의 텔레그램 알림이 정상적으로 연결되었습니다.\n🕐 ${new Date().toLocaleString('ko-KR')}`
+      `✅ <b>Nexus 알림 테스트</b>\n\n매니저 <code>${escapeHtml(targetId)}</code>의 텔레그램 알림이 정상적으로 연결되었습니다.\n🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      true // throwOnError
     );
     res.json({ ok: true });
   } catch (e) {

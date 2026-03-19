@@ -5,17 +5,26 @@ const crypto = require('crypto');
 const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
 
-// python 명령어 (환경변수 PYTHON_CMD 로 직접 지정 가능, 기본 python3)
-const PYTHON_CMD = process.env.PYTHON_CMD || 'python3';
-function getPythonCmd() { return PYTHON_CMD; }
+// seed_checker.py 실행 헬퍼 — bash -l 로 login shell 환경을 로드해서 pymysql 등 찾기
+function spawnSeedChecker(envVars, onClose) {
+  const scriptPath = path.join(__dirname, 'seed_checker.py');
+  const pythonCmd = process.env.PYTHON_CMD || 'python3';
 
-// spawn 시 사용할 공통 환경변수 (PATH 포함)
-function buildPyEnv(extra = {}) {
-  return {
-    ...process.env,
-    PATH: (process.env.PATH || '') + ':/usr/local/bin:/usr/bin:/bin',
-    ...extra,
-  };
+  // 환경변수를 VAR=val 형태로 앞에 붙여 bash -lc 로 실행
+  const envPrefix = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join(' ');
+  const cmd = `cd ${JSON.stringify(__dirname)} && ${envPrefix} ${pythonCmd} ${JSON.stringify(scriptPath)}`;
+
+  const py = spawn('bash', ['-lc', cmd], { stdio: 'pipe' });
+  let out = '', err = '';
+  py.stdout.on('data', d => { out += d.toString(); });
+  py.stderr.on('data', d => { err += d.toString(); });
+  py.on('close', code => {
+    if (out) console.log('[SEED CHECKER STDOUT]\n' + out.trim());
+    if (err) console.error('[SEED CHECKER STDERR]\n' + err.trim());
+    if (onClose) onClose(code);
+  });
+  py.on('error', e => console.error('[SEED CHECKER] spawn 오류:', e.message));
+  return py;
 }
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
@@ -2224,22 +2233,10 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
     if (!seedIds.length) return res.status(400).json({ error: '재확인할 이벤트 시드가 없습니다.' });
     if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지 가능합니다.' });
 
-    const scriptPath = path.join(__dirname, 'seed_checker.py');
-    const env = buildPyEnv({ EVENT_SEED_IDS: seedIds.join(',') });
-
-    const pyCmd = getPythonCmd();
-    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨 (${pyCmd}). 잠시 후 새로고침하세요.` });
-
-    const py = spawn(pyCmd, [scriptPath], { env, stdio: 'pipe' });
-    let out = '', err = '';
-    py.stdout.on('data', d => { out += d.toString(); });
-    py.stderr.on('data', d => { err += d.toString(); });
-    py.on('close', code => {
-      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) cmd=${pyCmd} IDs=${seedIds.join(',')}`);
-      if (out) console.log('[EVENT-SEED RECHECK STDOUT]\n' + out.trim());
-      if (err) console.error('[EVENT-SEED RECHECK STDERR]\n' + err.trim());
+    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
+    spawnSeedChecker({ EVENT_SEED_IDS: seedIds.join(',') }, code => {
+      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
     });
-    py.on('error', e2 => console.error('[EVENT-SEED RECHECK] spawn 오류:', e2.message));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2373,26 +2370,9 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
     if (seedIds.length === 0) return res.status(400).json({ error: '재확인할 시드 ID가 없습니다.' });
     if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지만 재확인 가능합니다.' });
 
-    const scriptPath = path.join(__dirname, 'seed_checker.py');
-
-    const env = buildPyEnv({ SEED_IDS: seedIds.join(',') });
-
-    const pyCmd2 = getPythonCmd();
     res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
-
-    const py = spawn(pyCmd2, [scriptPath], { env, stdio: 'pipe' });
-    let stdout = '';
-    let stderr = '';
-    py.stdout.on('data', d => { stdout += d.toString(); });
-    py.stderr.on('data', d => { stderr += d.toString(); });
-    py.on('close', code => {
-      console.log(`[SEED RECHECK] 완료 (exit=${code}) cmd=${pyCmd2} IDs=${seedIds.join(',')}`);
-      if (stdout) console.log('[SEED RECHECK STDOUT]\n' + stdout.trim());
-      if (stderr) console.error('[SEED RECHECK STDERR]\n' + stderr.trim());
-    });
-    py.on('error', err => {
-      // python3 없으면 python 으로 재시도
-      console.error('[SEED RECHECK] spawn 오류:', err.message);
+    spawnSeedChecker({ SEED_IDS: seedIds.join(',') }, code => {
+      console.log(`[SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

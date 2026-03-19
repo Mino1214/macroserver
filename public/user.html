@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#0a0b14">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>회원 페이지</title>
+  <style>
+    :root {
+      --bg:      #0a0b14;
+      --bg2:     #111220;
+      --bg3:     #181929;
+      --border:  rgba(124,111,255,.18);
+      --ac:      #7c6fff;
+      --ac-dim:  rgba(124,111,255,.12);
+      --ac-glow: rgba(124,111,255,.3);
+      --fg:      #f0f0ff;
+      --muted:   #6b7280;
+      --ok:      #4ade80;
+      --warn:    #fb923c;
+      --err:     #f87171;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ===== LOGIN ===== */
+    #loginBox {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    .login-wrap { width: 100%; max-width: 380px; }
+    .login-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 32px;
+    }
+    .login-title { font-size: 26px; font-weight: 700; color: var(--ac); text-align: center; margin-bottom: 6px; }
+    .login-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+
+    /* ===== FORMS ===== */
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .field { margin-bottom: 16px; }
+    input[type=text], input[type=password], input[type=number] {
+      width: 100%; padding: 11px 14px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--fg); font-size: 14px;
+      outline: none; transition: border-color .15s; font-family: inherit;
+    }
+    input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px var(--ac-dim); }
+
+    /* ===== BUTTONS ===== */
+    button {
+      padding: 10px 18px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all .15s; outline: none; font-family: inherit;
+    }
+    .btn-ac { background: var(--ac); color: #fff; width: 100%; padding: 13px; font-size: 15px; margin-top: 8px; }
+    .btn-ac:hover { opacity: .85; }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border); color: var(--fg);
+    }
+    .btn-ghost:hover { border-color: var(--ac); color: var(--ac); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    .btn-ok { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .btn-ok:hover { background: rgba(74,222,128,.25); }
+    .btn-err { background: rgba(248,113,113,.12); color: var(--err); border: 1px solid rgba(248,113,113,.3); }
+    .btn-err:hover { background: rgba(248,113,113,.22); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ===== ERROR MSG ===== */
+    .errmsg { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 20px; text-align: center; }
+
+    /* ===== MAIN APP ===== */
+    #appBox { display: none; }
+
+    /* ===== HEADER ===== */
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; background: var(--bg2);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+    }
+    .top-title { font-size: 17px; font-weight: 700; color: var(--ac); }
+    .top-user { font-size: 13px; color: var(--muted); }
+    .top-logout { font-size: 12px; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .top-logout:hover { color: var(--err); border-color: var(--err); }
+
+    /* ===== TABBAR ===== */
+    .tabbar {
+      display: flex; overflow-x: auto; gap: 4px;
+      padding: 10px 16px; background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+    .tabbar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 16px; border-radius: 10px; background: transparent;
+      border: 1px solid transparent; color: var(--muted);
+      font-size: 12px; font-weight: 500; white-space: nowrap; gap: 2px;
+      transition: all .15s; cursor: pointer;
+    }
+    .tab-btn .icon { font-size: 18px; }
+    .tab-btn.active { background: var(--ac-dim); border-color: var(--ac); color: var(--ac); }
+    .tab-btn:hover:not(.active) { color: var(--fg); border-color: var(--border); }
+
+    /* ===== CONTENT ===== */
+    .tab-content { padding: 20px 16px; max-width: 860px; margin: 0 auto; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ===== GLASS CARD ===== */
+    .glass-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px 20px; margin-bottom: 16px;
+    }
+    .glass-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--ac); }
+    .glass-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+
+    /* ===== STATUS BADGE ===== */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 13px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    }
+    .badge-run { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .badge-stop { background: rgba(248,113,113,.1); color: var(--err); border: 1px solid rgba(248,113,113,.25); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot-run { background: var(--ok); animation: pulse 1.6s infinite; }
+    .dot-stop { background: var(--err); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* ===== MINER STATUS DISPLAY ===== */
+    .miner-hero {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 18px; padding: 30px 20px;
+    }
+    .miner-icon { font-size: 56px; line-height: 1; }
+    .miner-status-text { font-size: 22px; font-weight: 700; }
+    .miner-detail { color: var(--muted); font-size: 14px; text-align: center; line-height: 1.6; }
+
+    /* ===== STAT ROW ===== */
+    .stat-row {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+    }
+    .stat-box {
+      flex: 1; min-width: 130px; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val { font-size: 20px; font-weight: 700; color: var(--ac); }
+    .stat-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+    /* ===== TABLE ===== */
+    .table-container { overflow-x: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 10px 12px; text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+         text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 11px 12px; border-bottom: 1px solid rgba(124,111,255,.07); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(124,111,255,.04); }
+    .no-data { text-align: center; color: var(--muted); padding: 36px; font-size: 13px; }
+
+    /* ===== PAGINATION ===== */
+    .pagination { display: flex; gap: 8px; justify-content: center; margin-top: 16px; align-items: center; }
+    .page-info { font-size: 13px; color: var(--muted); }
+
+    /* ===== INFO ROW ===== */
+    .info-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; border-bottom: 1px solid rgba(124,111,255,.08); gap: 12px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { font-size: 13px; color: var(--muted); min-width: 120px; }
+    .info-val { font-size: 14px; font-weight: 500; flex: 1; }
+    .info-edit { display: flex; gap: 8px; align-items: center; flex: 1; }
+    .info-edit input { flex: 1; }
+
+    /* ===== TOAST ===== */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 20px;
+      font-size: 14px; z-index: 9999; opacity: 0;
+      transition: opacity .25s; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok { border-color: var(--ok); color: var(--ok); }
+    #toast.err { border-color: var(--err); color: var(--err); }
+
+    /* ===== LOADING ===== */
+    .spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid var(--border); border-top-color: var(--ac);
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-center { display: flex; justify-content: center; padding: 40px; }
+
+    @media (max-width: 480px) {
+      .glass-card { padding: 18px 14px; }
+      .miner-icon { font-size: 44px; }
+      .tab-content { padding: 16px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="loginBox">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-title">회원 로그인</div>
+      <div class="login-sub">채굴기 현황 및 채굴 내역을 확인하세요</div>
+      <div class="field">
+        <label>아이디</label>
+        <input type="text" id="loginId" placeholder="아이디 입력" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>비밀번호</label>
+        <input type="password" id="loginPw" placeholder="비밀번호 입력" autocomplete="current-password">
+      </div>
+      <button class="btn-ac" id="loginBtn" onclick="doLogin()">로그인</button>
+      <div class="errmsg" id="loginErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="appBox">
+  <!-- 상단 바 -->
+  <div class="top-bar">
+    <div class="top-title">채굴기 대여</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="top-user" id="topUserId"></span>
+      <button class="top-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+
+  <!-- 탭바 -->
+  <div class="tabbar">
+    <button class="tab-btn active" data-tab="sectionMiner" onclick="showTab('sectionMiner');loadMiner()">
+      <span class="icon">⛏️</span><span>채굴기</span>
+    </button>
+    <button class="tab-btn" data-tab="sectionRecords" onclick="showTab('sectionRecords');loadRecords(1)">
+      <span class="icon">📊</span><span>채굴 내역</span>
+    </button>
+    <button class="tab-btn" data-tab="sectionProfile" onclick="showTab('sectionProfile');loadProfile()">
+      <span class="icon">👤</span><span>내 정보</span>
+    </button>
+  </div>
+
+  <!-- 탭 콘텐츠 -->
+  <div class="tab-content">
+
+    <!-- 채굴기 탭 -->
+    <div class="tab-panel active" id="sectionMiner">
+      <div class="glass-card" id="minerCard">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+      <div class="glass-card">
+        <h2>구독 정보</h2>
+        <div id="subInfo" style="color:var(--muted);font-size:14px;">불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 채굴 내역 탭 -->
+    <div class="tab-panel" id="sectionRecords">
+      <div class="glass-card">
+        <h2>채굴 내역</h2>
+        <div id="recordsStats" class="stat-row"></div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>채굴 일시</th>
+                <th>코인</th>
+                <th>수량</th>
+                <th>메모</th>
+              </tr>
+            </thead>
+            <tbody id="recordsBody">
+              <tr><td colspan="5" class="no-data">불러오는 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="recordsPagination"></div>
+      </div>
+    </div>
+
+    <!-- 내 정보 탭 -->
+    <div class="tab-panel" id="sectionProfile">
+      <div class="glass-card">
+        <h2>내 정보</h2>
+        <div id="profileContent">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /appBox -->
+
+<div id="toast"></div>
+
+<script>
+  const API = '';
+  let _token = localStorage.getItem('user_token') || '';
+  let _userId = localStorage.getItem('user_id') || '';
+  let _recordsPage = 1;
+
+  // ===== 초기화 =====
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginId').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPw').focus(); });
+    document.getElementById('loginPw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    if (_token) tryAutoLogin();
+    else showLogin();
+  });
+
+  async function tryAutoLogin() {
+    try {
+      const r = await fetch(`${API}/api/user/miner?token=${_token}`);
+      if (r.ok) { showApp(); }
+      else { clearSession(); showLogin(); }
+    } catch { clearSession(); showLogin(); }
+  }
+
+  function showLogin() {
+    document.getElementById('loginBox').style.display = 'flex';
+    document.getElementById('appBox').style.display = 'none';
+  }
+  function showApp() {
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('appBox').style.display = 'block';
+    document.getElementById('topUserId').textContent = _userId;
+    loadMiner();
+    loadSubInfo();
+  }
+
+  function clearSession() {
+    _token = '';
+    _userId = '';
+    localStorage.removeItem('user_token');
+    localStorage.removeItem('user_id');
+  }
+
+  // ===== 로그인 =====
+  async function doLogin() {
+    const id = document.getElementById('loginId').value.trim();
+    const pw = document.getElementById('loginPw').value.trim();
+    const err = document.getElementById('loginErr');
+    const btn = document.getElementById('loginBtn');
+    err.textContent = '';
+    if (!id || !pw) { err.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+    btn.disabled = true; btn.textContent = '로그인 중...';
+    try {
+      const r = await fetch(`${API}/api/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password: pw }),
+      });
+      const data = await r.json();
+      if (!r.ok) { err.textContent = data.error || '로그인 실패'; return; }
+      _token = data.token;
+      _userId = id.toLowerCase();
+      localStorage.setItem('user_token', _token);
+      localStorage.setItem('user_id', _userId);
+      showApp();
+    } catch (e) {
+      err.textContent = '서버 연결 오류';
+    } finally {
+      btn.disabled = false; btn.textContent = '로그인';
+    }
+  }
+
+  async function doLogout() {
+    try { await fetch(`${API}/api/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: _token }) }); } catch {}
+    clearSession();
+    showLogin();
+  }
+
+  // ===== 탭 전환 =====
+  function showTab(id) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-btn[data-tab="${id}"]`).forEach(b => b.classList.add('active'));
+  }
+
+  // ===== 채굴기 상태 =====
+  async function loadMiner() {
+    const card = document.getElementById('minerCard');
+    card.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const r = await fetch(`${API}/api/user/miner?token=${_token}`);
+      if (!r.ok) { if (r.status === 401) { clearSession(); showLogin(); return; } throw new Error(); }
+      const data = await r.json();
+      const isRun = data.status === 'running';
+      card.innerHTML = `
+        <div class="miner-hero">
+          <div class="miner-icon">${isRun ? '⛏️' : '🔌'}</div>
+          <span class="badge ${isRun ? 'badge-run' : 'badge-stop'}">
+            <span class="dot ${isRun ? 'dot-run' : 'dot-stop'}"></span>
+            ${isRun ? '채굴 중' : '정지'}
+          </span>
+          <div class="miner-status-text" style="color:${isRun ? 'var(--ok)' : 'var(--err)'}">
+            ${isRun ? '채굴기 작동 중' : '채굴기 정지됨'}
+          </div>
+          <div class="miner-detail">
+            ${data.coin_type ? `채굴 코인: <b>${esc(data.coin_type)}</b>` : ''}
+            ${data.assigned_at ? `<br>시작 일시: ${fmtDate(data.assigned_at)}` : ''}
+          </div>
+        </div>
+      `;
+    } catch { card.innerHTML = '<div class="no-data">정보를 불러올 수 없습니다.</div>'; }
+  }
+
+  async function loadSubInfo() {
+    const el = document.getElementById('subInfo');
+    try {
+      const r = await fetch(`${API}/api/user/subscription?token=${_token}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const exp = d.expireDate ? new Date(d.expireDate) : null;
+      const now = new Date();
+      const remain = exp ? Math.ceil((exp - now) / 86400000) : 0;
+      const expired = exp ? now > exp : true;
+      el.innerHTML = `
+        <div class="stat-row">
+          <div class="stat-box"><div class="stat-label">상태</div>
+            <div class="stat-val" style="font-size:15px;color:${d.status === 'approved' ? 'var(--ok)' : 'var(--err)'}">
+              ${d.status === 'approved' ? '활성' : d.status === 'suspended' ? '정지' : d.status}
+            </div>
+          </div>
+          <div class="stat-box"><div class="stat-label">만료일</div>
+            <div class="stat-val" style="font-size:14px;">${exp ? fmtDate(exp) : '없음'}</div>
+          </div>
+          <div class="stat-box"><div class="stat-label">남은 일수</div>
+            <div class="stat-val" style="color:${expired?'var(--err)':'var(--ac)'}">${expired ? '만료됨' : remain + '일'}</div>
+          </div>
+        </div>
+      `;
+    } catch { el.textContent = '정보를 불러올 수 없습니다.'; }
+  }
+
+  // ===== 채굴 내역 =====
+  async function loadRecords(page) {
+    _recordsPage = page || 1;
+    const tbody = document.getElementById('recordsBody');
+    const stats = document.getElementById('recordsStats');
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data"><div class="spinner"></div></td></tr>';
+    try {
+      const r = await fetch(`${API}/api/user/mining-records?token=${_token}&page=${_recordsPage}&pageSize=20`);
+      if (!r.ok) { if (r.status === 401) { clearSession(); showLogin(); return; } throw new Error(); }
+      const data = await r.json();
+
+      stats.innerHTML = `
+        <div class="stat-box"><div class="stat-label">전체 채굴 건수</div><div class="stat-val">${data.total}<span class="stat-unit">건</span></div></div>
+        <div class="stat-box"><div class="stat-label">누적 채굴 수량</div><div class="stat-val">${Number(data.cumulative).toFixed(8)}</div></div>
+      `;
+
+      if (!data.records.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="no-data">채굴 내역이 없습니다.</td></tr>';
+        document.getElementById('recordsPagination').innerHTML = '';
+        return;
+      }
+
+      tbody.innerHTML = data.records.map((r, i) => `
+        <tr>
+          <td style="color:var(--muted)">${((_recordsPage - 1) * 20) + i + 1}</td>
+          <td>${fmtDate(r.mined_at)}</td>
+          <td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600">${esc(r.coin_type)}</span></td>
+          <td style="font-weight:600">${Number(r.amount).toFixed(8)}</td>
+          <td style="color:var(--muted)">${r.note ? esc(r.note) : '-'}</td>
+        </tr>
+      `).join('');
+
+      const totalPages = Math.ceil(data.total / 20);
+      renderPagination('recordsPagination', _recordsPage, totalPages, loadRecords);
+    } catch { tbody.innerHTML = '<tr><td colspan="5" class="no-data">불러오기 실패</td></tr>'; }
+  }
+
+  // ===== 내 정보 =====
+  async function loadProfile() {
+    const el = document.getElementById('profileContent');
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const r = await fetch(`${API}/api/user/profile?token=${_token}`);
+      if (!r.ok) { if (r.status === 401) { clearSession(); showLogin(); return; } throw new Error(); }
+      const d = await r.json();
+      el.innerHTML = `
+        <div class="info-row">
+          <div class="info-label">아이디</div>
+          <div class="info-val">${esc(d.id)}</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">내 메신저 ID</div>
+          <div class="info-edit">
+            <input type="text" id="messengerInput" value="${esc(d.messenger_id || '')}" placeholder="메신저 ID 입력 (예: @telegram_id)">
+            <button class="btn-ghost btn-sm" onclick="saveMessenger()">저장</button>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">소속 총판 ID</div>
+          <div class="info-val">${d.manager_id ? esc(d.manager_id) : '<span style="color:var(--muted)">없음</span>'}</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">총판 메신저 ID</div>
+          <div class="info-val">${d.manager_messenger_id ? esc(d.manager_messenger_id) : '<span style="color:var(--muted)">미등록</span>'}</div>
+        </div>
+      `;
+    } catch { el.innerHTML = '<div class="no-data">불러오기 실패</div>'; }
+  }
+
+  async function saveMessenger() {
+    const val = document.getElementById('messengerInput')?.value?.trim();
+    try {
+      const r = await fetch(`${API}/api/user/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ messenger_id: val }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.error || '저장 실패', 'err'); return; }
+      showToast('메신저 ID가 저장되었습니다.', 'ok');
+    } catch { showToast('저장 실패', 'err'); }
+  }
+
+  // ===== 유틸 =====
+  function renderPagination(containerId, current, total, cb) {
+    const el = document.getElementById(containerId);
+    if (total <= 1) { el.innerHTML = ''; return; }
+    let html = `<button class="btn-ghost btn-sm" ${current <= 1 ? 'disabled' : ''} onclick="${cb.name}(${current - 1})">이전</button>`;
+    html += `<span class="page-info">${current} / ${total}</span>`;
+    html += `<button class="btn-ghost btn-sm" ${current >= total ? 'disabled' : ''} onclick="${cb.name}(${current + 1})">다음</button>`;
+    el.innerHTML = html;
+  }
+
+  function fmtDate(d) {
+    if (!d) return '-';
+    const dt = new Date(d);
+    if (isNaN(dt)) return String(d);
+    return `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+  }
+  function p2(n) { return String(n).padStart(2, '0'); }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function showToast(msg, type = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = (type === 'ok' ? '✅ ' : '❌ ') + msg;
+    t.className = `show ${type}`;
+    setTimeout(() => { t.className = ''; }, 2800);
+  }
+</script>
+</body>
+</html>

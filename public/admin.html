@@ -411,6 +411,20 @@
     <button class="tab-btn master-tab nav-master hidden" data-tab="sectionGiftSeed" onclick="showTab('sectionGiftSeed');loadEventSeeds(1);loadGiftHistory();">
       <span class="icon">🎁</span><span>시드지급</span>
     </button>
+    <!-- 총판(매니저)용 탭 -->
+    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionMinerMgmt" onclick="showTab('sectionMinerMgmt');loadMinerMgmt()">
+      <span class="icon">⛏️</span><span>채굴관리</span>
+    </button>
+    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionMySettlement" onclick="showTab('sectionMySettlement');loadMySettlement(1)">
+      <span class="icon">💵</span><span>정산내역</span>
+    </button>
+    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionWithdraw" onclick="showTab('sectionWithdraw');loadWithdrawHistory()">
+      <span class="icon">💸</span><span>출금신청</span>
+    </button>
+    <!-- 마스터용 정산 관리 탭 -->
+    <button class="tab-btn master-tab nav-master hidden" data-tab="sectionSettleMgmt" onclick="showTab('sectionSettleMgmt');loadSettleMgmt()">
+      <span class="icon">📋</span><span>정산관리</span>
+    </button>
   </div>
 
   <!-- Tab Content -->
@@ -793,6 +807,169 @@
 
     </div><!-- /sectionGiftSeed -->
 
+    <!-- ===== 채굴 관리 탭 (매니저용) ===== -->
+    <div class="tab-panel hidden" id="sectionMinerMgmt">
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">채굴기 관리</h2>
+          <button class="btn-ac btn-sm" onclick="loadMinerMgmt()">새로고침</button>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table id="tableMinerMgmt">
+              <thead><tr>
+                <th>아이디</th>
+                <th>만료일</th>
+                <th>남은 일수</th>
+                <th>채굴기 상태</th>
+                <th>채굴 코인</th>
+                <th>채굴 기록 추가</th>
+                <th>제어</th>
+              </tr></thead>
+              <tbody id="minerMgmtBody">
+                <tr><td colspan="7" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /sectionMinerMgmt -->
+
+    <!-- ===== 정산 내역 탭 (매니저용) ===== -->
+    <div class="tab-panel hidden" id="sectionMySettlement">
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">내 정산 내역</h2>
+          <button class="btn-ac btn-sm" onclick="loadMySettlement(1)">새로고침</button>
+        </div>
+        <div id="mySettleSummary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>날짜</th>
+                <th>회원 ID</th>
+                <th>결제 금액</th>
+                <th>정산 비율</th>
+                <th>정산 금액</th>
+                <th>유형</th>
+              </tr></thead>
+              <tbody id="mySettleBody">
+                <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pagination" id="mySettlePagination"></div>
+      </div>
+    </div><!-- /sectionMySettlement -->
+
+    <!-- ===== 출금 신청 탭 (매니저용) ===== -->
+    <div class="tab-panel hidden" id="sectionWithdraw">
+      <div class="glass-card" id="withdrawBalanceCard">
+        <h2>출금 신청</h2>
+        <div id="withdrawBalance" style="color:var(--muted);margin-bottom:16px;">잔액 불러오는 중...</div>
+        <div id="withdrawForm">
+          <div class="row-g" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:140px;">
+              <label>출금 금액 (USDT)</label>
+              <input type="number" id="withdrawAmount" min="0.01" step="0.01" placeholder="0.00">
+            </div>
+            <div style="flex:2;min-width:200px;">
+              <label>지갑 주소</label>
+              <input type="text" id="withdrawWallet" placeholder="출금받을 지갑 주소">
+            </div>
+            <button class="btn-ac btn-sm" id="withdrawBtn" onclick="requestWithdraw()">출금 신청</button>
+          </div>
+          <div id="withdrawMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+          <div id="withdrawDateNote" style="font-size:12px;color:var(--muted);margin-top:6px;">
+            ※ 출금 신청은 <b>매월 1일</b>에만 가능합니다.
+          </div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <h2>출금 신청 내역</h2>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>신청일</th>
+                <th>금액 (USDT)</th>
+                <th>지갑 주소</th>
+                <th>상태</th>
+                <th>처리일</th>
+                <th>거절 사유</th>
+              </tr></thead>
+              <tbody id="withdrawHistBody">
+                <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /sectionWithdraw -->
+
+    <!-- ===== 정산 관리 탭 (마스터용) ===== -->
+    <div class="tab-panel hidden" id="sectionSettleMgmt">
+      <!-- 총판별 정산 요약 -->
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">총판별 정산 현황</h2>
+          <button class="btn-ac btn-sm" onclick="loadSettleMgmt()">새로고침</button>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table id="tableMgrSettle">
+              <thead><tr>
+                <th>총판 ID</th>
+                <th>메신저 ID</th>
+                <th>정산 비율</th>
+                <th>누적 수익</th>
+                <th>출금 완료</th>
+                <th>잔액</th>
+                <th>비율 변경</th>
+              </tr></thead>
+              <tbody id="mgrSettleBody">
+                <tr><td colspan="7" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- 출금 신청 관리 -->
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">출금 신청 목록</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="withdrawFilter" onchange="loadWithdrawAdmin()" style="padding:7px 10px;font-size:13px;">
+              <option value="">전체</option>
+              <option value="pending">대기</option>
+              <option value="approved">승인</option>
+              <option value="rejected">거절</option>
+            </select>
+            <button class="btn-ac btn-sm" onclick="loadWithdrawAdmin()">새로고침</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>신청일</th>
+                <th>총판 ID</th>
+                <th>금액 (USDT)</th>
+                <th>지갑 주소</th>
+                <th>상태</th>
+                <th>처리</th>
+              </tr></thead>
+              <tbody id="withdrawAdminBody">
+                <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /sectionSettleMgmt -->
+
   </div><!-- /tab-content -->
 </div><!-- /dashboard -->
 
@@ -891,11 +1068,18 @@
     const isMaster = me && me.role === 'master';
 
     // master-only elements
-    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','userCreateForm'].forEach(id => {
+    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','sectionSettleMgmt','userCreateForm'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', !isMaster);
     });
     document.querySelectorAll('.nav-master').forEach(el => el.classList.toggle('hidden', !isMaster));
+
+    // manager tabs (both master and manager see these)
+    ['sectionMinerMgmt','sectionMySettlement','sectionWithdraw'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    });
+    document.querySelectorAll('.nav-manager').forEach(el => el.classList.remove('hidden'));
     if (isMaster) {
       document.getElementById('thManager')?.classList.remove('hidden');
       document.getElementById('thPendingManager')?.classList.remove('hidden');
@@ -1677,7 +1861,319 @@
     try { me = await api('/api/admin/me'); showDashboard(); }
     catch (_) { showLogin(); }
   })();
+
+  // =============================================
+  // 채굴 관리 (매니저/마스터 공통)
+  // =============================================
+  async function loadMinerMgmt() {
+    const tbody = document.getElementById('minerMgmtBody');
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const usersRes = await api('/api/admin/users');
+      const users = Array.isArray(usersRes) ? usersRes : (usersRes.users || []);
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data">회원이 없습니다.</td></tr>';
+        return;
+      }
+      const rows = await Promise.all(users.map(async u => {
+        let miner = { status: 'stopped', coin_type: 'BTC' };
+        try { miner = await api('/api/admin/users/' + u.id + '/miner'); } catch {}
+        return { ...u, miner };
+      }));
+      const p = n => String(n).padStart(2, '0');
+      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; };
+      tbody.innerHTML = rows.map(u => {
+        const isRun = u.miner && u.miner.status === 'running';
+        const exp = u.expireDate ? new Date(u.expireDate) : null;
+        const remain = exp ? Math.ceil((exp - Date.now()) / 86400000) : 0;
+        const uid = String(u.id).replace(/'/g, '');
+        const ct = (u.miner && u.miner.coin_type) || 'BTC';
+        return '<tr>' +
+          '<td><b>' + uid + '</b></td>' +
+          '<td style="color:var(--muted);font-size:12px">' + fmtD(u.expireDate) + '</td>' +
+          '<td style="color:' + (remain <= 0 ? 'var(--err)' : remain <= 7 ? 'var(--warn)' : 'var(--ok)') + ';font-weight:600">' + (remain <= 0 ? '만료' : remain + '일') + '</td>' +
+          '<td><span class="badge ' + (isRun ? 'badge-run' : 'badge-stop') + '" style="font-size:11px">' + (isRun ? '⛏️ 채굴 중' : '⏹ 정지') + '</span></td>' +
+          '<td><select id="coinSel_' + uid + '" style="padding:4px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+            ['BTC','ETH','USDT','SOL'].map(c => '<option' + (ct===c?' selected':'') + '>' + c + '</option>').join('') +
+          '</select></td>' +
+          '<td><div style="display:flex;gap:4px;align-items:center">' +
+            '<input type="number" id="mineAmt_' + uid + '" step="0.00000001" min="0" placeholder="수량" style="width:90px;padding:4px 7px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+            '<button class="btn-ok btn-sm" onclick="addMiningRecord(\'' + uid + '\')">추가</button>' +
+          '</div></td>' +
+          '<td><div style="display:flex;gap:4px;">' +
+            '<button class="btn-ok btn-sm" onclick="setMinerStatus(\'' + uid + '\',\'running\')"' + (isRun ? ' disabled' : '') + '>시작</button>' +
+            '<button class="btn-err btn-sm" onclick="setMinerStatus(\'' + uid + '\',\'stopped\')"' + (!isRun ? ' disabled' : '') + '>정지</button>' +
+          '</div></td>' +
+          '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  async function setMinerStatus(userId, status) {
+    const sel = document.getElementById('coinSel_' + userId);
+    const coinType = sel ? sel.value : 'BTC';
+    try {
+      await api('/api/admin/users/' + userId + '/miner', 'PATCH', { status: status, coin_type: coinType });
+      showToast(status === 'running' ? '채굴기 시작됨' : '채굴기 정지됨');
+      loadMinerMgmt();
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function addMiningRecord(userId) {
+    const amtEl = document.getElementById('mineAmt_' + userId);
+    const sel = document.getElementById('coinSel_' + userId);
+    const coinType = sel ? sel.value : 'BTC';
+    const amount = parseFloat(amtEl ? amtEl.value : '0');
+    if (!amount || amount <= 0) { showToast('수량을 입력하세요', 'err'); return; }
+    try {
+      await api('/api/admin/mining-records', 'POST', { user_id: userId, coin_type: coinType, amount: amount });
+      showToast('채굴 기록이 추가되었습니다.');
+      if (amtEl) amtEl.value = '';
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  // =============================================
+  // 내 정산 내역
+  // =============================================
+  var _settlePage = 1;
+  async function loadMySettlement(page) {
+    _settlePage = page || 1;
+    const tbody = document.getElementById('mySettleBody');
+    const summary = document.getElementById('mySettleSummary');
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/my/settlements?page=' + _settlePage + '&pageSize=20');
+      summary.innerHTML =
+        '<div style="min-width:130px;flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">누적 수익</div>' +
+          '<div style="font-size:20px;font-weight:700;color:var(--ac)">' + Number(data.totalEarned).toFixed(4) + '<span style="font-size:12px;color:var(--muted);margin-left:4px">USDT</span></div>' +
+        '</div>' +
+        '<div style="min-width:130px;flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">출금 완료</div>' +
+          '<div style="font-size:20px;font-weight:700;color:var(--ac)">' + Number(data.totalWithdrawn).toFixed(4) + '<span style="font-size:12px;color:var(--muted);margin-left:4px">USDT</span></div>' +
+        '</div>' +
+        '<div style="min-width:130px;flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">출금 가능 잔액</div>' +
+          '<div style="font-size:20px;font-weight:700;color:var(--ok)">' + Number(data.balance).toFixed(4) + '<span style="font-size:12px;color:var(--muted);margin-left:4px">USDT</span></div>' +
+        '</div>';
+      if (!data.records || !data.records.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">정산 내역이 없습니다.</td></tr>';
+        document.getElementById('mySettlePagination').innerHTML = '';
+        return;
+      }
+      const p = n => String(n).padStart(2, '0');
+      const fmtDt = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`; };
+      tbody.innerHTML = data.records.map(function(r) {
+        return '<tr>' +
+          '<td style="font-size:12px;color:var(--muted)">' + fmtDt(r.created_at) + '</td>' +
+          '<td>' + String(r.user_id).replace(/</g,'&lt;') + '</td>' +
+          '<td>' + Number(r.payment_amount).toFixed(4) + ' USDT</td>' +
+          '<td style="color:var(--ac)">' + r.settlement_rate + '%</td>' +
+          '<td style="color:var(--ok);font-weight:600">' + Number(r.settlement_amount).toFixed(4) + ' USDT</td>' +
+          '<td><span style="background:' + (r.payment_type==='new'?'var(--ac-dim)':'rgba(74,222,128,.1)') + ';color:' + (r.payment_type==='new'?'var(--ac)':'var(--ok)') + ';padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">' + (r.payment_type==='new'?'신규':'연장') + '</span></td>' +
+          '</tr>';
+      }).join('');
+      const totalPages = Math.ceil(data.total / 20);
+      const pEl = document.getElementById('mySettlePagination');
+      if (pEl && totalPages > 1) {
+        pEl.innerHTML =
+          '<button class="btn-ghost btn-sm"' + (_settlePage<=1?' disabled':'') + ' onclick="loadMySettlement(' + (_settlePage-1) + ')">이전</button>' +
+          '<span style="font-size:13px;color:var(--muted)">' + _settlePage + ' / ' + totalPages + '</span>' +
+          '<button class="btn-ghost btn-sm"' + (_settlePage>=totalPages?' disabled':'') + ' onclick="loadMySettlement(' + (_settlePage+1) + ')">다음</button>';
+      } else if (pEl) { pEl.innerHTML = ''; }
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  // =============================================
+  // 출금 신청 (매니저)
+  // =============================================
+  async function loadWithdrawHistory() {
+    const tbody = document.getElementById('withdrawHistBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/my/settlements?page=1&pageSize=1');
+      document.getElementById('withdrawBalance').innerHTML =
+        '출금 가능 잔액: <b style="color:var(--ok);font-size:18px">' + Number(data.balance).toFixed(4) + ' USDT</b>';
+      const today = new Date().getDate();
+      const withdrawBtn = document.getElementById('withdrawBtn');
+      if (withdrawBtn) withdrawBtn.disabled = today !== 1;
+      const noteEl = document.getElementById('withdrawDateNote');
+      if (noteEl) noteEl.textContent = today === 1 ? '오늘은 출금 신청 가능일입니다.' : '※ 출금 신청은 매월 1일에만 가능합니다. (오늘: ' + today + '일)';
+
+      const hist = await api('/api/admin/my/withdrawals');
+      const rows = hist.withdrawals || [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">출금 신청 내역이 없습니다.</td></tr>';
+        return;
+      }
+      const p = n => String(n).padStart(2, '0');
+      const fmtDt = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`; };
+      tbody.innerHTML = rows.map(function(r) {
+        const stBadge = r.status==='approved' ? 'badge-run' : r.status==='rejected' ? 'badge-stop' : '';
+        const stTxt = r.status==='approved' ? '승인' : r.status==='rejected' ? '거절' : '대기';
+        return '<tr>' +
+          '<td style="font-size:12px;color:var(--muted)">' + fmtDt(r.requested_at) + '</td>' +
+          '<td style="font-weight:600">' + Number(r.amount).toFixed(4) + ' USDT</td>' +
+          '<td style="font-size:12px;color:var(--muted)">' + (r.wallet_address ? String(r.wallet_address).replace(/</g,'&lt;') : '-') + '</td>' +
+          '<td><span class="badge ' + stBadge + '">' + stTxt + '</span></td>' +
+          '<td style="font-size:12px;color:var(--muted)">' + (r.processed_at ? fmtDt(r.processed_at) : '-') + '</td>' +
+          '<td style="font-size:12px;color:var(--err)">' + (r.reject_reason ? String(r.reject_reason).replace(/</g,'&lt;') : '-') + '</td>' +
+          '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  async function requestWithdraw() {
+    const amount = parseFloat(document.getElementById('withdrawAmount').value);
+    const wallet = document.getElementById('withdrawWallet').value.trim();
+    const msg = document.getElementById('withdrawMsg');
+    if (!amount || amount <= 0) { msg.style.color='var(--err)'; msg.textContent='금액을 입력하세요.'; return; }
+    msg.style.color='var(--muted)'; msg.textContent='신청 중...';
+    try {
+      await api('/api/admin/my/withdrawals', 'POST', { amount: amount, wallet_address: wallet });
+      msg.style.color='var(--ok)'; msg.textContent='출금 신청이 완료되었습니다.';
+      document.getElementById('withdrawAmount').value = '';
+      document.getElementById('withdrawWallet').value = '';
+      loadWithdrawHistory();
+    } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message; }
+  }
+
+  // =============================================
+  // 정산 관리 (마스터)
+  // =============================================
+  async function loadSettleMgmt() {
+    await Promise.all([loadMgrSettleSummary(), loadWithdrawAdmin()]);
+  }
+
+  async function loadMgrSettleSummary() {
+    const tbody = document.getElementById('mgrSettleBody');
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/managers/settlement-summary');
+      const managers = data.managers || [];
+      if (!managers.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data">총판이 없습니다.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = managers.map(function(m) {
+        const mid = String(m.id).replace(/'/g,"'");
+        return '<tr>' +
+          '<td><b>' + String(m.id).replace(/</g,'&lt;') + '</b></td>' +
+          '<td style="color:var(--muted)">' + (m.telegram ? String(m.telegram).replace(/</g,'&lt;') : '-') + '</td>' +
+          '<td><span style="color:var(--ac);font-weight:600">' + m.settlement_rate + '%</span></td>' +
+          '<td>' + Number(m.total_earned).toFixed(4) + ' USDT</td>' +
+          '<td>' + Number(m.total_withdrawn).toFixed(4) + ' USDT</td>' +
+          '<td style="color:var(--ok);font-weight:600">' + Number(m.balance).toFixed(4) + ' USDT</td>' +
+          '<td><div style="display:flex;gap:4px;align-items:center">' +
+            '<input type="number" id="rateInput_' + mid + '" min="0" max="100" step="0.1" value="' + m.settlement_rate + '" style="width:65px;padding:4px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+            '<button class="btn-ghost btn-sm" onclick="saveSettleRate(\'' + mid + '\')">적용</button>' +
+          '</div></td>' +
+          '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  async function saveSettleRate(managerId) {
+    const el = document.getElementById('rateInput_' + managerId);
+    const rate = el ? parseFloat(el.value) : NaN;
+    if (isNaN(rate) || rate < 0 || rate > 100) { showToast('0~100 사이 값을 입력하세요', 'err'); return; }
+    try {
+      await api('/api/admin/managers/' + managerId + '/settlement-rate', 'PATCH', { rate: rate });
+      showToast(managerId + ' 정산 비율 ' + rate + '% 저장됨');
+      loadMgrSettleSummary();
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function loadWithdrawAdmin() {
+    const tbody = document.getElementById('withdrawAdminBody');
+    const selEl = document.getElementById('withdrawFilter');
+    const status = selEl ? selEl.value : '';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/withdrawals' + (status ? '?status=' + status : ''));
+      const rows = data.withdrawals || [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">출금 신청이 없습니다.</td></tr>';
+        return;
+      }
+      const p = n => String(n).padStart(2, '0');
+      const fmtDt = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`; };
+      tbody.innerHTML = rows.map(function(r) {
+        const stBadge = r.status==='approved'?'badge-run':r.status==='rejected'?'badge-stop':'';
+        const stTxt = r.status==='approved'?'승인':r.status==='rejected'?'거절':'대기';
+        const actionCell = r.status === 'pending'
+          ? '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
+              '<button class="btn-ok btn-sm" onclick="processWithdraw(' + r.id + ',\'approve\')">승인</button>' +
+              '<input type="text" id="rejectReason_' + r.id + '" placeholder="거절 사유" style="width:100px;padding:4px 7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+              '<button class="btn-err btn-sm" onclick="processWithdraw(' + r.id + ',\'reject\')">거절</button>' +
+            '</div>'
+          : '<span style="color:var(--muted);font-size:12px">' + (r.processed_at ? fmtDt(r.processed_at) : '-') + '</span>';
+        return '<tr>' +
+          '<td style="font-size:12px;color:var(--muted)">' + fmtDt(r.requested_at) + '</td>' +
+          '<td><b>' + String(r.manager_id).replace(/</g,'&lt;') + '</b></td>' +
+          '<td style="font-weight:600">' + Number(r.amount).toFixed(4) + ' USDT</td>' +
+          '<td style="font-size:11px;color:var(--muted)">' + (r.wallet_address ? String(r.wallet_address).replace(/</g,'&lt;') : '-') + '</td>' +
+          '<td><span class="badge ' + stBadge + '">' + stTxt + '</span></td>' +
+          '<td>' + actionCell + '</td>' +
+          '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  async function processWithdraw(id, action) {
+    const el = document.getElementById('rejectReason_' + id);
+    const reject_reason = el ? el.value : '';
+    if (action === 'reject' && !String(reject_reason).trim()) {
+      showToast('거절 사유를 입력하세요', 'err'); return;
+    }
+    try {
+      await api('/api/admin/withdrawals/' + id, 'PATCH', { action: action, reject_reason: reject_reason });
+      showToast(action === 'approve' ? '출금 승인 완료' : '출금 거절 완료');
+      loadWithdrawAdmin();
+      loadMgrSettleSummary();
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  function showToast(msg, type) {
+    var t = document.getElementById('adminToast');
+    if (!t) return;
+    t.textContent = (type === 'err' ? '❌ ' : '✅ ') + msg;
+    t.className = 'admin-toast show' + (type === 'err' ? ' err' : ' ok');
+    clearTimeout(t._tid);
+    t._tid = setTimeout(function() { t.className = 'admin-toast'; }, 2800);
+  }
 </script>
+
+<div id="adminToast" class="admin-toast"></div>
+<style>
+  .admin-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 20px;
+    font-size: 14px; z-index: 9999; opacity: 0;
+    transition: opacity .25s; pointer-events: none; white-space: nowrap;
+  }
+  .admin-toast.show { opacity: 1; }
+  .admin-toast.ok { border-color: var(--ok); color: var(--ok); }
+  .admin-toast.err { border-color: var(--err); color: var(--err); }
+  .badge-run { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+  .badge-stop { background: rgba(248,113,113,.1); color: var(--err); border: 1px solid rgba(248,113,113,.25); }
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .stat-box { min-width: 130px; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+  .stat-val { font-size: 20px; font-weight: 700; color: var(--ac); }
+  .stat-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
+</style>
 
 </body>
 </html>

@@ -131,6 +131,66 @@ CREATE TABLE IF NOT EXISTS deposit_addresses (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='사용자별 개인 입금주소 발급 내역';
 
+-- ===== 채굴기 플랫폼 기능 추가 =====
+
+-- 채굴기 상태 테이블 (사용자별 1행)
+CREATE TABLE IF NOT EXISTS miner_status (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  user_id     VARCHAR(50) NOT NULL UNIQUE COMMENT '사용자 ID',
+  status      ENUM('running','stopped') NOT NULL DEFAULT 'stopped' COMMENT '채굴기 상태',
+  coin_type   VARCHAR(20) NOT NULL DEFAULT 'BTC' COMMENT '채굴 코인 종류',
+  assigned_at DATETIME DEFAULT NULL COMMENT '채굴기 할당일시',
+  updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='채굴기 상태 (사용자별)';
+
+-- 채굴 내역 테이블
+CREATE TABLE IF NOT EXISTS mining_records (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  user_id     VARCHAR(50) NOT NULL COMMENT '사용자 ID',
+  coin_type   VARCHAR(20) NOT NULL DEFAULT 'BTC' COMMENT '채굴 코인 종류',
+  amount      DECIMAL(20,8) NOT NULL DEFAULT 0 COMMENT '채굴 수량',
+  mined_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '채굴 일시',
+  note        TEXT DEFAULT NULL COMMENT '메모',
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user (user_id),
+  INDEX idx_mined_at (mined_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='채굴 내역';
+
+-- 총판 정산 내역 테이블
+CREATE TABLE IF NOT EXISTS settlements (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  manager_id        VARCHAR(50) NOT NULL COMMENT '총판 ID',
+  user_id           VARCHAR(50) NOT NULL COMMENT '결제 사용자 ID',
+  payment_amount    DECIMAL(20,8) NOT NULL COMMENT '결제 금액 (USDT)',
+  settlement_rate   DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '정산 비율 (%)',
+  settlement_amount DECIMAL(20,8) NOT NULL COMMENT '정산 금액 (USDT)',
+  payment_type      ENUM('new','renewal') NOT NULL DEFAULT 'new' COMMENT '결제 유형',
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '정산 발생일시',
+  INDEX idx_manager (manager_id),
+  INDEX idx_user (user_id),
+  INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='총판 정산 내역';
+
+-- 출금 신청 테이블
+CREATE TABLE IF NOT EXISTS withdrawal_requests (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  manager_id    VARCHAR(50) NOT NULL COMMENT '총판 ID',
+  amount        DECIMAL(20,8) NOT NULL COMMENT '출금 신청 금액',
+  wallet_address VARCHAR(200) DEFAULT NULL COMMENT '출금 지갑주소',
+  status        ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' COMMENT '처리 상태',
+  reject_reason TEXT DEFAULT NULL COMMENT '거절 사유',
+  requested_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '신청일시',
+  processed_at  DATETIME DEFAULT NULL COMMENT '처리일시',
+  INDEX idx_manager (manager_id),
+  INDEX idx_status (status),
+  INDEX idx_requested (requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='출금 신청';
+
 -- 결과 확인
 SELECT '✅ 데이터베이스 생성 완료!' AS Status;
 SHOW TABLES;

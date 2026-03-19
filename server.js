@@ -334,6 +334,91 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(managed_account_tasks) 오류:', e.message);
   }
+
+  // ===== 채굴기 플랫폼 기능 =====
+  try {
+    await db.pool.query(`
+      ALTER TABLE managers
+        ADD COLUMN IF NOT EXISTS settlement_rate DECIMAL(5,2) NOT NULL DEFAULT 10.00 COMMENT '정산 비율 (%)'
+    `);
+    console.log('✅ DB 마이그레이션: managers.settlement_rate 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(managers.settlement_rate) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS miner_status (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        user_id     VARCHAR(50) NOT NULL UNIQUE COMMENT '사용자 ID',
+        status      ENUM('running','stopped') NOT NULL DEFAULT 'stopped',
+        coin_type   VARCHAR(20) NOT NULL DEFAULT 'BTC',
+        assigned_at DATETIME DEFAULT NULL,
+        updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_status (status)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: miner_status 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(miner_status) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS mining_records (
+        id        INT AUTO_INCREMENT PRIMARY KEY,
+        user_id   VARCHAR(50) NOT NULL,
+        coin_type VARCHAR(20) NOT NULL DEFAULT 'BTC',
+        amount    DECIMAL(20,8) NOT NULL DEFAULT 0,
+        mined_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        note      TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (user_id),
+        INDEX idx_mined_at (mined_at)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: mining_records 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(mining_records) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS settlements (
+        id                INT AUTO_INCREMENT PRIMARY KEY,
+        manager_id        VARCHAR(50) NOT NULL,
+        user_id           VARCHAR(50) NOT NULL,
+        payment_amount    DECIMAL(20,8) NOT NULL,
+        settlement_rate   DECIMAL(5,2) NOT NULL DEFAULT 0,
+        settlement_amount DECIMAL(20,8) NOT NULL,
+        payment_type      ENUM('new','renewal') NOT NULL DEFAULT 'new',
+        created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_manager (manager_id),
+        INDEX idx_user (user_id),
+        INDEX idx_created (created_at)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: settlements 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(settlements) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS withdrawal_requests (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        manager_id     VARCHAR(50) NOT NULL,
+        amount         DECIMAL(20,8) NOT NULL,
+        wallet_address VARCHAR(200) DEFAULT NULL,
+        status         ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+        reject_reason  TEXT DEFAULT NULL,
+        requested_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        processed_at   DATETIME DEFAULT NULL,
+        INDEX idx_manager (manager_id),
+        INDEX idx_status (status),
+        INDEX idx_requested (requested_at)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: withdrawal_requests 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(withdrawal_requests) 오류:', e.message);
+  }
 }
 runMigrations();
 
@@ -570,6 +655,29 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     const newExpiry = await db.userDB.extendSubscription(userId, days);
     const newExpiryDate = newExpiry instanceof Date ? newExpiry : new Date(newExpiry);
     console.log(`[AUTO-SWEEP] ✅ 구독 ${days}일 연장 → user=${userId} 만료=${newExpiryDate.toISOString()}`);
+
+    // 7-b. 총판 정산 자동 계산
+    if (managerId) {
+      try {
+        const [[mgr]] = await db.pool.query('SELECT settlement_rate FROM managers WHERE id = ?', [managerId]);
+        const rate = Number(mgr?.settlement_rate) || 0;
+        if (rate > 0) {
+          const settlementAmount = sweepAmount * rate / 100;
+          const [[{ cnt }]] = await db.pool.query(
+            'SELECT COUNT(*) as cnt FROM settlements WHERE user_id = ?', [userId]
+          );
+          const paymentType = Number(cnt) > 0 ? 'renewal' : 'new';
+          await db.pool.query(
+            `INSERT INTO settlements (manager_id, user_id, payment_amount, settlement_rate, settlement_amount, payment_type)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [managerId, userId, sweepAmount, rate, settlementAmount, paymentType]
+          );
+          console.log(`[AUTO-SWEEP] ✅ 정산 적립 managerId=${managerId} rate=${rate}% amount=${settlementAmount.toFixed(4)} USDT`);
+        }
+      } catch (e) {
+        console.error('[AUTO-SWEEP] 정산 계산 오류:', e.message);
+      }
+    }
 
     // 날짜를 locale 없이 안전하게 포맷 (서버 locale 무관)
     const expiryStr = `${newExpiryDate.getFullYear()}-${String(newExpiryDate.getMonth()+1).padStart(2,'0')}-${String(newExpiryDate.getDate()).padStart(2,'0')}`;
@@ -908,6 +1016,17 @@ function requireMaster(req, res, next) {
   next();
 }
 
+// 클라이언트(회원) 세션 인증 미들웨어
+async function requireSession(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token || req.body?.token || '';
+  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  const userId = await sessionStore.getUserId(token);
+  if (!userId) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+  req.userId = userId;
+  req.sessionToken = token;
+  next();
+}
+
 // ===== macroUser 인증 헬퍼 =====
 function muHashPassword(pw) {
   return crypto.createHash('sha256').update(pw).digest('hex');
@@ -1156,6 +1275,85 @@ app.post('/api/logout', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== 회원 전용 API ==========
+
+// GET /api/user/profile — 메신저 ID + 소속 총판 메신저 ID 조회
+app.get('/api/user/profile', requireSession, async (req, res) => {
+  try {
+    const [[user]] = await db.pool.query(
+      'SELECT id, telegram, manager_id FROM users WHERE id = ?',
+      [req.userId]
+    );
+    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    let managerTelegram = '';
+    if (user.manager_id) {
+      const [[mgr]] = await db.pool.query('SELECT telegram FROM managers WHERE id = ?', [user.manager_id]);
+      managerTelegram = mgr?.telegram || '';
+    }
+    res.json({
+      id: user.id,
+      messenger_id: user.telegram || '',
+      manager_id: user.manager_id || '',
+      manager_messenger_id: managerTelegram,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/user/profile — 본인 메신저 ID 수정
+app.patch('/api/user/profile', requireSession, async (req, res) => {
+  try {
+    const { messenger_id } = req.body || {};
+    if (messenger_id === undefined) return res.status(400).json({ error: 'messenger_id 필요' });
+    await db.pool.query('UPDATE users SET telegram = ? WHERE id = ?', [messenger_id.trim(), req.userId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/user/miner — 채굴기 상태 조회
+app.get('/api/user/miner', requireSession, async (req, res) => {
+  try {
+    const [[row]] = await db.pool.query(
+      'SELECT status, coin_type, assigned_at FROM miner_status WHERE user_id = ?',
+      [req.userId]
+    );
+    res.json({
+      status: row?.status || 'stopped',
+      coin_type: row?.coin_type || 'BTC',
+      assigned_at: row?.assigned_at || null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/user/mining-records — 채굴 내역 (페이지네이션)
+app.get('/api/user/mining-records', requireSession, async (req, res) => {
+  try {
+    let page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    let pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const offset = (page - 1) * pageSize;
+    const [[{ total }]] = await db.pool.query(
+      'SELECT COUNT(*) as total FROM mining_records WHERE user_id = ?',
+      [req.userId]
+    );
+    const [records] = await db.pool.query(
+      'SELECT id, coin_type, amount, mined_at, note FROM mining_records WHERE user_id = ? ORDER BY mined_at DESC LIMIT ? OFFSET ?',
+      [req.userId, pageSize, offset]
+    );
+    const [[{ cumulative }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as cumulative FROM mining_records WHERE user_id = ?',
+      [req.userId]
+    );
+    res.json({ total, page, pageSize, records, cumulative: Number(cumulative) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -2950,6 +3148,298 @@ app.post('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res)
       [accountId, task_type || 'manual']
     );
     res.json({ ok: true, id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== 총판(매니저)용 API ==========
+
+// GET /api/admin/my/settlements — 본인 정산 내역 + 누적 잔액
+app.get('/api/admin/my/settlements', requireAdmin, async (req, res) => {
+  try {
+    const managerId = req.admin.id;
+    let page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    let pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const offset = (page - 1) * pageSize;
+    const [[{ total }]] = await db.pool.query(
+      'SELECT COUNT(*) as total FROM settlements WHERE manager_id = ?', [managerId]
+    );
+    const [records] = await db.pool.query(
+      `SELECT s.id, s.user_id, s.payment_amount, s.settlement_rate, s.settlement_amount, s.payment_type, s.created_at
+       FROM settlements s WHERE s.manager_id = ? ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+      [managerId, pageSize, offset]
+    );
+    // 누적 정산 총액
+    const [[{ totalEarned }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(settlement_amount), 0) as totalEarned FROM settlements WHERE manager_id = ?',
+      [managerId]
+    );
+    // 출금된 금액
+    const [[{ totalWithdrawn }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as totalWithdrawn FROM withdrawal_requests WHERE manager_id = ? AND status = "approved"',
+      [managerId]
+    );
+    const balance = Number(totalEarned) - Number(totalWithdrawn);
+    res.json({ total, page, pageSize, records, totalEarned: Number(totalEarned), totalWithdrawn: Number(totalWithdrawn), balance });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/my/withdrawals — 본인 출금 신청 목록
+app.get('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
+  try {
+    const managerId = req.admin.id;
+    const [rows] = await db.pool.query(
+      'SELECT id, amount, wallet_address, status, reject_reason, requested_at, processed_at FROM withdrawal_requests WHERE manager_id = ? ORDER BY requested_at DESC',
+      [managerId]
+    );
+    res.json({ withdrawals: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/my/withdrawals — 출금 신청 (매월 1일만 가능)
+app.post('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
+  try {
+    const managerId = req.admin.id;
+    const now = new Date();
+    if (now.getDate() !== 1) {
+      return res.status(400).json({ error: '출금 신청은 매월 1일에만 가능합니다.' });
+    }
+    const { amount, wallet_address } = req.body || {};
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ error: '유효한 금액을 입력하세요.' });
+    }
+    // 잔액 확인
+    const [[{ totalEarned }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(settlement_amount), 0) as totalEarned FROM settlements WHERE manager_id = ?',
+      [managerId]
+    );
+    const [[{ totalWithdrawn }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as totalWithdrawn FROM withdrawal_requests WHERE manager_id = ? AND status = "approved"',
+      [managerId]
+    );
+    // 대기 중인 출금 신청 합계도 차감
+    const [[{ pendingAmount }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as pendingAmount FROM withdrawal_requests WHERE manager_id = ? AND status = "pending"',
+      [managerId]
+    );
+    const balance = Number(totalEarned) - Number(totalWithdrawn) - Number(pendingAmount);
+    if (Number(amount) > balance) {
+      return res.status(400).json({ error: `출금 가능 잔액(${balance.toFixed(4)} USDT)을 초과합니다.` });
+    }
+    const [result] = await db.pool.query(
+      'INSERT INTO withdrawal_requests (manager_id, amount, wallet_address) VALUES (?, ?, ?)',
+      [managerId, Number(amount), wallet_address?.trim() || null]
+    );
+    res.json({ ok: true, id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/users/:id/miner — 특정 회원 채굴기 상태 조회
+app.get('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    if (req.admin.role !== 'master') {
+      const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
+      if (!user || user.manager_id !== req.admin.id) {
+        return res.status(403).json({ error: '소속 회원만 조회할 수 있습니다.' });
+      }
+    }
+    const [[row]] = await db.pool.query(
+      'SELECT status, coin_type, assigned_at FROM miner_status WHERE user_id = ?',
+      [targetId]
+    );
+    res.json({ status: row?.status || 'stopped', coin_type: row?.coin_type || 'BTC', assigned_at: row?.assigned_at || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/admin/users/:id/miner — 채굴기 상태 제어 (running/stopped)
+app.patch('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    const { status, coin_type } = req.body || {};
+    if (!['running', 'stopped'].includes(status)) {
+      return res.status(400).json({ error: 'status는 running 또는 stopped' });
+    }
+    // 매니저는 자기 소속 회원만 제어 가능
+    if (req.admin.role !== 'master') {
+      const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
+      if (!user || user.manager_id !== req.admin.id) {
+        return res.status(403).json({ error: '소속 회원만 제어할 수 있습니다.' });
+      }
+    }
+    const coinType = coin_type?.trim() || 'BTC';
+    const assignedAt = status === 'running' ? new Date() : null;
+    await db.pool.query(
+      `INSERT INTO miner_status (user_id, status, coin_type, assigned_at)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE status = VALUES(status), coin_type = VALUES(coin_type), assigned_at = VALUES(assigned_at)`,
+      [targetId, status, coinType, assignedAt]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/mining-records — 채굴 기록 추가 (매니저/마스터)
+app.post('/api/admin/mining-records', requireAdmin, async (req, res) => {
+  try {
+    const { user_id, coin_type, amount, mined_at, note } = req.body || {};
+    if (!user_id || !amount || isNaN(Number(amount))) {
+      return res.status(400).json({ error: 'user_id, amount 필수' });
+    }
+    const targetId = user_id.toLowerCase();
+    if (req.admin.role !== 'master') {
+      const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
+      if (!user || user.manager_id !== req.admin.id) {
+        return res.status(403).json({ error: '소속 회원만 관리할 수 있습니다.' });
+      }
+    }
+    const [result] = await db.pool.query(
+      'INSERT INTO mining_records (user_id, coin_type, amount, mined_at, note) VALUES (?, ?, ?, ?, ?)',
+      [targetId, coin_type || 'BTC', Number(amount), mined_at || new Date(), note || null]
+    );
+    res.json({ ok: true, id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/mining-records/:id — 채굴 기록 삭제 (마스터 전용)
+app.delete('/api/admin/mining-records/:id', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    await db.pool.query('DELETE FROM mining_records WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/users/:id/mining-records — 특정 회원 채굴 내역 (매니저/마스터)
+app.get('/api/admin/users/:id/mining-records', requireAdmin, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    if (req.admin.role !== 'master') {
+      const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
+      if (!user || user.manager_id !== req.admin.id) {
+        return res.status(403).json({ error: '소속 회원만 조회할 수 있습니다.' });
+      }
+    }
+    const [records] = await db.pool.query(
+      'SELECT id, coin_type, amount, mined_at, note FROM mining_records WHERE user_id = ? ORDER BY mined_at DESC LIMIT 100',
+      [targetId]
+    );
+    const [[{ cumulative }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as cumulative FROM mining_records WHERE user_id = ?',
+      [targetId]
+    );
+    res.json({ records, cumulative: Number(cumulative) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== 마스터 전용 API (정산 관리) ==========
+
+// GET /api/admin/settlements — 전체 정산 내역
+app.get('/api/admin/settlements', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    let page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    let pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 30));
+    const offset = (page - 1) * pageSize;
+    const managerId = req.query.manager_id || null;
+    const whereClause = managerId ? 'WHERE manager_id = ?' : '';
+    const params = managerId ? [managerId] : [];
+    const [[{ total }]] = await db.pool.query(
+      `SELECT COUNT(*) as total FROM settlements ${whereClause}`, params
+    );
+    const [records] = await db.pool.query(
+      `SELECT id, manager_id, user_id, payment_amount, settlement_rate, settlement_amount, payment_type, created_at
+       FROM settlements ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+    res.json({ total, page, pageSize, records });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/admin/managers/:id/settlement-rate — 정산 비율 설정
+app.patch('/api/admin/managers/:id/settlement-rate', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { rate } = req.body || {};
+    if (rate === undefined || isNaN(Number(rate)) || Number(rate) < 0 || Number(rate) > 100) {
+      return res.status(400).json({ error: '비율은 0~100 사이여야 합니다.' });
+    }
+    await db.pool.query('UPDATE managers SET settlement_rate = ? WHERE id = ? AND role = "manager"', [Number(rate), req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/withdrawals — 전체 출금 신청 목록
+app.get('/api/admin/withdrawals', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const status = req.query.status || null;
+    const whereClause = status ? 'WHERE status = ?' : '';
+    const params = status ? [status] : [];
+    const [rows] = await db.pool.query(
+      `SELECT id, manager_id, amount, wallet_address, status, reject_reason, requested_at, processed_at
+       FROM withdrawal_requests ${whereClause} ORDER BY requested_at DESC`,
+      params
+    );
+    res.json({ withdrawals: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id — 출금 승인/거절
+app.patch('/api/admin/withdrawals/:id', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { action, reject_reason } = req.body || {};
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'action은 approve 또는 reject' });
+    }
+    const [[wr]] = await db.pool.query('SELECT * FROM withdrawal_requests WHERE id = ?', [req.params.id]);
+    if (!wr) return res.status(404).json({ error: '출금 신청을 찾을 수 없습니다.' });
+    if (wr.status !== 'pending') return res.status(400).json({ error: '이미 처리된 신청입니다.' });
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    await db.pool.query(
+      'UPDATE withdrawal_requests SET status = ?, reject_reason = ?, processed_at = NOW() WHERE id = ?',
+      [newStatus, action === 'reject' ? (reject_reason || '') : null, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/managers/settlement-summary — 총판별 정산 요약
+app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT m.id, m.telegram, m.settlement_rate,
+              COALESCE(s.total_earned, 0) as total_earned,
+              COALESCE(w.total_withdrawn, 0) as total_withdrawn,
+              COALESCE(s.total_earned, 0) - COALESCE(w.total_withdrawn, 0) as balance
+       FROM managers m
+       LEFT JOIN (SELECT manager_id, SUM(settlement_amount) as total_earned FROM settlements GROUP BY manager_id) s ON m.id = s.manager_id
+       LEFT JOIN (SELECT manager_id, SUM(amount) as total_withdrawn FROM withdrawal_requests WHERE status = 'approved' GROUP BY manager_id) w ON m.id = w.manager_id
+       WHERE m.role = 'manager'
+       ORDER BY m.id`
+    );
+    res.json({ managers: rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

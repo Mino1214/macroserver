@@ -284,10 +284,30 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
 
     // 4. 입금 주소로 TRX 선송금
     console.log(`[AUTO-SWEEP] ${depositAddress}에 ${TRX_FOR_ENERGY} TRX 전송 중...`);
-    await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(TRX_FOR_ENERGY));
+    const sendResult = await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(TRX_FOR_ENERGY));
+    console.log(`[AUTO-SWEEP] TRX 전송 txID: ${sendResult?.txid || sendResult?.transaction?.txID || JSON.stringify(sendResult).slice(0,80)}`);
 
-    // 5. TRX 확인 대기
-    await new Promise(r => setTimeout(r, TRX_CONFIRM_WAIT_MS));
+    // 5. TRX 실제 도착 확인 (최대 90초 = 6초 × 15회)
+    // — 단순 시간 대기 대신 잔액 폴링으로 안전하게 확인
+    const TRX_CHECK_INTERVAL = 6000;
+    const TRX_CHECK_MAX = 15;
+    let trxConfirmed = false;
+    for (let i = 0; i < TRX_CHECK_MAX; i++) {
+      await new Promise(r => setTimeout(r, TRX_CHECK_INTERVAL));
+      try {
+        const chkResp = await axios.get(
+          `https://api.trongrid.io/v1/accounts/${depositAddress}`,
+          { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 }
+        );
+        const depTrxBal = (chkResp.data?.data?.[0]?.balance || 0) / 1e6;
+        console.log(`[AUTO-SWEEP] TRX 도착 확인 ${i + 1}/${TRX_CHECK_MAX}: ${depTrxBal} TRX`);
+        if (depTrxBal >= 1) { trxConfirmed = true; break; }
+      } catch (_) { /* 일시적 오류 무시 */ }
+    }
+    if (!trxConfirmed) {
+      console.error('[AUTO-SWEEP] ❌ TRX 미착금 (90초 초과) — 다음 크론에서 재시도');
+      return; // paid 상태 유지 → 다음 크론에서 재시도
+    }
 
     // 6. 입금 주소로 USDT sweep
     const tronDeposit = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: depositPrivKey });

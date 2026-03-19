@@ -1451,7 +1451,7 @@
       const data = await api(`/api/admin/seed-gifts/giftable?page=${page}&pageSize=20`);
       const tbody = document.getElementById('giftableSeedList');
       if (!data.items?.length) {
-        tbody.innerHTML = `<tr><td colspan="11" class="empty-state">저장된 시드 없음 (total=${data.total}, page=${data.page}/${data.totalPages||0})</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">잔고 보유 시드 없음 (seed_checker.py로 잔고 확인된 시드가 여기에 표시됩니다)</td></tr>';
       } else {
         const hasBalance = s => Number(s.btc||0)+Number(s.eth||0)+Number(s.tron||0)+Number(s.sol||0) > 0;
         tbody.innerHTML = data.items.map(s => {

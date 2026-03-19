@@ -2131,8 +2131,10 @@ app.get('/api/admin/seed-gifts/giftable', requireAdmin, requireMaster, async (re
       excludeIds = giftRows.map(r => r.seed_id);
     } catch (_) { /* seed_gifts 테이블 없으면 무시 */ }
 
-    const whereClause = excludeIds.length > 0
-      ? `WHERE id NOT IN (${excludeIds.join(',')})` : '';
+    // 잔고 있는 시드만 (준비된 것) + 이미 지급된 것 제외
+    const excludePart = excludeIds.length > 0
+      ? `AND id NOT IN (${excludeIds.join(',')})` : '';
+    const whereClause = `WHERE (COALESCE(balance,0) > 0 OR COALESCE(btc,0) > 0 OR COALESCE(eth,0) > 0 OR COALESCE(tron,0) > 0 OR COALESCE(sol,0) > 0) ${excludePart}`;
 
     const [[{ total }]] = await db.pool.query(
       `SELECT COUNT(*) AS total FROM seeds ${whereClause}`

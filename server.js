@@ -192,17 +192,20 @@ function escapeHtml(str) {
 }
 
 // throwOnError=true 이면 실패 시 예외 발생 (테스트 엔드포인트용)
-async function sendTelegram(botToken, chatId, html, throwOnError = false) {
+// parseMode: 'HTML'(기본) | 'plain' (HTML 파싱 없이 전송)
+async function sendTelegram(botToken, chatId, text, throwOnError = false, parseMode = 'HTML') {
   try {
+    const body = { chat_id: chatId, text };
+    if (parseMode === 'HTML') body.parse_mode = 'HTML';
     await axios.post(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
-      { chat_id: chatId, text: html, parse_mode: 'HTML' },
+      body,
       { timeout: 8000 }
     );
     console.log(`[TELEGRAM] 전송 완료 → chatId=${chatId}`);
   } catch (e) {
     const desc = e.response?.data?.description || e.message;
-    console.error(`[TELEGRAM] 전송 실패 chatId=${chatId}:`, desc);
+    console.error(`[TELEGRAM] 전송 실패 chatId=${chatId}: ${desc}`);
     if (throwOnError) throw new Error(`Telegram 오류: ${desc}`);
   }
 }
@@ -369,29 +372,36 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
 
     const txId = await contract.transfer(rootAddress, Number(balanceRaw)).send({ feeLimit: 40_000_000 });
     await db.depositAddressDB.updateStatus(depositAddress, 'swept');
-    console.log(`[AUTO-SWEEP] ✅ 스윕 완료 ${sweepAmount} USDT → ${rootAddress} | txId=${txId}`);
+    // txId가 객체로 반환될 수 있으므로 안전하게 문자열 추출
+    const txIdStr = (typeof txId === 'string') ? txId : (txId?.txid || txId?.transaction?.txID || JSON.stringify(txId));
+    console.log(`[AUTO-SWEEP] ✅ 스윕 완료 ${sweepAmount} USDT → ${rootAddress} | txId=${txIdStr}`);
 
     // 7. 구독 일수 계산 & 연장
     const days = await calcDaysFromUsdt(usdtBalance);
     const newExpiry = await db.userDB.extendSubscription(userId, days);
-    console.log(`[AUTO-SWEEP] ✅ 구독 ${days}일 연장 → user=${userId} 만료=${newExpiry.toISOString()}`);
+    const newExpiryDate = newExpiry instanceof Date ? newExpiry : new Date(newExpiry);
+    console.log(`[AUTO-SWEEP] ✅ 구독 ${days}일 연장 → user=${userId} 만료=${newExpiryDate.toISOString()}`);
 
-    // 8. 텔레그램 알림 (매니저 + 마스터)
+    // 날짜를 locale 없이 안전하게 포맷 (서버 locale 무관)
+    const expiryStr = `${newExpiryDate.getFullYear()}-${String(newExpiryDate.getMonth()+1).padStart(2,'0')}-${String(newExpiryDate.getDate()).padStart(2,'0')}`;
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // 8. 텔레그램 알림 (매니저 + 마스터) — parse_mode 없는 plain text로 안전하게 전송
     const msg =
-      `✅ <b>입금 처리 완료!</b>\n\n` +
-      `👤 유저: <code>${escapeHtml(userId)}</code>\n` +
-      `💵 금액: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
-      `📅 지급: <b>${days}일</b> (만료: ${escapeHtml(newExpiry.toLocaleDateString('ko-KR'))})\n` +
-      `🏦 수금: <code>${escapeHtml(rootAddress)}</code>\n` +
-      `🔗 TxID: <code>${escapeHtml(String(txId).slice(0, 20))}...</code>\n` +
-      `🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`;
+      `✅ 입금 처리 완료!\n\n` +
+      `👤 유저: ${userId}\n` +
+      `💵 금액: ${sweepAmount.toFixed(2)} USDT\n` +
+      `📅 지급: ${days}일 (만료: ${expiryStr})\n` +
+      `🏦 수금: ${rootAddress}\n` +
+      `🔗 TxID: ${txIdStr.slice(0, 30)}\n` +
+      `🕐 ${nowStr} UTC`;
 
     if (managerId) {
       const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
-      if (mgr?.tg_bot_token && mgr?.tg_chat_id) await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
+      if (mgr?.tg_bot_token && mgr?.tg_chat_id) await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg, false, 'plain');
     }
     const masterTg = await getMasterTelegram();
-    if (masterTg.botToken && masterTg.chatId) await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
+    if (masterTg.botToken && masterTg.chatId) await sendTelegram(masterTg.botToken, masterTg.chatId, msg, false, 'plain');
 
   } catch (e) {
     console.error('[AUTO-SWEEP] 오류:', e.message || e);

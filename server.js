@@ -88,7 +88,8 @@ function deriveRootPrivateKey(secret) {
   const plain = decryptSecret(secret);
   if (!plain) throw new Error('니모닉이 없습니다.');
   if (plain.startsWith('xpub')) throw new Error('xpub은 루트 키 파생 불가');
-  const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0`);
+  // 루트지갑 = 인덱스 0 (입금 주소는 1부터 시작)
+  const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/0`);
   return wallet.privateKey.replace('0x', '');
 }
 
@@ -263,6 +264,17 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
 
     const { TronWeb } = require('tronweb');
     const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
+
+    // ── 파생된 주소 vs DB 주소 일치 확인 ──
+    const derivedRootAddr = tronRoot.defaultAddress.base58;
+    if (derivedRootAddr !== rootAddress) {
+      console.error(`[AUTO-SWEEP] ❌ 루트 주소 불일치!`);
+      console.error(`  DB root_wallet_address : ${rootAddress}`);
+      console.error(`  니모닉 인덱스0 파생 주소 : ${derivedRootAddr}`);
+      console.error(`  → 관리자 페이지에서 root_wallet_address를 ${derivedRootAddr} 로 수정하거나 해당 주소의 니모닉을 재입력하세요.`);
+      return;
+    }
+    console.log(`[AUTO-SWEEP] ✅ 루트 주소 확인: ${rootAddress}`);
 
     // 3. 루트 지갑 TRX 잔액 확인 (TronGrid REST API 사용 — publicnode의 getBalance는 미활성 주소에서 에러 발생)
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';

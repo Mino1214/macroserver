@@ -625,7 +625,7 @@
           <div class="table-wrapper">
             <table>
               <thead><tr>
-                <th>버전</th><th>주소</th><th>라벨</th><th>상태</th>
+                <th>버전</th><th>주소</th><th>라벨</th><th>상태</th><th>Sweep</th>
                 <th>총발급</th><th>입금</th><th>만료</th><th>활성화</th>
               </tr></thead>
               <tbody id="walletHistoryList"></tbody>
@@ -1248,7 +1248,10 @@
       const active = data.active;
       const infoEl = document.getElementById('activeWalletInfo');
       if (active) {
-        infoEl.innerHTML = `<span style="color:var(--ok);">● v${active.wallet_version}</span> ${active.root_wallet_address}${active.label ? ` <span style="color:var(--muted);font-size:11px;">(${active.label})</span>` : ''} <span style="color:var(--muted);font-size:11px;">${new Date(active.activated_at).toLocaleString()}</span>`;
+        const sweepBadge = active.canDerive
+          ? `<span style="color:var(--ok);font-size:11px;margin-left:8px;">✅ 니모닉 저장됨 (Sweep 가능)</span>`
+          : `<span style="color:var(--err);font-size:11px;margin-left:8px;">⚠️ 니모닉 없음 (Sweep 불가 — 재등록 필요)</span>`;
+        infoEl.innerHTML = `<span style="color:var(--ok);">● v${active.wallet_version}</span> ${active.root_wallet_address}${active.label ? ` <span style="color:var(--muted);font-size:11px;">(${active.label})</span>` : ''} ${sweepBadge} <span style="color:var(--muted);font-size:11px;">${new Date(active.activated_at).toLocaleString()}</span>`;
       } else {
         infoEl.innerHTML = '<span style="color:var(--err);">활성화된 수금 지갑 없음</span>';
       }
@@ -1257,11 +1260,15 @@
       else {
         tbody.innerHTML = data.history.map(w => {
           const s = w.stats || {};
+          const sweepCell = w.canDerive
+            ? `<span style="color:var(--ok);">✅ 가능</span>`
+            : `<span style="color:var(--err);" title="니모닉 재등록 필요">❌ 불가</span>`;
           return `<tr>
             <td>v${w.wallet_version}</td>
             <td style="font-family:monospace;font-size:11px;word-break:break-all;">${w.root_wallet_address}</td>
             <td>${w.label||'-'}</td>
             <td>${w.status==='active' ? '<span style="color:var(--ok);font-weight:700;">active</span>' : '<span style="color:var(--muted);">inactive</span>'}</td>
+            <td>${sweepCell}</td>
             <td>${s.total||0}</td><td>${s.paid||0}</td><td>${s.expired||0}</td>
             <td>${new Date(w.activated_at).toLocaleString()}</td>
           </tr>`;

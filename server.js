@@ -1697,15 +1697,32 @@ app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req,
     const active = await db.collectionWalletDB.getActive();
     const history = await db.collectionWalletDB.getHistory();
 
-    // 버전별 통계 추가
+    // xpub_key 분석 — 실제 값은 노출하지 않고 스윕 가능 여부만 반환
+    const secretType = (xpubKey) => {
+      if (!xpubKey) return 'none';
+      if (xpubKey.startsWith('enc:')) return 'mnemonic'; // 암호화된 니모닉 → sweep 가능
+      if (xpubKey.startsWith('xpub')) return 'xpub';    // xpub → sweep 불가
+      return 'unknown';
+    };
+
+    const sanitize = (w) => {
+      const type = secretType(w.xpub_key);
+      return {
+        ...w,
+        xpub_key: undefined,          // 원본 비노출
+        secretType: type,             // 'mnemonic' | 'xpub' | 'none' | 'unknown'
+        canDerive: type === 'mnemonic', // true = sweep 가능
+      };
+    };
+
     const historyWithStats = await Promise.all(
       history.map(async (w) => {
         const stats = await db.collectionWalletDB.getStats(w.wallet_version);
-        return { ...w, stats };
+        return { ...sanitize(w), stats };
       })
     );
 
-    res.json({ active, history: historyWithStats });
+    res.json({ active: active ? sanitize(active) : null, history: historyWithStats });
   } catch (error) {
     console.error('수금 지갑 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });

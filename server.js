@@ -5,20 +5,24 @@ const crypto = require('crypto');
 const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
 
-// python 실행 명령어 자동 감지 (python3 → python → py)
+// pymysql이 설치된 python 명령어 자동 감지
 let _pythonCmd = null;
 function getPythonCmd() {
   if (_pythonCmd) return _pythonCmd;
-  for (const cmd of ['python3', 'python', 'py']) {
+  // pymysql 임포트 가능한 python을 우선 찾음
+  const candidates = ['python3', 'python', 'py', '/usr/bin/python3', '/usr/local/bin/python3'];
+  for (const cmd of candidates) {
     try {
-      const r = spawnSync(cmd, ['--version'], { timeout: 3000 });
-      if (r.status === 0 || (r.stdout && r.stdout.toString().includes('Python')) || (r.stderr && r.stderr.toString().includes('Python'))) {
+      const r = spawnSync(cmd, ['-c', 'import pymysql'], { timeout: 5000 });
+      if (r.status === 0) {
         _pythonCmd = cmd;
-        console.log(`[PYTHON] 감지됨: ${cmd}`);
+        console.log(`[PYTHON] pymysql 확인됨: ${cmd}`);
         return cmd;
       }
     } catch (_) {}
   }
+  // pymysql 없으면 일단 python3로 시도 (에러 로그에서 확인)
+  console.warn('[PYTHON] pymysql이 있는 Python을 찾지 못했습니다. python3로 시도합니다.');
   _pythonCmd = 'python3';
   return _pythonCmd;
 }

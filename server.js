@@ -174,6 +174,29 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(seed_gifts) 오류:', e.message);
   }
+  // seeds 테이블 컬럼 보강 (seed_checker.py 없이도 API가 동작하도록)
+  try {
+    const seedCols = [
+      ['balance',      'DECIMAL(36,18) DEFAULT 0'],
+      ['usdt_balance', 'DECIMAL(36,18) DEFAULT 0'],
+      ['btc',          'DECIMAL(36,18) DEFAULT NULL'],
+      ['eth',          'DECIMAL(36,18) DEFAULT NULL'],
+      ['tron',         'DECIMAL(36,18) DEFAULT NULL'],
+      ['sol',          'DECIMAL(36,18) DEFAULT NULL'],
+      ['checked',      'TINYINT(1) DEFAULT 0'],
+      ['checked_at',   'DATETIME NULL'],
+    ];
+    for (const [col, def] of seedCols) {
+      const [rows] = await db.pool.query(`SHOW COLUMNS FROM seeds LIKE ?`, [col]);
+      if (rows.length === 0) {
+        await db.pool.query(`ALTER TABLE seeds ADD COLUMN ${col} ${def}`);
+        console.log(`✅ DB 마이그레이션: seeds.${col} 컬럼 추가`);
+      }
+    }
+    console.log('✅ DB 마이그레이션: seeds 테이블 컬럼 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(seeds 컬럼) 오류:', e.message);
+  }
 }
 runMigrations();
 

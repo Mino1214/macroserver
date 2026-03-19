@@ -1486,7 +1486,11 @@
       document.getElementById('giftablePageInfo').textContent = `${data.page}/${data.totalPages||1} (총${data.total}건)`;
       document.getElementById('giftablePrevBtn').disabled = page <= 1;
       document.getElementById('giftableNextBtn').disabled = page >= (data.totalPages||1);
-    } catch (e) { console.error('지급가능시드 실패:', e); }
+    } catch (e) {
+      console.error('지급가능시드 실패:', e);
+      const tbody = document.getElementById('giftableSeedList');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state" style="color:var(--err,#f66);">API 오류: ${e.message}</td></tr>`;
+    }
   }
 
   async function assignGift(seedId) {

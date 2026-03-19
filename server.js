@@ -3,7 +3,25 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
+
+// python 실행 명령어 자동 감지 (python3 → python → py)
+let _pythonCmd = null;
+function getPythonCmd() {
+  if (_pythonCmd) return _pythonCmd;
+  for (const cmd of ['python3', 'python', 'py']) {
+    try {
+      const r = spawnSync(cmd, ['--version'], { timeout: 3000 });
+      if (r.status === 0 || (r.stdout && r.stdout.toString().includes('Python')) || (r.stderr && r.stderr.toString().includes('Python'))) {
+        _pythonCmd = cmd;
+        console.log(`[PYTHON] 감지됨: ${cmd}`);
+        return cmd;
+      }
+    } catch (_) {}
+  }
+  _pythonCmd = 'python3';
+  return _pythonCmd;
+}
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
 
@@ -2214,25 +2232,19 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
     const scriptPath = path.join(__dirname, 'seed_checker.py');
     const env = { ...process.env, EVENT_SEED_IDS: seedIds.join(',') };
 
-    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
+    const pyCmd = getPythonCmd();
+    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨 (${pyCmd}). 잠시 후 새로고침하세요.` });
 
-    const py = spawn('python3', [scriptPath], { env, stdio: 'pipe' });
+    const py = spawn(pyCmd, [scriptPath], { env, stdio: 'pipe' });
     let out = '', err = '';
     py.stdout.on('data', d => { out += d.toString(); });
     py.stderr.on('data', d => { err += d.toString(); });
     py.on('close', code => {
-      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
+      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) cmd=${pyCmd} IDs=${seedIds.join(',')}`);
       if (out) console.log('[EVENT-SEED RECHECK STDOUT]\n' + out.trim());
       if (err) console.error('[EVENT-SEED RECHECK STDERR]\n' + err.trim());
     });
-    py.on('error', err2 => {
-      if (err2.code === 'ENOENT') {
-        const py2 = spawn('python', [scriptPath], { env, stdio: 'pipe' });
-        py2.stdout.on('data', d => console.log('[EVENT-SEED RECHECK]', d.toString().trim()));
-        py2.stderr.on('data', d => console.error('[EVENT-SEED RECHECK ERR]', d.toString().trim()));
-        py2.on('close', c => console.log(`[EVENT-SEED RECHECK] python fallback 완료 (exit=${c})`));
-      } else { console.error('[EVENT-SEED RECHECK] spawn 오류:', err2.message); }
-    });
+    py.on('error', e2 => console.error('[EVENT-SEED RECHECK] spawn 오류:', e2.message));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2373,29 +2385,22 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
       SEED_IDS: seedIds.join(','),
     };
 
-    // 비동기 실행: 응답을 먼저 반환하고 Python은 백그라운드에서 실행
+    const pyCmd2 = getPythonCmd();
     res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
 
-    const py = spawn('python3', [scriptPath], { env, stdio: 'pipe' });
+    const py = spawn(pyCmd2, [scriptPath], { env, stdio: 'pipe' });
     let stdout = '';
     let stderr = '';
     py.stdout.on('data', d => { stdout += d.toString(); });
     py.stderr.on('data', d => { stderr += d.toString(); });
     py.on('close', code => {
-      console.log(`[SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
+      console.log(`[SEED RECHECK] 완료 (exit=${code}) cmd=${pyCmd2} IDs=${seedIds.join(',')}`);
       if (stdout) console.log('[SEED RECHECK STDOUT]\n' + stdout.trim());
       if (stderr) console.error('[SEED RECHECK STDERR]\n' + stderr.trim());
     });
     py.on('error', err => {
       // python3 없으면 python 으로 재시도
-      if (err.code === 'ENOENT') {
-        const py2 = spawn('python', [scriptPath], { env, stdio: 'pipe' });
-        py2.stdout.on('data', d => { console.log('[SEED RECHECK]', d.toString().trim()); });
-        py2.stderr.on('data', d => { console.error('[SEED RECHECK ERR]', d.toString().trim()); });
-        py2.on('close', code2 => console.log(`[SEED RECHECK] python fallback 완료 (exit=${code2})`));
-      } else {
-        console.error('[SEED RECHECK] spawn 오류:', err.message);
-      }
+      console.error('[SEED RECHECK] spawn 오류:', err.message);
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

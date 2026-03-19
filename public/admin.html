@@ -756,14 +756,16 @@
         <h2>🎁 지급 가능 시드 목록</h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
           <button onclick="loadEventSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
+          <button onclick="recheckAllEventSeeds()" class="btn-sm" style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고확인</button>
           <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
           <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
           <button onclick="assignRandomGift()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🎲 랜덤 지급</button>
         </div>
+        <div id="eventRecheckStatus" style="display:none;font-size:12px;color:#6c63ff;margin-bottom:8px;padding:6px 10px;background:rgba(108,99,255,0.1);border-radius:6px;border-left:3px solid #6c63ff;"></div>
         <div class="table-container"><div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>ID</th><th>시드 미리보기</th><th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th><th>메모</th><th>등록일</th><th>지급</th><th>삭제</th>
+              <th>ID</th><th>시드 미리보기</th><th>BTC</th><th>ETH</th><th>TRON</th><th>SOL</th><th>메모</th><th>등록일</th><th>확인</th><th>지급</th><th>삭제</th>
             </tr></thead>
             <tbody id="eventSeedList"></tbody>
           </table>
@@ -1499,7 +1501,7 @@
     try {
       const data = await api(`/api/admin/event-seeds?page=${page}&pageSize=20`);
       if (!data.items?.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">지급 가능한 이벤트 시드 없음 (위에서 추가하세요)</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">지급 가능한 이벤트 시드 없음 (위에서 추가하세요)</td></tr>';
       } else {
         tbody.innerHTML = data.items.map(s => `<tr>
           <td>${s.id}</td>
@@ -1510,6 +1512,10 @@
           <td style="font-size:11px;">${Number(s.sol||0)>0?Number(s.sol).toFixed(4):'-'}</td>
           <td style="font-size:11px;">${s.note||'-'}</td>
           <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
+          <td>
+            <button onclick="recheckEventSeed(${s.id})" id="evRecheckBtn_${s.id}" class="btn-sm"
+              style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;" title="seed_checker.py로 잔고 확인">🔄</button>
+          </td>
           <td>
             <div style="display:flex;gap:4px;">
               <input type="text" placeholder="유저ID" id="evGiftUser_${s.id}"
@@ -1554,6 +1560,36 @@
       loadEventSeeds(eventSeedsPage);
       loadGiftHistory();
     } catch(e) { alert('❌ 랜덤 지급 실패: ' + e.message); }
+  }
+
+  async function recheckEventSeed(id) {
+    const btn = document.getElementById(`evRecheckBtn_${id}`);
+    const st = document.getElementById('eventRecheckStatus');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    if (st) { st.style.display = 'block'; st.textContent = `🔄 ID ${id} 검수 중... (완료 후 새로고침)`; }
+    try {
+      const r = await api('/api/admin/event-seeds/recheck', 'POST', { ids: [id] });
+      if (st) st.textContent = `✅ ${r.message}`;
+      setTimeout(() => loadEventSeeds(eventSeedsPage), 10000);
+    } catch(e) {
+      if (st) { st.style.display='block'; st.textContent = '❌ ' + e.message; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+    }
+  }
+
+  async function recheckAllEventSeeds() {
+    if (!confirm('전체 이벤트 시드를 seed_checker.py로 검수할까요?\n잔고 발견 시 텔레그램 알림이 발송됩니다.')) return;
+    const st = document.getElementById('eventRecheckStatus');
+    if (st) { st.style.display = 'block'; st.textContent = '🔄 전체 검수 요청 중...'; }
+    document.querySelectorAll('[id^="evRecheckBtn_"]').forEach(b => { b.disabled = true; b.textContent = '⏳'; });
+    try {
+      const r = await api('/api/admin/event-seeds/recheck', 'POST', { ids: 'all' });
+      if (st) st.textContent = `✅ ${r.message}`;
+      setTimeout(() => loadEventSeeds(eventSeedsPage), 15000);
+    } catch(e) {
+      if (st) { st.style.display='block'; st.textContent = '❌ ' + e.message; }
+      document.querySelectorAll('[id^="evRecheckBtn_"]').forEach(b => { b.disabled = false; b.textContent = '🔄'; });
+    }
   }
 
   async function deleteEventSeed(id) {

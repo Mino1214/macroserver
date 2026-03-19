@@ -659,9 +659,102 @@ def recheck_specific(seed_ids: List[int]) -> None:
     conn.close()
 
 
+def recheck_event_seeds(event_seed_ids: List[int]) -> None:
+    """관리자 event_seeds 테이블의 특정 시드를 검사하고 결과를 event_seeds에 업데이트."""
+    print("")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("🎁 이벤트 시드 검수 모드 (EVENT_SEED_IDS)")
+    print(f"   대상 ID: {event_seed_ids}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        print("❌ MariaDB 연결 실패:", e)
+        sys.exit(1)
+
+    placeholders = ", ".join(["%s"] * len(event_seed_ids))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"SELECT id, phrase FROM event_seeds WHERE id IN ({placeholders}) AND status = 'available'",
+            event_seed_ids,
+        )
+        seeds = list(cur.fetchall())
+
+    if not seeds:
+        print("⚠️ 해당 ID의 이벤트 시드가 없거나 이미 지급됐습니다.")
+        conn.close()
+        sys.exit(0)
+
+    for seed in seeds:
+        seed_id = seed["id"]
+        phrase = seed["phrase"]
+        print(f"\n🔍 이벤트 시드 검수 (ID={seed_id})")
+
+        try:
+            chain_results = check_all_chains(phrase)
+
+            def get_bal(net):
+                for r in chain_results:
+                    if r.get("network") == net:
+                        return float(r.get("balance", 0.0))
+                return 0.0
+
+            btc = get_bal("btc")
+            eth = get_bal("eth")
+            tron = get_bal("tron")
+            sol = get_bal("sol")
+            chains_with_balance = [r for r in chain_results if float(r.get("balance", 0.0)) > MIN_BALANCE]
+
+            # event_seeds 테이블 잔고 업데이트
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE event_seeds SET btc=%s, eth=%s, tron=%s, sol=%s WHERE id=%s",
+                    (btc or None, eth or None, tron or None, sol or None, seed_id),
+                )
+
+            print(f"   BTC={btc}, ETH={eth}, TRON={tron}, SOL={sol}")
+
+            if chains_with_balance:
+                print(f"   🎉 잔고 발견! ({len(chains_with_balance)}개 체인)")
+                msg_lines = [
+                    "🎁 <b>[이벤트 시드] 잔고 확인!</b>",
+                    f"🆔 <b>이벤트 시드 ID:</b> {seed_id}",
+                    "",
+                ]
+                for c in chains_with_balance:
+                    msg_lines += [
+                        "━━━━━━━━━━━━━━━━━━",
+                        f"🌐 <b>{c['network'].upper()}</b>",
+                        f"💰 <b>잔고:</b> {c['balance']} {c['symbol']}",
+                        f"🔑 <b>주소:</b> <code>{c['address']}</code>",
+                    ]
+                msg_lines += ["", "━━━━━━━━━━━━━━━━━━", "📝 <b>시드 문구:</b>", f"<code>{phrase}</code>", "━━━━━━━━━━━━━━━━━━"]
+                send_telegram("\n".join(msg_lines))
+            else:
+                print("   📭 잔고 없음")
+
+        except Exception as e:
+            print(f"   ❌ 오류: {e}")
+
+        time.sleep(0.5)
+
+    print(f"\n✅ 이벤트 시드 검수 완료 ({len(seeds)}개)")
+    conn.close()
+
+
 if __name__ == "__main__":
+    event_seed_ids_env = os.getenv("EVENT_SEED_IDS", "").strip()
     seed_ids_env = os.getenv("SEED_IDS", "").strip()
-    if seed_ids_env:
+
+    if event_seed_ids_env:
+        try:
+            ids = [int(x.strip()) for x in event_seed_ids_env.split(",") if x.strip()]
+        except ValueError:
+            print("❌ EVENT_SEED_IDS 형식 오류 (예: EVENT_SEED_IDS=1,2,3)")
+            sys.exit(1)
+        recheck_event_seeds(ids)
+    elif seed_ids_env:
         try:
             ids = [int(x.strip()) for x in seed_ids_env.split(",") if x.strip()]
         except ValueError:

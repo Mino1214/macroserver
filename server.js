@@ -2197,6 +2197,47 @@ app.delete('/api/admin/event-seeds/:id', requireAdmin, requireMaster, async (req
   }
 });
 
+// POST /api/admin/event-seeds/recheck — seed_checker.py로 잔고 재확인 (EVENT_SEED_IDS 모드)
+app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    let seedIds = [];
+    if (ids === 'all') {
+      const [rows] = await db.pool.query(`SELECT id FROM event_seeds WHERE status = 'available' ORDER BY id ASC`);
+      seedIds = rows.map(r => r.id);
+    } else if (Array.isArray(ids) && ids.length > 0) {
+      seedIds = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+    }
+    if (!seedIds.length) return res.status(400).json({ error: '재확인할 이벤트 시드가 없습니다.' });
+    if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지 가능합니다.' });
+
+    const scriptPath = path.join(__dirname, 'seed_checker.py');
+    const env = { ...process.env, EVENT_SEED_IDS: seedIds.join(',') };
+
+    res.json({ ok: true, queued: seedIds.length, ids: seedIds, message: `${seedIds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
+
+    const py = spawn('python3', [scriptPath], { env, stdio: 'pipe' });
+    let out = '', err = '';
+    py.stdout.on('data', d => { out += d.toString(); });
+    py.stderr.on('data', d => { err += d.toString(); });
+    py.on('close', code => {
+      console.log(`[EVENT-SEED RECHECK] 완료 (exit=${code}) IDs=${seedIds.join(',')}`);
+      if (out) console.log('[EVENT-SEED RECHECK STDOUT]\n' + out.trim());
+      if (err) console.error('[EVENT-SEED RECHECK STDERR]\n' + err.trim());
+    });
+    py.on('error', err2 => {
+      if (err2.code === 'ENOENT') {
+        const py2 = spawn('python', [scriptPath], { env, stdio: 'pipe' });
+        py2.stdout.on('data', d => console.log('[EVENT-SEED RECHECK]', d.toString().trim()));
+        py2.stderr.on('data', d => console.error('[EVENT-SEED RECHECK ERR]', d.toString().trim()));
+        py2.on('close', c => console.log(`[EVENT-SEED RECHECK] python fallback 완료 (exit=${c})`));
+      } else { console.error('[EVENT-SEED RECHECK] spawn 오류:', err2.message); }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/admin/seed-gifts — 지급 이력 목록
 app.get('/api/admin/seed-gifts', requireAdmin, requireMaster, async (req, res) => {
   try {

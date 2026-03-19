@@ -175,6 +175,10 @@ async function setMasterTelegram(botToken, chatId) {
   );
 }
 
+// ---------- TRON RPC 노드 ----------
+// TronGrid 무료 티어는 429(속도 제한)가 잦음 → 인증 불필요한 공개 노드 사용
+const TRON_FULL_HOST = 'https://tron-rpc.publicnode.com';
+
 // ---------- 텔레그램 알림 ----------
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
@@ -260,7 +264,7 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     const { TronWeb } = require('tronweb');
     // ⚠️ TronWeb에는 API 키를 넣지 않음
     // TRON-PRO-API-KEY 가 유효하지 않으면 오히려 401 반환됨 — 무료 티어(키 없음)가 안정적
-    const tronRoot = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey: rootPrivKey });
+    const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
 
     // 3. 루트 지갑 TRX 잔액 확인
     const rootTrxSun = await tronRoot.trx.getBalance(rootAddress);
@@ -278,7 +282,7 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     await new Promise(r => setTimeout(r, TRX_CONFIRM_WAIT_MS));
 
     // 6. 입금 주소로 USDT sweep
-    const tronDeposit = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey: depositPrivKey });
+    const tronDeposit = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: depositPrivKey });
     const contract = await tronDeposit.contract().at(USDT_CONTRACT);
     const balanceRaw = await contract.balanceOf(depositAddress).call();
     const sweepAmount = Number(balanceRaw) / 1e6;
@@ -1812,7 +1816,7 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
 
     // 3. TronWeb으로 USDT sweep (API 키 없이 사용 — 키 있으면 오히려 401 발생)
     const { TronWeb } = require('tronweb');
-    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io', privateKey });
+    const tronWeb = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey });
 
     const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // TRC20 USDT
     const contract = await tronWeb.contract().at(USDT_CONTRACT);

@@ -167,12 +167,13 @@ async function checkEth(phrase) {
 // ─────────────────────────────────────────
 async function checkTron(phrase) {
   try {
-    const wallet     = ethers.HDNodeWallet.fromPhrase(phrase, '', "m/44'/195'/0'/0/0");
-    const signingKey = new ethers.SigningKey(wallet.privateKey);
-    // uncompressedPub = "0x04" + 64 bytes → strip "0x04"
-    const pubBytes   = Buffer.from(signingKey.publicKey.slice(4), 'hex'); // 64 bytes
-    const keccak     = Buffer.from(ethers.keccak256(pubBytes).slice(2), 'hex'); // 32 bytes
-    const address    = base58CheckEncode(0x41, keccak.slice(12)); // last 20 bytes, prefix 0x41
+    const wallet = ethers.HDNodeWallet.fromPhrase(phrase, '', "m/44'/195'/0'/0/0");
+    // 비압축 공개키 (0x04 + 64bytes) 취득 — compressed=false
+    const uncompressedPub = ethers.SigningKey.computePublicKey(wallet.privateKey, false);
+    // "0x04xxxx..." → "04" 2글자(0x 제거 후 04) 포함 → slice(4)로 64바이트 payload
+    const pubBytes = Buffer.from(uncompressedPub.slice(4), 'hex'); // 64 bytes
+    const keccak   = Buffer.from(ethers.keccak256(pubBytes).slice(2), 'hex'); // 32 bytes
+    const address  = base58CheckEncode(0x41, keccak.slice(12)); // last 20 bytes, prefix 0x41
 
     console.log(`[TRON] Address: ${address}`);
 

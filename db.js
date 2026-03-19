@@ -262,10 +262,11 @@ const userDB = {
 const seedDB = {
   // 시드 추가
   async add(userId, phrase) {
-    await pool.query(
+    const [result] = await pool.query(
       'INSERT INTO seeds (user_id, phrase) VALUES (?, ?)',
       [userId, phrase.trim()]
     );
+    return result.insertId; // 삽입된 시드 ID 반환
   },
 
   // 시드 목록 조회

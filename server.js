@@ -262,13 +262,21 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     }
 
     const { TronWeb } = require('tronweb');
-    // ⚠️ TronWeb에는 API 키를 넣지 않음
-    // TRON-PRO-API-KEY 가 유효하지 않으면 오히려 401 반환됨 — 무료 티어(키 없음)가 안정적
     const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
 
-    // 3. 루트 지갑 TRX 잔액 확인
-    const rootTrxSun = await tronRoot.trx.getBalance(rootAddress);
-    const rootTrxBalance = rootTrxSun / 1e6;
+    // 3. 루트 지갑 TRX 잔액 확인 (TronGrid REST API 사용 — publicnode의 getBalance는 미활성 주소에서 에러 발생)
+    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+    let rootTrxBalance = 0;
+    try {
+      const balResp = await axios.get(
+        `https://api.trongrid.io/v1/accounts/${rootAddress}`,
+        { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 10000 }
+      );
+      rootTrxBalance = (balResp.data?.data?.[0]?.balance || 0) / 1e6;
+    } catch (e) {
+      console.error('[AUTO-SWEEP] TRX 잔액 조회 실패:', e.message);
+      return;
+    }
     if (rootTrxBalance < TRX_FOR_ENERGY + 5) {
       console.error(`[AUTO-SWEEP] 루트 지갑 TRX 부족: ${rootTrxBalance} TRX (필요 ${TRX_FOR_ENERGY + 5})`);
       return;

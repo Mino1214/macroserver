@@ -650,13 +650,14 @@
             <option value="expired">expired</option>
           </select>
           <button onclick="loadDepositAddresses(1)" class="btn-ghost btn-sm">새로고침</button>
+          <button onclick="recoverAllTrx(this)" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 10px;border-radius:6px;font-size:12px;">TRX 전체 회수</button>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
             <table>
               <thead><tr>
                 <th>ID</th><th>사용자</th><th>입금주소</th>
-                <th>버전</th><th>idx</th><th>상태</th><th>발급일</th><th>Sweep</th>
+                <th>버전</th><th>idx</th><th>상태</th><th>발급일</th><th>Sweep</th><th>TRX 회수</th>
               </tr></thead>
               <tbody id="depositAddressList"></tbody>
             </table>
@@ -1317,6 +1318,30 @@
       loadDepositAddresses(depositCurrentPage);
     } catch (e) { alert('❌ Sweep 실패: ' + e.message); }
   }
+
+  async function recoverTrxSingle(depositAddress) {
+    if (!confirm(`${depositAddress}\n\n이 주소의 TRX를 루트 지갑으로 회수하시겠어요?\n(1 TRX 수수료 여유분 제외 전액)`)) return;
+    try {
+      const res = await api('/api/admin/recover-trx', 'POST', { depositAddress });
+      const r = res.results?.[0];
+      if (r?.ok) alert(`✅ TRX 회수 완료!\n${r.sent} TRX → root\nTxID: ${r.txId}`);
+      else alert(`⚠️ ${r?.reason || r?.error || '회수 건너뜀'}`);
+      loadDepositAddresses(depositCurrentPage);
+    } catch (e) { alert('❌ TRX 회수 실패: ' + e.message); }
+  }
+
+  async function recoverAllTrx(btnEl) {
+    if (!confirm('모든 입금주소의 TRX를 루트 지갑으로 회수합니다.\n(주소당 1 TRX 수수료 여유분 제외 전액)\n\n계속하시겠어요?')) return;
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '회수 중...'; }
+    try {
+      const res = await api('/api/admin/recover-trx', 'POST', {});
+      const s = res.summary;
+      const detail = res.results.filter(r => r.ok).map(r => `• ${r.address.slice(0,12)}… → ${r.sent} TRX`).join('\n') || '(없음)';
+      alert(`✅ TRX 전체 회수 완료!\n성공: ${s.success}/${s.total} 주소\n총 회수: ${s.totalSentTrx} TRX\n\n${detail}`);
+      loadDepositAddresses(depositCurrentPage);
+    } catch (e) { alert('❌ TRX 전체 회수 실패: ' + e.message); }
+    finally { if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'TRX 전체 회수'; } }
+  }
   async function loadDepositAddresses(page = 1) {
     if (page < 1) return;
     depositCurrentPage = page;
@@ -1340,6 +1365,7 @@
             <td><span style="color:${color};font-weight:700;">${item.status}</span></td>
             <td>${new Date(item.created_at).toLocaleString()}</td>
             <td>${canSweep ? `<button class="btn-ghost btn-sm" onclick="sweepAddress('${item.deposit_address}')" style="font-size:11px;">Sweep</button>` : '-'}</td>
+            <td><button class="btn-ghost btn-sm" onclick="recoverTrxSingle('${item.deposit_address}')" style="font-size:11px;color:var(--acc);">TRX↩</button></td>
           </tr>`;
         }).join('');
       }

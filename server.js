@@ -228,7 +228,30 @@ async function calcDaysFromUsdt(usdtAmount) {
   */
 }
 
-const TRX_FOR_ENERGY = 35; // TRX 선송금량 (에너지 비용 충당)
+const TRON_FULL_HOST_CALC = 'https://api.trongrid.io'; // 체인 파라미터 조회용
+const USDT_ENERGY_NEEDED = 65_000; // USDT TRC20 전송에 필요한 에너지 추정치
+
+// TRON 체인 파라미터에서 현재 에너지 단가를 조회해 필요한 TRX 계산
+async function calcTrxNeeded() {
+  try {
+    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+    const resp = await axios.get(`${TRON_FULL_HOST_CALC}/wallet/getchainparameters`, {
+      headers: { 'TRON-PRO-API-KEY': TRON_KEY },
+      timeout: 8000
+    });
+    const params = resp.data?.chainParameter || [];
+    const ep = params.find(p => p.key === 'getEnergyFee');
+    const energyFee = ep?.value || 420; // sun / energy unit
+    const trxRaw = Math.ceil((USDT_ENERGY_NEEDED * energyFee) / 1_000_000);
+    const trxNeeded = Math.max(trxRaw + 2, 15); // +2 TRX bandwidth 버퍼, 최소 15
+    console.log(`[TRX-CALC] 에너지 단가=${energyFee} sun → 필요 TRX=${trxNeeded}`);
+    return trxNeeded;
+  } catch (e) {
+    console.warn('[TRX-CALC] 체인 파라미터 조회 실패, fallback=28:', e.message);
+    return 28;
+  }
+}
+
 const TRX_CONFIRM_WAIT_MS = 20_000; // TRX 전송 후 대기 (ms)
 
 async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance) {
@@ -289,14 +312,16 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
       console.error('[AUTO-SWEEP] TRX 잔액 조회 실패:', e.message);
       return;
     }
-    if (rootTrxBalance < TRX_FOR_ENERGY + 5) {
-      console.error(`[AUTO-SWEEP] 루트 지갑 TRX 부족: ${rootTrxBalance} TRX (필요 ${TRX_FOR_ENERGY + 5})`);
+    // 4. 필요한 TRX 동적 계산
+    const trxNeeded = await calcTrxNeeded();
+    if (rootTrxBalance < trxNeeded + 5) {
+      console.error(`[AUTO-SWEEP] 루트 지갑 TRX 부족: ${rootTrxBalance} TRX (필요 ${trxNeeded + 5})`);
       return;
     }
 
-    // 4. 입금 주소로 TRX 선송금
-    console.log(`[AUTO-SWEEP] ${depositAddress}에 ${TRX_FOR_ENERGY} TRX 전송 중...`);
-    const sendResult = await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(TRX_FOR_ENERGY));
+    // 4-b. 입금 주소로 TRX 선송금
+    console.log(`[AUTO-SWEEP] ${depositAddress}에 ${trxNeeded} TRX 전송 중... (계산값)`);
+    const sendResult = await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(trxNeeded));
     console.log(`[AUTO-SWEEP] TRX 전송 txID: ${sendResult?.txid || sendResult?.transaction?.txID || JSON.stringify(sendResult).slice(0,80)}`);
 
     // 5. TRX 실제 도착 확인 (최대 90초 = 6초 × 15회)
@@ -1879,6 +1904,73 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
   } catch (error) {
     console.error('Sweep 오류:', error);
     res.status(500).json({ error: `Sweep 실패: ${error.message || error}` });
+  }
+});
+
+// POST /api/admin/recover-trx — 입금주소에서 TRX 전액 root 지갑으로 회수
+// body: {} → 전체 주소, { depositAddress } → 특정 주소만
+app.post('/api/admin/recover-trx', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+    const { TronWeb } = require('tronweb');
+    const { depositAddress: singleAddr } = req.body || {};
+
+    // 1. 대상 주소 조회 (단일 or 전체)
+    const whereClause = singleAddr
+      ? 'WHERE c.xpub_key IS NOT NULL AND c.xpub_key != \'\' AND d.deposit_address = ?'
+      : 'WHERE c.xpub_key IS NOT NULL AND c.xpub_key != \'\'';
+    const params = singleAddr ? [singleAddr] : [];
+    const [rows] = await db.pool.query(`
+      SELECT d.deposit_address, d.derivation_index, c.xpub_key, c.root_wallet_address
+      FROM deposit_addresses d
+      JOIN collection_wallets c ON d.wallet_version = c.wallet_version
+      ${whereClause}
+    `, params);
+
+    if (!rows.length) return res.json({ ok: true, results: [], message: '회수 가능한 주소 없음' });
+
+    const results = [];
+    for (const row of rows) {
+      const addr = row.deposit_address;
+      try {
+        // TRX 잔액 조회
+        const balResp = await axios.get(
+          `https://api.trongrid.io/v1/accounts/${addr}`,
+          { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 }
+        );
+        const trxBalance = (balResp.data?.data?.[0]?.balance || 0) / 1e6;
+
+        // 최소 3 TRX 이상 있을 때만 회수 (dust 방지)
+        if (trxBalance < 3) {
+          results.push({ address: addr, skipped: true, reason: `잔액 부족 (${trxBalance.toFixed(2)} TRX)` });
+          continue;
+        }
+
+        // 개인키 파생
+        const privateKey = deriveTronPrivateKey(row.xpub_key, row.derivation_index);
+        const tronWeb = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey });
+
+        // 전송량: 전액에서 1 TRX 차감 (수수료 여유분)
+        const sendTrx = Math.floor((trxBalance - 1) * 1_000_000) / 1_000_000;
+        const txResult = await tronWeb.trx.sendTransaction(row.root_wallet_address, TronWeb.toSun(sendTrx));
+        const txId = txResult?.txid || txResult?.transaction?.txID || 'unknown';
+
+        console.log(`[RECOVER-TRX] ${addr} → root ${sendTrx} TRX, txid=${txId}`);
+        results.push({ address: addr, sent: sendTrx, txId, ok: true });
+      } catch (e) {
+        console.error(`[RECOVER-TRX] ${addr} 실패:`, e.message);
+        results.push({ address: addr, ok: false, error: e.message });
+      }
+      // TronGrid 요청 간격 유지
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    const success = results.filter(r => r.ok).length;
+    const totalSent = results.filter(r => r.ok).reduce((s, r) => s + (r.sent || 0), 0);
+    res.json({ ok: true, results, summary: { total: rows.length, success, totalSentTrx: totalSent.toFixed(2) } });
+  } catch (error) {
+    console.error('[RECOVER-TRX] 오류:', error);
+    res.status(500).json({ error: `TRX 회수 실패: ${error.message}` });
   }
 });
 

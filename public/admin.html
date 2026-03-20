@@ -911,6 +911,18 @@
 
     <!-- ===== 정산 관리 탭 (마스터용) ===== -->
     <div class="tab-panel hidden" id="sectionSettleMgmt">
+
+      <!-- 마스터 정산 개요 카드 -->
+      <div class="glass-card" id="masterOverviewCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
+          <h2 style="margin:0">정산 개요</h2>
+          <button class="btn-ghost btn-sm" onclick="loadMasterOverview()">새로고침</button>
+        </div>
+        <div id="masterOverviewBody" style="display:flex;flex-wrap:wrap;gap:12px;">
+          <div style="color:var(--muted);font-size:13px;">불러오는 중...</div>
+        </div>
+      </div>
+
       <!-- 총판별 정산 요약 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
@@ -2048,7 +2060,33 @@
   // 정산 관리 (마스터)
   // =============================================
   async function loadSettleMgmt() {
-    await Promise.all([loadMgrSettleSummary(), loadWithdrawAdmin()]);
+    await Promise.all([loadMasterOverview(), loadMgrSettleSummary(), loadWithdrawAdmin()]);
+  }
+
+  async function loadMasterOverview() {
+    const el = document.getElementById('masterOverviewBody');
+    if (!el) return;
+    try {
+      const d = await api('/api/admin/master/settlement-overview');
+      el.innerHTML =
+        mkOverviewBox('💰 총 회수 금액', d.total_collected, 'USDT', 'var(--ac)', '회원들의 누적 결제 합산') +
+        mkOverviewBox('📤 줘야 하는 금액', d.pending_payout, 'USDT', 'var(--warn)', '미지급 총판 인센티브 잔액') +
+        mkOverviewBox('✅ 지급 완료', d.total_paid_out, 'USDT', 'var(--ok)', '승인 출금 합산') +
+        mkOverviewBox('🏦 마스터 순수익', d.master_net, 'USDT', d.master_net >= 0 ? 'var(--ok)' : 'var(--err)', '총 수금 − 총판 인센티브 전체');
+    } catch (e) {
+      el.innerHTML = '<div style="color:var(--err);font-size:13px;">' + String(e.message).replace(/</g,'&lt;') + '</div>';
+    }
+  }
+
+  function mkOverviewBox(label, value, unit, color, desc) {
+    return '<div style="flex:1;min-width:170px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:18px 16px;">' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">' + label + '</div>' +
+      '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.2;">' +
+        Number(value).toFixed(4) +
+        '<span style="font-size:12px;color:var(--muted);margin-left:5px;font-weight:400">' + unit + '</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:6px;">' + desc + '</div>' +
+    '</div>';
   }
 
   async function loadMgrSettleSummary() {

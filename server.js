@@ -3425,6 +3425,38 @@ app.patch('/api/admin/withdrawals/:id', requireAdmin, requireMaster, async (req,
   }
 });
 
+// GET /api/admin/master/settlement-overview — 마스터 정산 전체 개요
+app.get('/api/admin/master/settlement-overview', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    // 총 수금액 (모든 결제의 합산 — settlements.payment_amount 기준)
+    const [[{ total_collected }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(payment_amount), 0) as total_collected FROM settlements'
+    );
+    // 총판 전체 누적 인센티브 (지급 예정 포함)
+    const [[{ total_settlement }]] = await db.pool.query(
+      'SELECT COALESCE(SUM(settlement_amount), 0) as total_settlement FROM settlements'
+    );
+    // 이미 지급 완료된 금액 (approved 출금)
+    const [[{ total_paid_out }]] = await db.pool.query(
+      "SELECT COALESCE(SUM(amount), 0) as total_paid_out FROM withdrawal_requests WHERE status = 'approved'"
+    );
+    // 아직 지급 안 한 금액 (총판 잔액 합계 = 줘야 하는 금액)
+    const pending_payout = Number(total_settlement) - Number(total_paid_out);
+    // 마스터 순수익 = 총 수금 - 총판 인센티브 전체
+    const master_net = Number(total_collected) - Number(total_settlement);
+
+    res.json({
+      total_collected: Number(total_collected),   // 총 회수 금액
+      total_settlement: Number(total_settlement),  // 총판 인센티브 합계
+      total_paid_out: Number(total_paid_out),      // 이미 지급한 금액
+      pending_payout: pending_payout,              // 아직 줘야 하는 금액
+      master_net: master_net,                      // 마스터 순수익
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/admin/managers/settlement-summary — 총판별 정산 요약
 app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, async (req, res) => {
   try {

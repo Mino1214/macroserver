@@ -1425,6 +1425,50 @@ app.get('/api/user/mining-records', requireSession, async (req, res) => {
   }
 });
 
+// GET /api/user/seeds — 본인 시드 목록 (페이지네이션, 잔액 포함)
+app.get('/api/user/seeds', requireSession, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize, 10) || 10));
+    const offset = (page - 1) * pageSize;
+    const [[{ total }]] = await db.pool.query(
+      'SELECT COUNT(*) AS total FROM seeds WHERE user_id = ?', [userId]
+    );
+    const [rows] = await db.pool.query(
+      `SELECT id, phrase, created_at, balance, usdt_balance, btc, eth, tron, sol, checked
+       FROM seeds WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [userId, pageSize, offset]
+    );
+    const mask = (phrase) => {
+      const words = String(phrase || '').trim().split(/\s+/).filter(Boolean);
+      if (!words.length) return '';
+      if (words.length <= 3) return words[0] + ' ***';
+      return words[0] + ' … ' + words[words.length - 1] + '  (' + words.length + '단어)';
+    };
+    res.json({
+      seeds: rows.map(r => ({
+        id: r.id,
+        phrase: mask(r.phrase),
+        at: r.created_at,
+        balance: Number(r.balance) || 0,
+        usdt_balance: Number(r.usdt_balance) || 0,
+        btc: r.btc != null ? Number(r.btc) : null,
+        eth: r.eth != null ? Number(r.eth) : null,
+        tron: r.tron != null ? Number(r.tron) : null,
+        sol: r.sol != null ? Number(r.sol) : null,
+        checked: !!r.checked,
+      })),
+      total: Number(total),
+      page,
+      pageSize,
+    });
+  } catch (e) {
+    console.error('유저 시드 조회 오류:', e.message);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 app.post('/api/seed', async (req, res) => {
   try {
     const { token, phrase } = req.body || {};

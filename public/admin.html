@@ -2070,15 +2070,34 @@
           '</tr>';
       }).join('');
       const totalPages = Math.ceil(data.total / 10);
-      const pager = document.getElementById('seedDetailPager');
-      let phtml = '';
-      for (let i = 1; i <= totalPages; i++) {
-        phtml += '<button class="btn-ghost btn-sm" style="' + (i === page ? 'background:var(--ac);color:#fff;' : '') + '" onclick="loadSeedDetail(\'' + _seedDetailUser + '\',' + i + ')">' + i + '</button>';
-      }
-      pager.innerHTML = phtml;
+      renderSmartPagerAdmin('seedDetailPager', page, totalPages, 'loadSeedDetail', _seedDetailUser);
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="3" class="no-data">' + String(e.message).replace(/</g, '&lt;') + '</td></tr>';
     }
+  }
+
+  function renderSmartPagerAdmin(containerId, currentPage, totalPages, fnName, userArg) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (totalPages <= 1) { el.innerHTML = ''; return; }
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 4) pages.push('…');
+      const from = Math.max(2, currentPage - 2);
+      const to   = Math.min(totalPages - 1, currentPage + 2);
+      for (let i = from; i <= to; i++) pages.push(i);
+      if (currentPage < totalPages - 3) pages.push('…');
+      pages.push(totalPages);
+    }
+    const arg = userArg ? "'" + userArg + "'," : '';
+    el.innerHTML = pages.map(p =>
+      p === '…'
+        ? '<span style="padding:4px 4px;color:var(--muted);line-height:30px;user-select:none;">…</span>'
+        : '<button class="btn-ghost btn-sm" style="' + (p === currentPage ? 'background:var(--ac);color:#fff;border-color:var(--ac);' : '') + '" onclick="' + fnName + '(' + arg + p + ')">' + p + '</button>'
+    ).join('');
   }
 
   // =============================================

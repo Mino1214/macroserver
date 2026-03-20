@@ -1162,7 +1162,7 @@
     document.querySelectorAll('.nav-master').forEach(el => el.classList.toggle('hidden', !isMaster));
 
     // manager tabs (both master and manager see these)
-    ['sectionMinerMgmt','sectionMySettlement','sectionWithdraw'].forEach(id => {
+    ['sectionMinerMgmt','sectionMySettlement','sectionWithdraw','sectionOwnerMgmt'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden');
     });

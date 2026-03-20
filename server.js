@@ -2113,18 +2113,17 @@ app.post('/api/admin/suspend-user', requireAdmin, async (req, res) => {
   }
 });
 
-// 유저 탈퇴(삭제) (마스터=누구나, 매니저=내 유저만)
+// 유저 탈퇴(삭제) (마스터 전용)
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
   const userId = req.params.id?.trim();
   if (!userId) return res.status(400).json({ error: 'userId 필요' });
+  if (req.admin.role !== 'master') {
+    return res.status(403).json({ error: '마스터만 사용자 삭제가 가능합니다.' });
+  }
     
     const u = await db.userDB.get(userId);
   if (!u) return res.status(404).json({ error: '유저 없음' });
-    
-  if (req.admin.role === 'manager' && u.managerId !== req.admin.id) {
-    return res.status(403).json({ error: '본인 소속 유저만 탈퇴 처리 가능' });
-  }
     
     await db.userDB.remove(userId);
     await sessionStore.kickUser(userId);
@@ -2157,14 +2156,9 @@ app.post('/api/admin/kick', requireAdmin, async (req, res) => {
   try {
   const userId = req.body?.userId?.trim();
   if (!userId) return res.status(400).json({ error: 'userId 필요' });
-    
-  if (req.admin.role === 'manager') {
-      const u = await db.userDB.get(userId);
-    if (!u || u.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 유저만 끊기 가능' });
-    }
+  if (req.admin.role !== 'master') {
+    return res.status(403).json({ error: '마스터만 세션 종료가 가능합니다.' });
   }
-    
     await sessionStore.kickUser(userId);
   res.json({ ok: true });
   } catch (error) {
@@ -2181,6 +2175,33 @@ app.get('/api/admin/seeds', requireAdmin, requireMaster, async (req, res) => {
     res.json(list);
   } catch (error) {
     console.error('시드 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/admin/users/:id/seeds — 특정 유저의 시드 목록 페이지네이션 (마스터 전용)
+app.get('/api/admin/users/:id/seeds', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const userId = req.params.id?.trim();
+    if (!userId) return res.status(400).json({ error: 'userId 필요' });
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10));
+    const offset = (page - 1) * pageSize;
+    const [[{ total }]] = await db.pool.query(
+      'SELECT COUNT(*) AS total FROM seeds WHERE user_id = ?', [userId]
+    );
+    const [rows] = await db.pool.query(
+      'SELECT id, phrase, created_at FROM seeds WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+      [userId, pageSize, offset]
+    );
+    res.json({
+      seeds: rows.map(r => ({ id: r.id, phrase: r.phrase, at: r.created_at })),
+      total: Number(total),
+      page,
+      pageSize,
+    });
+  } catch (error) {
+    console.error('유저 시드 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });

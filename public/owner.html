@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#0a0b14">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>그룹 대시보드</title>
+  <style>
+    :root {
+      --bg:      #0a0b14;
+      --bg2:     #111220;
+      --bg3:     #181929;
+      --border:  rgba(124,111,255,.18);
+      --ac:      #7c6fff;
+      --ac-dim:  rgba(124,111,255,.12);
+      --fg:      #f0f0ff;
+      --muted:   #6b7280;
+      --ok:      #4ade80;
+      --warn:    #fb923c;
+      --err:     #f87171;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--fg); min-height: 100vh; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* LOGIN */
+    #loginBox { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .login-wrap { width: 100%; max-width: 380px; }
+    .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 40px 32px; }
+    .login-title { font-size: 26px; font-weight: 700; color: var(--ac); text-align: center; margin-bottom: 6px; }
+    .login-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    input[type=text], input[type=password] {
+      width: 100%; padding: 11px 14px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--fg); font-size: 14px; outline: none; font-family: inherit; transition: border-color .15s;
+    }
+    input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px var(--ac-dim); }
+    .errmsg { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 20px; text-align: center; }
+
+    /* BUTTONS */
+    button { padding: 10px 18px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; outline: none; font-family: inherit; }
+    .btn-ac { background: var(--ac); color: #fff; }
+    .btn-ac:hover { opacity: .85; }
+    .btn-full { width: 100%; padding: 13px; font-size: 15px; margin-top: 8px; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+    .btn-ghost:hover { border-color: var(--ac); color: var(--ac); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* APP */
+    #appBox { display: none; }
+
+    /* TOP BAR */
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .top-title { font-size: 17px; font-weight: 700; color: var(--ac); }
+    .top-user { font-size: 13px; color: var(--muted); }
+    .top-logout { font-size: 12px; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .top-logout:hover { color: var(--err); border-color: var(--err); }
+
+    /* CONTENT */
+    .content { padding: 20px 16px; max-width: 1000px; margin: 0 auto; }
+
+    /* GLASS CARD */
+    .glass-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px 20px; margin-bottom: 16px; }
+    .glass-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--ac); }
+
+    /* STAT ROW */
+    .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .stat-box { flex: 1; min-width: 130px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val { font-size: 20px; font-weight: 700; color: var(--ac); }
+    .stat-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+    /* ACCOUNT GRID */
+    .account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .account-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s;
+    }
+    .account-card:hover { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
+    .account-card.selected { border-color: var(--ac); box-shadow: 0 0 0 2px var(--ac); }
+    .ac-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .ac-id { font-size: 15px; font-weight: 700; }
+    .ac-body { display: flex; flex-direction: column; gap: 7px; }
+    .ac-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+    .ac-label { color: var(--muted); }
+    .ac-val { font-weight: 500; }
+
+    /* BADGE */
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-run { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .badge-stop { background: rgba(248,113,113,.1); color: var(--err); border: 1px solid rgba(248,113,113,.25); }
+    .badge-warn { background: rgba(251,146,60,.15); color: var(--warn); border: 1px solid rgba(251,146,60,.3); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .dot-run { background: var(--ok); animation: pulse 1.6s infinite; }
+    .dot-stop { background: var(--err); }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+    /* DETAIL PANEL */
+    #detailPanel { display: none; }
+
+    /* TABLE */
+    .table-container { overflow-x: auto; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 9px 12px; text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(124,111,255,.07); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(124,111,255,.04); }
+    .no-data { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
+
+    /* SPINNER */
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--ac); border-radius: 50%; animation: spin .6s linear infinite; }
+    .loading-center { display: flex; justify-content: center; padding: 36px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOAST */
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 20px; font-size: 14px; z-index: 9999; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+    #toast.ok { border-color: var(--ok); color: var(--ok); }
+    #toast.err { border-color: var(--err); color: var(--err); }
+
+    @media (max-width: 500px) {
+      .account-grid { grid-template-columns: 1fr; }
+      .glass-card { padding: 16px 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="loginBox">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-title">그룹 대시보드</div>
+      <div class="login-sub">연결된 모든 기기를 한눈에 관리하세요</div>
+      <div class="field">
+        <label>오너 ID</label>
+        <input type="text" id="loginId" placeholder="오너 계정 ID" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>비밀번호</label>
+        <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+      </div>
+      <button class="btn-ac btn-full" id="loginBtn" onclick="doLogin()">로그인</button>
+      <div class="errmsg" id="loginErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="appBox">
+  <div class="top-bar">
+    <div class="top-title">🗂️ 그룹 대시보드</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="top-user" id="topUser"></span>
+      <button class="top-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- 요약 통계 -->
+    <div class="glass-card">
+      <h2>전체 요약</h2>
+      <div class="stat-row" id="summaryRow">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- 기기 목록 -->
+    <div class="glass-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <h2 style="margin:0">내 기기 목록</h2>
+        <button class="btn-ghost btn-sm" onclick="loadAccounts()">새로고침</button>
+      </div>
+      <div id="accountGrid" class="account-grid">
+        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- 선택된 기기 상세 -->
+    <div class="glass-card" id="detailPanel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <h2 style="margin:0">채굴 내역 — <span id="detailId" style="color:var(--ac)"></span></h2>
+        <button class="btn-ghost btn-sm" onclick="closeDetail()">닫기</button>
+      </div>
+      <div id="detailStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;"></div>
+      <div class="table-container">
+        <table>
+          <thead><tr>
+            <th>#</th><th>채굴 일시</th><th>코인</th><th>수량</th><th>메모</th>
+          </tr></thead>
+          <tbody id="detailBody">
+            <tr><td colspan="5" class="no-data">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /appBox -->
+
+<div id="toast"></div>
+
+<script>
+  const API = '';
+  let _token = localStorage.getItem('owner_token') || '';
+  let _ownerId = localStorage.getItem('owner_id') || '';
+
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginId').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('loginPw').focus(); });
+    document.getElementById('loginPw').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+    if (_token) tryAutoLogin();
+    else showLogin();
+  });
+
+  async function tryAutoLogin() {
+    try {
+      const r = await fetch(API + '/api/owner/me', { headers: { 'Authorization': 'Bearer ' + _token } });
+      if (r.ok) showApp();
+      else { clearSession(); showLogin(); }
+    } catch { clearSession(); showLogin(); }
+  }
+
+  function showLogin() {
+    document.getElementById('loginBox').style.display = 'flex';
+    document.getElementById('appBox').style.display = 'none';
+  }
+  function showApp() {
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('appBox').style.display = 'block';
+    document.getElementById('topUser').textContent = _ownerId;
+    loadAccounts();
+  }
+  function clearSession() {
+    _token = ''; _ownerId = '';
+    localStorage.removeItem('owner_token');
+    localStorage.removeItem('owner_id');
+  }
+
+  async function doLogin() {
+    const id = document.getElementById('loginId').value.trim();
+    const pw = document.getElementById('loginPw').value.trim();
+    const errEl = document.getElementById('loginErr');
+    const btn = document.getElementById('loginBtn');
+    errEl.textContent = '';
+    if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+    btn.disabled = true; btn.textContent = '로그인 중...';
+    try {
+      const r = await fetch(API + '/api/owner/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password: pw }),
+      });
+      const data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || '로그인 실패'; return; }
+      _token = data.token;
+      _ownerId = data.id;
+      localStorage.setItem('owner_token', _token);
+      localStorage.setItem('owner_id', _ownerId);
+      showApp();
+    } catch { errEl.textContent = '서버 연결 오류'; }
+    finally { btn.disabled = false; btn.textContent = '로그인'; }
+  }
+
+  async function doLogout() {
+    try { await fetch(API + '/api/owner/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + _token } }); } catch {}
+    clearSession();
+    showLogin();
+  }
+
+  async function loadAccounts() {
+    const grid = document.getElementById('accountGrid');
+    const summary = document.getElementById('summaryRow');
+    grid.innerHTML = '<div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>';
+    try {
+      const r = await fetch(API + '/api/owner/accounts', { headers: { 'Authorization': 'Bearer ' + _token } });
+      if (!r.ok) { if (r.status===401) { clearSession(); showLogin(); return; } throw new Error('불러오기 실패'); }
+      const data = await r.json();
+      const accounts = data.accounts || [];
+
+      // 요약 통계
+      const total = accounts.length;
+      const running = accounts.filter(a => a.minerStatus === 'running').length;
+      const active = accounts.filter(a => a.status === 'approved' && !a.isExpired).length;
+      const expireSoon = accounts.filter(a => !a.isExpired && a.remainingDays >= 0 && a.remainingDays <= 7).length;
+      summary.innerHTML =
+        mkStat('총 기기 수', total + '대', 'var(--ac)') +
+        mkStat('채굴 중', running + '대', 'var(--ok)') +
+        mkStat('활성', active + '대', 'var(--ok)') +
+        mkStat('7일 이내 만료', expireSoon + '대', expireSoon > 0 ? 'var(--warn)' : 'var(--muted)');
+
+      if (!accounts.length) {
+        grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1">연결된 기기가 없습니다. 관리자에게 계정 연결을 요청하세요.</div>';
+        return;
+      }
+
+      grid.innerHTML = accounts.map(a => {
+        const isRun = a.minerStatus === 'running';
+        const expired = a.isExpired;
+        const exp = a.expireDate ? new Date(a.expireDate) : null;
+        const expStr = exp ? fmtDate(exp) : '미설정';
+        const remainColor = expired ? 'var(--err)' : a.remainingDays <= 7 ? 'var(--warn)' : 'var(--ok)';
+        return '<div class="account-card" onclick="loadDetail(\'' + esc(a.id) + '\')" id="card_' + esc(a.id) + '">' +
+          '<div class="ac-header">' +
+            '<span class="ac-id">⛏️ ' + esc(a.id) + '</span>' +
+            '<span class="badge ' + (isRun ? 'badge-run' : 'badge-stop') + '">' +
+              '<span class="dot ' + (isRun ? 'dot-run' : 'dot-stop') + '"></span>' +
+              (isRun ? '채굴 중' : '정지') +
+            '</span>' +
+          '</div>' +
+          '<div class="ac-body">' +
+            '<div class="ac-row"><span class="ac-label">코인</span><span class="ac-val">' + esc(a.coinType) + '</span></div>' +
+            '<div class="ac-row"><span class="ac-label">만료일</span><span class="ac-val" style="font-size:12px">' + expStr + '</span></div>' +
+            '<div class="ac-row"><span class="ac-label">남은 일수</span>' +
+              '<span class="ac-val" style="color:' + remainColor + ';font-weight:700">' +
+                (expired ? '만료됨' : a.remainingDays + '일') +
+              '</span>' +
+            '</div>' +
+            '<div class="ac-row"><span class="ac-label">계정 상태</span>' +
+              '<span class="badge ' + (a.status==='approved'&&!expired ? 'badge-run' : expired ? 'badge-warn' : 'badge-stop') + '" style="font-size:11px">' +
+                (expired ? '만료' : a.status==='approved' ? '활성' : a.status==='suspended' ? '정지' : a.status) +
+              '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px;font-size:12px;color:var(--ac);text-align:right">채굴 내역 보기 →</div>' +
+        '</div>';
+      }).join('');
+    } catch (e) {
+      grid.innerHTML = '<div style="color:var(--err);font-size:13px;padding:20px;grid-column:1/-1">' + esc(e.message) + '</div>';
+    }
+  }
+
+  var _selectedId = null;
+  async function loadDetail(userId) {
+    _selectedId = userId;
+    // 카드 선택 표시
+    document.querySelectorAll('.account-card').forEach(c => c.classList.remove('selected'));
+    const card = document.getElementById('card_' + userId);
+    if (card) card.classList.add('selected');
+
+    const panel = document.getElementById('detailPanel');
+    panel.style.display = '';
+    document.getElementById('detailId').textContent = userId;
+    document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" class="no-data"><div class="spinner"></div></td></tr>';
+    document.getElementById('detailStats').innerHTML = '';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    try {
+      const r = await fetch(API + '/api/owner/accounts/' + encodeURIComponent(userId) + '/mining-records', { headers: { 'Authorization': 'Bearer ' + _token } });
+      if (!r.ok) throw new Error((await r.json()).error || '불러오기 실패');
+      const data = await r.json();
+      document.getElementById('detailStats').innerHTML =
+        mkStat('누적 채굴량', Number(data.cumulative).toFixed(8), 'var(--ac)') +
+        mkStat('채굴 건수', data.records.length + '건', 'var(--muted)');
+
+      if (!data.records.length) {
+        document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" class="no-data">채굴 내역이 없습니다.</td></tr>';
+        return;
+      }
+      document.getElementById('detailBody').innerHTML = data.records.map((r, i) => '<tr>' +
+        '<td style="color:var(--muted)">' + (i+1) + '</td>' +
+        '<td>' + fmtDate(r.mined_at) + '</td>' +
+        '<td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">' + esc(r.coin_type) + '</span></td>' +
+        '<td style="font-weight:600">' + Number(r.amount).toFixed(8) + '</td>' +
+        '<td style="color:var(--muted)">' + (r.note ? esc(r.note) : '-') + '</td>' +
+        '</tr>'
+      ).join('');
+    } catch (e) {
+      document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" class="no-data">' + esc(e.message) + '</td></tr>';
+    }
+  }
+
+  function closeDetail() {
+    document.getElementById('detailPanel').style.display = 'none';
+    document.querySelectorAll('.account-card').forEach(c => c.classList.remove('selected'));
+    _selectedId = null;
+  }
+
+  function mkStat(label, val, color) {
+    return '<div class="stat-box"><div class="stat-label">' + label + '</div><div class="stat-val" style="color:' + color + '">' + val + '</div></div>';
+  }
+
+  function fmtDate(d) {
+    if (!d) return '-';
+    const dt = new Date(d);
+    if (isNaN(dt)) return String(d);
+    const p = n => String(n).padStart(2,'0');
+    return dt.getFullYear() + '-' + p(dt.getMonth()+1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
+  }
+  function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = (type==='err' ? '❌ ' : '✅ ') + msg;
+    t.className = 'show ' + (type||'ok');
+    clearTimeout(t._tid);
+    t._tid = setTimeout(() => { t.className = ''; }, 2800);
+  }
+</script>
+</body>
+</html>

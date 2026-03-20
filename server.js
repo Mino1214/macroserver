@@ -419,6 +419,49 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB 마이그레이션(withdrawal_requests) 오류:', e.message);
   }
+
+  // ===== 그룹 오너 계정 시스템 =====
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS account_owners (
+        id         VARCHAR(50) NOT NULL PRIMARY KEY COMMENT '오너 계정 ID',
+        pw         VARCHAR(255) NOT NULL COMMENT '비밀번호',
+        name       VARCHAR(100) DEFAULT NULL COMMENT '표시 이름',
+        telegram   VARCHAR(100) DEFAULT NULL COMMENT '메신저 ID',
+        manager_id VARCHAR(50)  DEFAULT NULL COMMENT '담당 매니저 ID',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_manager (manager_id)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: account_owners 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(account_owners) 오류:', e.message);
+  }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS owner_sessions (
+        token        VARCHAR(64) NOT NULL PRIMARY KEY,
+        owner_id     VARCHAR(50) NOT NULL,
+        last_activity DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_owner (owner_id)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: owner_sessions 테이블 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(owner_sessions) 오류:', e.message);
+  }
+  try {
+    // users 테이블에 owner_id 컬럼 추가
+    const [cols] = await db.pool.query("SHOW COLUMNS FROM users LIKE 'owner_id'");
+    if (cols.length === 0) {
+      await db.pool.query("ALTER TABLE users ADD COLUMN owner_id VARCHAR(50) DEFAULT NULL COMMENT '그룹 오너 계정 ID'");
+      console.log('✅ DB 마이그레이션: users.owner_id 컬럼 추가');
+    } else {
+      console.log('✅ DB 마이그레이션: users.owner_id 확인 완료');
+    }
+  } catch (e) {
+    console.error('DB 마이그레이션(users.owner_id) 오류:', e.message);
+  }
 }
 runMigrations();
 
@@ -1025,6 +1068,31 @@ async function requireSession(req, res, next) {
   req.userId = userId;
   req.sessionToken = token;
   next();
+}
+
+// 그룹 오너 세션 인증 미들웨어
+async function requireOwnerSession(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token || req.body?.token || '';
+  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  try {
+    const [[session]] = await db.pool.query(
+      `SELECT s.owner_id, s.last_activity, o.name, o.telegram, o.manager_id
+       FROM owner_sessions s JOIN account_owners o ON s.owner_id = o.id
+       WHERE s.token = ?`,
+      [token]
+    );
+    if (!session) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+    const lastActivity = new Date(session.last_activity).getTime();
+    if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
+      await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]);
+      return res.status(401).json({ error: '세션이 만료되었습니다.' });
+    }
+    await db.pool.query('UPDATE owner_sessions SET last_activity = NOW() WHERE token = ?', [token]);
+    req.owner = { id: session.owner_id, name: session.name, telegram: session.telegram, managerId: session.manager_id };
+    next();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 }
 
 // ===== macroUser 인증 헬퍼 =====
@@ -3472,6 +3540,175 @@ app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, a
        ORDER BY m.id`
     );
     res.json({ managers: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== 그룹 오너 API ==========
+
+// POST /api/owner/login
+app.post('/api/owner/login', async (req, res) => {
+  try {
+    const { id, password } = req.body || {};
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    const [[owner]] = await db.pool.query('SELECT id, name, telegram, manager_id FROM account_owners WHERE id = ? AND pw = ?', [id.trim().toLowerCase(), password.trim()]);
+    if (!owner) return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    const token = crypto.randomBytes(24).toString('hex');
+    await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, owner.id]);
+    res.json({ token, id: owner.id, name: owner.name || owner.id, telegram: owner.telegram || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/logout
+app.post('/api/owner/logout', async (req, res) => {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.body?.token || '';
+  if (token) await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]).catch(() => {});
+  res.json({ ok: true });
+});
+
+// GET /api/owner/me
+app.get('/api/owner/me', requireOwnerSession, async (req, res) => {
+  res.json({ id: req.owner.id, name: req.owner.name, telegram: req.owner.telegram });
+});
+
+// GET /api/owner/accounts — 연결된 유저 계정 목록 + 상태
+app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
+  try {
+    const [users] = await db.pool.query(
+      `SELECT u.id, u.telegram, u.status, u.expire_date, u.subscription_days,
+              ms.status as miner_status, ms.coin_type
+       FROM users u
+       LEFT JOIN miner_status ms ON ms.user_id = u.id
+       WHERE u.owner_id = ?
+       ORDER BY u.id`,
+      [req.owner.id]
+    );
+    const now = new Date();
+    const result = users.map(u => {
+      const exp = u.expire_date ? new Date(u.expire_date) : null;
+      const remainingDays = exp ? Math.ceil((exp - now) / 86400000) : 0;
+      return {
+        id: u.id,
+        telegram: u.telegram || '',
+        status: u.status,
+        expireDate: u.expire_date || null,
+        remainingDays,
+        isExpired: exp ? now > exp : true,
+        minerStatus: u.miner_status || 'stopped',
+        coinType: u.coin_type || 'BTC',
+      };
+    });
+    res.json({ accounts: result, total: result.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/owner/accounts/:id/mining-records — 특정 계정 채굴 내역
+app.get('/api/owner/accounts/:id/mining-records', requireOwnerSession, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    // 소유 확인
+    const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [targetId, req.owner.id]);
+    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    const [records] = await db.pool.query(
+      'SELECT id, coin_type, amount, mined_at, note FROM mining_records WHERE user_id = ? ORDER BY mined_at DESC LIMIT 50',
+      [targetId]
+    );
+    const [[{ cumulative }]] = await db.pool.query('SELECT COALESCE(SUM(amount),0) as cumulative FROM mining_records WHERE user_id = ?', [targetId]);
+    res.json({ records, cumulative: Number(cumulative) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== 관리자 — 그룹 오너 관리 API ==========
+
+// GET /api/admin/account-owners — 오너 목록
+app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
+  try {
+    let query = `SELECT o.id, o.name, o.telegram, o.manager_id, o.created_at,
+                        COUNT(u.id) as account_count
+                 FROM account_owners o
+                 LEFT JOIN users u ON u.owner_id = o.id`;
+    const params = [];
+    if (req.admin.role !== 'master') {
+      query += ' WHERE o.manager_id = ?';
+      params.push(req.admin.id);
+    }
+    query += ' GROUP BY o.id ORDER BY o.created_at DESC';
+    const [rows] = await db.pool.query(query, params);
+    res.json({ owners: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/account-owners — 오너 생성
+app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
+  try {
+    const { id, password, name, telegram } = req.body || {};
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'id, password 필수' });
+    const ownerId = id.trim().toLowerCase();
+    const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
+    if (exists) return res.status(400).json({ error: '이미 존재하는 ID입니다.' });
+    const managerId = req.admin.role === 'master' ? (req.body.manager_id || null) : req.admin.id;
+    await db.pool.query(
+      'INSERT INTO account_owners (id, pw, name, telegram, manager_id) VALUES (?, ?, ?, ?, ?)',
+      [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, managerId]
+    );
+    res.json({ ok: true, id: ownerId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/account-owners/:id — 오너 삭제
+app.delete('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
+  try {
+    const ownerId = req.params.id;
+    if (req.admin.role !== 'master') {
+      const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+    }
+    // 연결된 users의 owner_id 해제
+    await db.pool.query('UPDATE users SET owner_id = NULL WHERE owner_id = ?', [ownerId]);
+    await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [ownerId]);
+    await db.pool.query('DELETE FROM account_owners WHERE id = ?', [ownerId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/account-owners/:id/accounts — 오너에 연결된 계정 목록
+app.get('/api/admin/account-owners/:id/accounts', requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await db.pool.query(
+      'SELECT id, telegram, status, expire_date FROM users WHERE owner_id = ? ORDER BY id',
+      [req.params.id]
+    );
+    res.json({ accounts: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/admin/users/:id/owner — 유저 계정의 오너 연결/해제
+app.patch('/api/admin/users/:id/owner', requireAdmin, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    const { owner_id } = req.body || {};
+    // 오너 존재 확인 (null이면 해제)
+    if (owner_id) {
+      const [[owner]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [owner_id]);
+      if (!owner) return res.status(404).json({ error: '오너 계정을 찾을 수 없습니다.' });
+    }
+    await db.pool.query('UPDATE users SET owner_id = ? WHERE id = ?', [owner_id || null, targetId]);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -425,6 +425,10 @@
     <button class="tab-btn master-tab nav-master hidden" data-tab="sectionSettleMgmt" onclick="showTab('sectionSettleMgmt');loadSettleMgmt()">
       <span class="icon">📋</span><span>정산관리</span>
     </button>
+    <!-- 그룹(오너) 관리 탭 — 매니저/마스터 공통 -->
+    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionOwnerMgmt" onclick="showTab('sectionOwnerMgmt');loadOwnerMgmt()">
+      <span class="icon">🗂️</span><span>그룹관리</span>
+    </button>
   </div>
 
   <!-- Tab Content -->
@@ -981,6 +985,77 @@
         </div>
       </div>
     </div><!-- /sectionSettleMgmt -->
+
+    <!-- ===== 그룹 오너 관리 탭 ===== -->
+    <div class="tab-panel hidden" id="sectionOwnerMgmt">
+      <!-- 오너 생성 -->
+      <div class="glass-card">
+        <h2>그룹 오너 계정 생성</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+          여러 유저 계정을 한 명이 한 번에 관리할 수 있는 오너 계정을 만듭니다.<br>
+          오너는 <b>/owner.html</b> 에서 로그인해 연결된 모든 기기를 확인합니다.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:120px;">
+            <label>오너 ID</label>
+            <input type="text" id="ownerNewId" placeholder="로그인 ID">
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <label>비밀번호</label>
+            <input type="password" id="ownerNewPw" placeholder="비밀번호">
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <label>표시 이름 (선택)</label>
+            <input type="text" id="ownerNewName" placeholder="홍길동">
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <label>메신저 ID (선택)</label>
+            <input type="text" id="ownerNewTelegram" placeholder="@telegram_id">
+          </div>
+          <button class="btn-ac btn-sm" onclick="createOwner()">생성</button>
+        </div>
+        <div id="ownerCreateMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+      </div>
+
+      <!-- 오너 목록 -->
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">그룹 오너 목록</h2>
+          <button class="btn-ghost btn-sm" onclick="loadOwnerMgmt()">새로고침</button>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>오너 ID</th>
+                <th>이름</th>
+                <th>메신저</th>
+                <th>연결된 계정 수</th>
+                <th>생성일</th>
+                <th>관리</th>
+              </tr></thead>
+              <tbody id="ownerListBody">
+                <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 계정 연결 모달 영역 -->
+      <div class="glass-card" id="ownerAccountsCard" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0">계정 연결 관리 — <span id="ownerAccountsTitle" style="color:var(--ac)"></span></h2>
+          <button class="btn-ghost btn-sm" onclick="document.getElementById('ownerAccountsCard').style.display='none'">닫기</button>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">유저 ID를 입력해 이 오너에 연결하거나, 연결을 해제합니다.</p>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <input type="text" id="ownerLinkUserId" placeholder="유저 ID 입력" style="flex:1;">
+          <button class="btn-ok btn-sm" onclick="linkUserToOwner()">연결</button>
+        </div>
+        <div id="ownerLinkedList"></div>
+      </div>
+    </div><!-- /sectionOwnerMgmt -->
 
   </div><!-- /tab-content -->
 </div><!-- /dashboard -->
@@ -2189,6 +2264,133 @@
     t.className = 'admin-toast show' + (type === 'err' ? ' err' : ' ok');
     clearTimeout(t._tid);
     t._tid = setTimeout(function() { t.className = 'admin-toast'; }, 2800);
+  }
+
+  // =============================================
+  // 그룹 오너 관리
+  // =============================================
+  var _currentOwnerForLink = null;
+
+  async function loadOwnerMgmt() {
+    const tbody = document.getElementById('ownerListBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/account-owners');
+      const owners = data.owners || [];
+      if (!owners.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">그룹 오너가 없습니다.</td></tr>';
+        return;
+      }
+      const p = n => String(n).padStart(2,'0');
+      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; };
+      tbody.innerHTML = owners.map(function(o) {
+        return '<tr>' +
+          '<td><b>' + String(o.id).replace(/</g,'&lt;') + '</b></td>' +
+          '<td>' + (o.name ? String(o.name).replace(/</g,'&lt;') : '<span style="color:var(--muted)">-</span>') + '</td>' +
+          '<td style="color:var(--muted);font-size:12px">' + (o.telegram ? String(o.telegram).replace(/</g,'&lt;') : '-') + '</td>' +
+          '<td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 12px;border-radius:20px;font-size:12px;font-weight:600">' + o.account_count + '개</span></td>' +
+          '<td style="font-size:12px;color:var(--muted)">' + fmtD(o.created_at) + '</td>' +
+          '<td><div style="display:flex;gap:4px;">' +
+            '<button class="btn-ghost btn-sm" onclick="openOwnerAccounts(\'' + String(o.id).replace(/'/g,"\\'") + '\')">계정 관리</button>' +
+            '<button class="btn-err btn-sm" onclick="deleteOwner(\'' + String(o.id).replace(/'/g,"\\'") + '\')">삭제</button>' +
+          '</div></td>' +
+          '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+    }
+  }
+
+  async function createOwner() {
+    const id = document.getElementById('ownerNewId').value.trim();
+    const pw = document.getElementById('ownerNewPw').value.trim();
+    const name = document.getElementById('ownerNewName').value.trim();
+    const telegram = document.getElementById('ownerNewTelegram').value.trim();
+    const msg = document.getElementById('ownerCreateMsg');
+    if (!id || !pw) { msg.style.color='var(--err)'; msg.textContent='ID와 비밀번호는 필수입니다.'; return; }
+    msg.style.color='var(--muted)'; msg.textContent='생성 중...';
+    try {
+      await api('/api/admin/account-owners', 'POST', { id, password: pw, name: name||undefined, telegram: telegram||undefined });
+      msg.style.color='var(--ok)'; msg.textContent='오너 계정 생성 완료. 로그인 주소: /owner.html';
+      document.getElementById('ownerNewId').value = '';
+      document.getElementById('ownerNewPw').value = '';
+      document.getElementById('ownerNewName').value = '';
+      document.getElementById('ownerNewTelegram').value = '';
+      loadOwnerMgmt();
+    } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message; }
+  }
+
+  async function deleteOwner(ownerId) {
+    if (!confirm(ownerId + ' 오너 계정을 삭제하면 연결된 계정의 연결이 해제됩니다. 계속하시겠습니까?')) return;
+    try {
+      await api('/api/admin/account-owners/' + ownerId, 'DELETE');
+      showToast('오너 계정이 삭제되었습니다.');
+      loadOwnerMgmt();
+      document.getElementById('ownerAccountsCard').style.display = 'none';
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function openOwnerAccounts(ownerId) {
+    _currentOwnerForLink = ownerId;
+    document.getElementById('ownerAccountsTitle').textContent = ownerId;
+    document.getElementById('ownerAccountsCard').style.display = '';
+    document.getElementById('ownerLinkUserId').value = '';
+    loadOwnerLinkedList(ownerId);
+    document.getElementById('ownerAccountsCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function loadOwnerLinkedList(ownerId) {
+    const el = document.getElementById('ownerLinkedList');
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;">불러오는 중...</div>';
+    try {
+      const data = await api('/api/admin/account-owners/' + ownerId + '/accounts');
+      const accounts = data.accounts || [];
+      if (!accounts.length) {
+        el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;">연결된 계정이 없습니다.</div>';
+        return;
+      }
+      const p = n => String(n).padStart(2,'0');
+      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt)?String(d):`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; };
+      el.innerHTML = '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
+        '<thead><tr>' +
+          '<th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">유저 ID</th>' +
+          '<th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">상태</th>' +
+          '<th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">만료일</th>' +
+          '<th style="padding:8px 10px;border-bottom:1px solid var(--border)"></th>' +
+        '</tr></thead><tbody>' +
+        accounts.map(function(a) {
+          return '<tr>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)"><b>' + String(a.id).replace(/</g,'&lt;') + '</b></td>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)">' +
+              '<span class="badge ' + (a.status==='approved'?'badge-run':'badge-stop') + '">' + a.status + '</span>' +
+            '</td>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07);font-size:12px;color:var(--muted)">' + fmtD(a.expire_date) + '</td>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)">' +
+              '<button class="btn-err btn-sm" onclick="unlinkUser(\'' + String(a.id).replace(/'/g,"\\'") + '\')">연결 해제</button>' +
+            '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table>';
+    } catch (e) { el.innerHTML = '<div style="color:var(--err);font-size:13px;">' + String(e.message).replace(/</g,'&lt;') + '</div>'; }
+  }
+
+  async function linkUserToOwner() {
+    const userId = document.getElementById('ownerLinkUserId').value.trim().toLowerCase();
+    if (!userId || !_currentOwnerForLink) return;
+    try {
+      await api('/api/admin/users/' + userId + '/owner', 'PATCH', { owner_id: _currentOwnerForLink });
+      showToast(userId + ' 계정 연결 완료');
+      document.getElementById('ownerLinkUserId').value = '';
+      loadOwnerLinkedList(_currentOwnerForLink);
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function unlinkUser(userId) {
+    try {
+      await api('/api/admin/users/' + userId + '/owner', 'PATCH', { owner_id: null });
+      showToast(userId + ' 연결 해제됨');
+      if (_currentOwnerForLink) loadOwnerLinkedList(_currentOwnerForLink);
+    } catch (e) { showToast(e.message, 'err'); }
   }
 </script>
 

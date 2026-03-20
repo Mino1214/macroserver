@@ -630,8 +630,32 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
     }
     console.log(`[AUTO-SWEEP] ✅ 루트 주소 확인: ${rootAddress}`);
 
-    // 3. 루트 지갑 TRX 잔액 확인 (TronGrid REST API 사용 — publicnode의 getBalance는 미활성 주소에서 에러 발생)
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+
+    // 2.5. 입금 주소 실제 USDT 잔액 확인 (TRX 선송금 전에 먼저 확인 → 낭비 방지)
+    let depositUsdtActual = 0;
+    try {
+      const depAcctResp = await axios.get(
+        `https://api.trongrid.io/v1/accounts/${depositAddress}`,
+        { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, params: { only_confirmed: true }, timeout: 10000 }
+      );
+      const trc20 = depAcctResp.data?.data?.[0]?.trc20 || [];
+      const entry = trc20.find(b => {
+        const k = Object.keys(b)[0];
+        return k && k.toLowerCase() === USDT_CONTRACT.toLowerCase();
+      });
+      depositUsdtActual = entry ? Number(Object.values(entry)[0]) / 1e6 : 0;
+    } catch (e) {
+      console.warn('[AUTO-SWEEP] 입금주소 USDT 잔액 조회 실패:', e.message);
+    }
+    if (depositUsdtActual < 0.1) {
+      console.log(`[AUTO-SWEEP] 입금주소 실잔액 없음 (${depositUsdtActual.toFixed(4)} USDT) → swept 처리 후 종료`);
+      await db.depositAddressDB.updateStatus(depositAddress, 'swept');
+      return;
+    }
+    console.log(`[AUTO-SWEEP] 입금주소 실잔액 확인: ${depositUsdtActual.toFixed(4)} USDT`);
+
+    // 3. 루트 지갑 TRX 잔액 확인 (TronGrid REST API 사용 — publicnode의 getBalance는 미활성 주소에서 에러 발생)
     let rootTrxBalance = 0;
     try {
       const balResp = await axios.get(
@@ -820,8 +844,25 @@ cron.schedule('* * * * *', async () => {
 
         const txList = txResp.data?.data || [];
 
-        if (txList.length === 0) {
-          // 아직 USDT 트랜잭션 없음 → waiting_deposit 전환
+        // ── 실제 현재 USDT 잔액 조회 (거래 내역 합산 방식은 스윕 후에도 양수로 남아 무한루프 발생) ──
+        let actualUsdtBalance = 0;
+        try {
+          const acctResp = await axios.get(
+            `https://api.trongrid.io/v1/accounts/${addr.deposit_address}`,
+            { headers: tronGridHeaders, params: { only_confirmed: true }, timeout: 10000 }
+          );
+          const trc20List = acctResp.data?.data?.[0]?.trc20 || [];
+          const usdtEntry = trc20List.find(b => {
+            const key = Object.keys(b)[0];
+            return key && key.toLowerCase() === USDT_CONTRACT.toLowerCase();
+          });
+          actualUsdtBalance = usdtEntry ? Number(Object.values(usdtEntry)[0]) / 1e6 : 0;
+        } catch (e) {
+          console.warn(`[DEPOSIT-CHECK] 실잔액 조회 실패 (${addr.deposit_address}):`, e.message);
+        }
+
+        // 실잔액 0 + 트랜잭션 없음 → 미입금 상태로 전환
+        if (txList.length === 0 && actualUsdtBalance < 0.01) {
           await db.pool.query(
             `UPDATE deposit_addresses SET status = 'waiting_deposit'
              WHERE deposit_address = ? AND status = 'issued'`,
@@ -831,11 +872,17 @@ cron.schedule('* * * * *', async () => {
           continue;
         }
 
-        // 해당 주소로 들어온 USDT 합산 (sweep 전 현재 잔액 근사값)
-        const inbound = txList.filter(
-          tx => tx.to === addr.deposit_address && tx.type === 'Transfer'
-        );
-        const usdtBalance = inbound.reduce((sum, tx) => sum + Number(tx.value) / 1e6, 0);
+        // 실잔액 0이지만 트랜잭션 기록이 남아 있는 경우 → 이미 스윕됨, DB 정리
+        if (actualUsdtBalance < 0.01 && addr.status === 'paid') {
+          console.log(`[DEPOSIT-CHECK] 주소 ${addr.deposit_address} 실잔액 0 (이미 스윕 완료) → swept 처리`);
+          await db.depositAddressDB.updateStatus(addr.deposit_address, 'swept');
+          await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
+          continue;
+        }
+
+        const usdtBalance = actualUsdtBalance > 0.01 ? actualUsdtBalance
+          : txList.filter(tx => tx.to === addr.deposit_address && tx.type === 'Transfer')
+                  .reduce((sum, tx) => sum + Number(tx.value) / 1e6, 0);
 
         if (usdtBalance > 0) {
           const alreadyPaid = addr.status === 'paid';

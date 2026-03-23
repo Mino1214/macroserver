@@ -7,7 +7,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>그룹 대시보드</title>
   <!-- QR code library -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --bg:      #0a0b14;
@@ -173,7 +173,8 @@
     .calc-row { display:flex; justify-content:space-between; }
     .calc-total { font-size:16px; font-weight:700; color:var(--ac); margin-top:6px; border-top:1px solid var(--border); padding-top:6px; }
     .amount-display { font-size:14px; margin-bottom:14px; }
-    #qrCanvas { background:#fff; border-radius:12px; padding:10px; display:block; margin:0 auto 12px; }
+    #qrBox, #bulkQrBox { background:#fff; border-radius:12px; padding:10px; display:inline-block; margin:0 auto 12px; line-height:0; }
+    #qrBox img, #bulkQrBox img { display:block; }
     .addr-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:monospace; font-size:11px; word-break:break-all; color:var(--fg); margin-bottom:12px; }
 
     /* SPINNER */
@@ -432,7 +433,7 @@
 
     <!-- QR 영역 -->
     <div id="qrArea" style="display:none;text-align:center;">
-      <canvas id="qrCanvas"></canvas>
+      <div id="qrBox"></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">TRON (TRC-20 USDT) 입금 주소</div>
       <div class="addr-box" id="qrAddress"></div>
       <button class="btn-ghost btn-sm" onclick="checkDeposit()" style="width:100%;margin-bottom:6px">지금 확인</button>
@@ -488,7 +489,7 @@
     <!-- 통합 QR 영역 -->
     <div id="bulkQrArea" style="display:none;text-align:center;margin-top:12px;border-top:1px solid var(--border);padding-top:16px;">
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">아래 주소로 정확한 금액 입금 후 자동 처리됩니다</div>
-      <canvas id="bulkQrCanvas" style="background:#fff;border-radius:12px;padding:10px;display:block;margin:0 auto 12px;"></canvas>
+      <div id="bulkQrBox" style="display:inline-block;margin:0 auto 12px;"></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">TRON (TRC-20 USDT) 입금 주소</div>
       <div class="addr-box" id="bulkQrAddress" style="cursor:pointer;" onclick="copyBulkAddress()"></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">입금 후 자동 감지됩니다 (크론: 매분 체크)</div>
@@ -1014,9 +1015,9 @@
       // QR 렌더링
       const qrArea = document.getElementById('bulkQrArea');
       document.getElementById('bulkQrAddress').textContent = address;
-      QRCode.toCanvas(document.getElementById('bulkQrCanvas'), address, { width: 200, margin: 1 }, err => {
-        if (err) errEl.textContent = 'QR 생성 오류: ' + err.message;
-      });
+      const bulkQrBox = document.getElementById('bulkQrBox');
+      bulkQrBox.innerHTML = '';
+      new QRCode(bulkQrBox, { text: address, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
       qrArea.style.display = '';
 
       // 폴링 시작
@@ -1282,9 +1283,9 @@
       const address = data.address;
       document.getElementById('qrAddress').textContent = address;
       // QR 렌더링
-      QRCode.toCanvas(document.getElementById('qrCanvas'), address, { width: 200, margin: 1 }, err => {
-        if (err) errEl.textContent = 'QR 생성 오류: ' + err.message;
-      });
+      const qrBox = document.getElementById('qrBox');
+      qrBox.innerHTML = '';
+      new QRCode(qrBox, { text: address, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
       document.getElementById('qrArea').style.display = '';
       startQrPoll();
     } catch (e) { errEl.textContent = e.message || '오류'; }

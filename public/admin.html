@@ -102,8 +102,10 @@
       color: var(--muted);
     }
     .btn-ghost:hover { border-color: var(--ac); color: var(--ac); }
-    .btn-ok  { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
-    .btn-err { background: rgba(248,113,113,.12); color: var(--err); border: 1px solid rgba(248,113,113,.3); }
+    .btn-ok   { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .btn-err  { background: rgba(248,113,113,.12); color: var(--err); border: 1px solid rgba(248,113,113,.3); }
+    .btn-warn { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .btn-sm  { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
     button:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -480,6 +482,7 @@
                 <th>이름</th>
                 <th>메신저</th>
                 <th>기기수</th>
+                <th>채굴 현황</th>
                 <th>상태</th>
                 <th>조치</th>
               </tr></thead>
@@ -1040,7 +1043,7 @@
                 <th>생성일</th>
                 <th>관리</th>
               </tr></thead>
-              <tbody id="ownerListBody">
+              <tbody id="ownerListBodyLegacy">
                 <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
               </tbody>
             </table>
@@ -1524,15 +1527,25 @@
       const dotHtml = `<div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:12px">${statusLbl}</span></div>`;
       const isExpanded = _expandedOwner === o.id;
 
+      // 채굴 중 표기
+      const minerCount = parseInt(o.active_miners) || 0;
+      const minerBadge = minerCount > 0
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#0f2a1a;color:#22c55e;border:1px solid #22c55e55;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;animation:pulse 1.2s infinite;display:inline-block;"></span>채굴 중 ${minerCount}개
+           </span>`
+        : `<span style="color:var(--muted);font-size:11px;">-</span>`;
+
       let actions = '';
       if (o.status === 'pending') {
         actions = `<button class="btn-ok btn-sm" onclick="approveOwner('${eid}')">승인</button>
                    <button class="btn-err btn-sm" onclick="rejectOwner('${eid}')">거절</button>`;
       } else {
-        actions = `<button class="btn-err btn-sm" onclick="deleteOwner('${eid}')">삭제</button>`;
+        const hasSession = parseInt(o.has_session) > 0;
+        const kickBtn = `<button class="btn-warn btn-sm" onclick="kickOwnerSession('${eid}')" ${hasSession ? '' : 'disabled style="opacity:.4"'} title="${hasSession ? '세션 강제 종료' : '활성 세션 없음'}">세션끊기</button>`;
+        actions = `${kickBtn}<button class="btn-err btn-sm" onclick="deleteOwner('${eid}')">삭제</button>`;
       }
 
-      const expandRow = isExpanded ? `<tr id="ownerExpandRow_${eid}"><td colspan="8" style="padding:0;">
+      const expandRow = isExpanded ? `<tr id="ownerExpandRow_${eid}"><td colspan="9" style="padding:0;">
         <div style="background:var(--bg3);border-top:1px solid var(--border);padding:14px 20px;" id="ownerExpandContent_${eid}">
           <div style="font-size:12px;color:var(--muted)">불러오는 중...</div>
         </div>
@@ -1545,6 +1558,7 @@
         <td style="font-size:12px">${o.name ? String(o.name).replace(/</g,'&lt;') : '<span style="color:var(--muted)">-</span>'}</td>
         <td style="font-size:12px;color:var(--muted)">${o.telegram ? String(o.telegram).replace(/</g,'&lt;') : '-'}</td>
         <td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600">${o.account_count}개</span></td>
+        <td>${minerBadge}</td>
         <td>${dotHtml}</td>
         <td style="white-space:nowrap;" onclick="event.stopPropagation()">${actions}</td>
       </tr>${expandRow}`;
@@ -2502,6 +2516,15 @@
       showToast('오너 계정이 삭제되었습니다.');
       loadOwnerMgmt();
       document.getElementById('ownerAccountsCard').style.display = 'none';
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function kickOwnerSession(ownerId) {
+    if (!confirm(ownerId + ' 오너의 세션을 강제 종료하시겠습니까?')) return;
+    try {
+      const data = await api('/api/admin/account-owners/' + ownerId + '/kick-session', 'POST');
+      showToast('세션이 종료되었습니다.');
+      loadOwners();
     } catch (e) { showToast(e.message, 'err'); }
   }
 

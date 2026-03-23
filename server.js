@@ -4235,9 +4235,13 @@ app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
     }
     const [rows] = await db.pool.query(
       `SELECT o.id, o.name, o.telegram, o.manager_id, o.status, o.created_at,
-              COUNT(u.id) as account_count
+              COUNT(DISTINCT u.id)                                                  AS account_count,
+              SUM(ms.status = 'running')                                            AS active_miners,
+              IF(COUNT(os.token) > 0, 1, 0)                                        AS has_session
        FROM account_owners o
-       LEFT JOIN users u ON u.owner_id = o.id
+       LEFT JOIN users u         ON u.owner_id  = o.id
+       LEFT JOIN miner_status ms ON ms.user_id  = u.id
+       LEFT JOIN owner_sessions os ON os.owner_id = o.id
        ${where}
        GROUP BY o.id
        ORDER BY FIELD(o.status,'pending','approved','rejected'), o.created_at DESC`,
@@ -4266,6 +4270,19 @@ app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// POST /api/admin/account-owners/:id/kick-session — 오너 세션 강제 종료
+app.post('/api/admin/account-owners/:id/kick-session', requireAdmin, async (req, res) => {
+  try {
+    const ownerId = req.params.id;
+    if (req.admin.role !== 'master') {
+      const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+    }
+    const [result] = await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [ownerId]);
+    res.json({ ok: true, deleted: result.affectedRows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/admin/account-owners/:id/approve — 오너 승인

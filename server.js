@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
@@ -2053,21 +2054,36 @@ app.get('/api/seed/history', async (req, res) => {
   }
 });
 
-// ---------- APK ???? (??? ???) ----------
-// ????? nexus ??? ?? ?? .apk ??? ?????.
+// ---------- APK download (latest .apk in folder) ----------
+// Korean paths in source files often break if editor/encoding is wrong ? use APK_DOWNLOAD_DIR in .env.
+// Default: ~/????/nexus (Desktop folder name as UTF-8 bytes, ASCII-only in this file).
+const _DESKTOP_KO = Buffer.from([
+  0xeb, 0xb0, 0x94, 0xed, 0x83, 0x95, 0xed, 0x99, 0x94, 0xeb, 0xa9, 0xb4,
+]).toString('utf8');
+
+function getApkDownloadDir() {
+  const fromEnv = process.env.APK_DOWNLOAD_DIR && process.env.APK_DOWNLOAD_DIR.trim();
+  if (fromEnv) return path.resolve(fromEnv);
+  return path.join(os.homedir(), _DESKTOP_KO, 'nexus');
+}
+
 app.get('/download/apk', async (req, res) => {
   try {
-    const apkDir = path.join('/home', 'myno', '????', 'nexus');
+    const apkDir = getApkDownloadDir();
 
-    // ?? ? APK ?? ?? ??
-    const files = await fs.promises.readdir(apkDir);
-    const apkFiles = files.filter((name) => name.toLowerCase().endsWith('.apk'));
+    const files = await fs.promises.readdir(apkDir, { withFileTypes: true });
+    const apkFiles = files
+      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.apk'))
+      .map((d) => d.name);
 
     if (apkFiles.length === 0) {
-      return res.status(404).json({ error: 'APK ??? ?? ? ????.' });
+      return res.status(404).json({
+        error: 'No APK file found',
+        dir: apkDir,
+        hint: 'Set APK_DOWNLOAD_DIR in .env to the folder that contains your .apk files',
+      });
     }
 
-    // ?? ??? ??? APK ?? ??
     const stats = await Promise.all(
       apkFiles.map(async (name) => {
         const fullPath = path.join(apkDir, name);
@@ -2079,11 +2095,26 @@ app.get('/download/apk', async (req, res) => {
     stats.sort((a, b) => b.mtime - a.mtime);
     const latest = stats[0];
 
-    // ????? ?? (Content-Disposition: attachment)
-    return res.download(latest.fullPath, latest.name);
+    // RFC 5987: Korean/non-ASCII filenames in Content-Disposition
+    const safeAscii = latest.name.replace(/[^\x20-\x7E]/g, '_') || 'app.apk';
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.android.package-archive'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(latest.name)}`
+    );
+
+    return res.sendFile(path.resolve(latest.fullPath));
   } catch (error) {
-    console.error('APK ???? ??:', error);
-    return res.status(500).json({ error: 'APK ???? ? ?? ??? ??????.' });
+    console.error('APK download error:', error.message, getApkDownloadDir());
+    return res.status(500).json({
+      error: 'APK download failed',
+      message: error.message,
+      dir: getApkDownloadDir(),
+      hint: 'Check APK_DOWNLOAD_DIR in .env and filesystem permissions',
+    });
   }
 });
 
@@ -4204,7 +4235,7 @@ app.post('/api/owner/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/owner/logout-all ? ??/?? ??? owner_sessions ?? ?? (?? ? ?·?? ? ????)
+// POST /api/owner/logout-all ? ??/?? ??? owner_sessions ?? ?? (?? ? ???? ? ????)
 app.post('/api/owner/logout-all', requireOwnerSession, async (req, res) => {
   try {
     await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [req.owner.id]);

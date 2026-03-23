@@ -468,6 +468,25 @@
   </div>
 </div>
 
+<!-- ====== 기기 비밀번호 변경 모달 ====== -->
+<div id="devicePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:360px;width:100%;box-shadow:var(--shadow-lg);position:relative;">
+    <button onclick="closeDevicePwModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">🔑 기기 비밀번호 변경</div>
+    <div id="devicePwTargetLabel" style="font-size:12px;color:var(--ac);margin-bottom:16px;"></div>
+    <div class="form-group" style="margin:0 0 12px;">
+      <label>새 비밀번호</label>
+      <input type="password" id="devicePwNew" placeholder="새 비밀번호" autocomplete="new-password">
+    </div>
+    <div class="form-group" style="margin:0 0 16px;">
+      <label>새 비밀번호 확인</label>
+      <input type="password" id="devicePwConfirm" placeholder="비밀번호 재입력" autocomplete="new-password">
+    </div>
+    <button class="btn-ac" style="width:100%;padding:13px;" onclick="saveDevicePw()">변경</button>
+    <p id="devicePwMsg" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center;"></p>
+  </div>
+</div>
+
 <!-- ====== 공지 팝업 ====== -->
 <div id="noticePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:600;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-lg);position:relative;">
@@ -1035,6 +1054,7 @@
         </div>
         <div class="card-actions" onclick="event.stopPropagation()">
           <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:rgba(124,111,255,.4);">QR충전</button>
+          <button class="btn-ghost btn-sm" onclick="openDevicePwModal('${uid}')">PW변경</button>
           <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
         </div>
       </div>`;
@@ -1707,6 +1727,40 @@
           </a>
         </div>`).join('');
     } catch (e) { el.innerHTML = `<div class="no-data" style="color:var(--err);">${esc(e.message)}</div>`; }
+  }
+
+  /* ===================== DEVICE PASSWORD ===================== */
+  let _devicePwTarget = null;
+
+  function openDevicePwModal(userId) {
+    _devicePwTarget = userId;
+    document.getElementById('devicePwTargetLabel').textContent = '기기: ' + userId;
+    document.getElementById('devicePwNew').value = '';
+    document.getElementById('devicePwConfirm').value = '';
+    document.getElementById('devicePwMsg').textContent = '';
+    document.getElementById('devicePwModal').style.display = 'flex';
+  }
+
+  function closeDevicePwModal() {
+    document.getElementById('devicePwModal').style.display = 'none';
+    _devicePwTarget = null;
+  }
+
+  async function saveDevicePw() {
+    const newPw  = document.getElementById('devicePwNew').value;
+    const cfmPw  = document.getElementById('devicePwConfirm').value;
+    const msgEl  = document.getElementById('devicePwMsg');
+    msgEl.textContent = '';
+    if (!newPw)           { msgEl.style.color='var(--err)'; msgEl.textContent='새 비밀번호를 입력하세요.'; return; }
+    if (newPw !== cfmPw)  { msgEl.style.color='var(--err)'; msgEl.textContent='비밀번호가 일치하지 않습니다.'; return; }
+    if (!_devicePwTarget) return;
+    try {
+      const r = await ownerFetch('/api/owner/accounts/' + encodeURIComponent(_devicePwTarget) + '/password', 'PATCH', { new_password: newPw });
+      const data = await r.json();
+      if (!r.ok) { msgEl.style.color='var(--err)'; msgEl.textContent=data.error||'변경 실패'; return; }
+      msgEl.style.color='var(--ok)'; msgEl.textContent='비밀번호가 변경되었습니다.';
+      setTimeout(closeDevicePwModal, 1000);
+    } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message||'오류'; }
   }
 
   /* ===================== MY ACCOUNT ===================== */

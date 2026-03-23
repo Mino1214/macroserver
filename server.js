@@ -4014,6 +4014,28 @@ app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
   }
 });
 
+// PATCH /api/owner/accounts/:id/password — 기기 비밀번호 변경 (오너/매니저만)
+app.patch('/api/owner/accounts/:id/password', requireOwnerSession, async (req, res) => {
+  try {
+    const targetId = req.params.id.toLowerCase();
+    const { new_password } = req.body || {};
+    if (!new_password?.trim()) return res.status(400).json({ error: '새 비밀번호를 입력하세요.' });
+
+    // 소유 확인: users.owner_id = 현재 오너 OR 매니저인 경우 해당 매니저 소속 오너의 기기
+    const [[owns]] = await db.pool.query(
+      `SELECT u.id FROM users u
+       LEFT JOIN account_owners ao ON ao.id = u.owner_id
+       WHERE u.id = ?
+         AND (u.owner_id = ? OR ao.manager_id = ?)`,
+      [targetId, req.owner.id, req.owner.id]
+    );
+    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+
+    await db.pool.query('UPDATE users SET pw = ? WHERE id = ?', [new_password.trim(), targetId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/owner/accounts/:id/mining-records — 특정 계정 채굴 내역
 app.get('/api/owner/accounts/:id/mining-records', requireOwnerSession, async (req, res) => {
   try {

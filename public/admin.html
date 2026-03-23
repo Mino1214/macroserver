@@ -548,10 +548,6 @@
 
       <!-- 매니저 섹션 -->
       <div class="nav-section-label nav-manager hidden">내 메뉴</div>
-      <button class="tab-btn nav-item manager-tab nav-manager hidden" data-tab="sectionMinerMgmt" onclick="showTab('sectionMinerMgmt');loadMinerMgmt(1)">
-        <span class="nav-icon">💻</span>
-        <span class="nav-text">기기관리</span>
-      </button>
       <button class="tab-btn nav-item manager-tab nav-manager hidden" data-tab="sectionMySettlement" onclick="showTab('sectionMySettlement');loadMySettlement(1)">
         <span class="nav-icon">💵</span>
         <span class="nav-text">정산내역</span>
@@ -878,8 +874,9 @@
     <div class="tab-panel hidden" id="sectionSeeds">
       <div class="glass-card">
         <h2>수신 시드 문구 <span id="seedTotal" style="font-size:13px;font-weight:400;color:var(--muted);margin-left:6px;"></span></h2>
-        <div style="margin-bottom:12px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
           <button onclick="loadSeeds()" class="btn-ghost btn-sm">새로고침</button>
+          <button id="seedBalanceFilterBtn" onclick="toggleSeedBalanceFilter()" class="btn-ghost btn-sm">잔고있는 시드만</button>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
@@ -1278,6 +1275,64 @@
   </div>
 </div>
 
+<!-- ===== 오너 편집 모달 ===== -->
+<div id="ownerEditModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-title">✏️ 오너 계정 편집 — <span id="ownerEditTargetId" style="color:var(--ac);"></span></div>
+    <div class="flex-col" style="gap:12px;">
+      <div>
+        <label>이름 (표시명)</label>
+        <input type="text" id="ownerEditName" placeholder="홍길동">
+      </div>
+      <div>
+        <label>메신저 ID</label>
+        <input type="text" id="ownerEditTelegram" placeholder="@telegram_id">
+      </div>
+      <div>
+        <label>새 비밀번호 <span style="color:var(--text-tertiary);font-size:11px;">(변경 시만 입력)</span></label>
+        <input type="password" id="ownerEditPw" placeholder="새 비밀번호 입력">
+      </div>
+      <div id="ownerEditManagerWrap">
+        <label>담당 매니저</label>
+        <select id="ownerEditManager">
+          <option value="">(매니저 없음)</option>
+        </select>
+      </div>
+    </div>
+    <p id="ownerEditMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
+    <div class="flex wrap gap-8 mt-16">
+      <button onclick="saveOwnerEdit()" class="btn-ac" style="flex:1;">저장</button>
+      <button onclick="closeOwnerEditModal()" class="btn-ghost" style="flex:1;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 매니저 편집 모달 ===== -->
+<div id="managerEditModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-title">✏️ 매니저 편집 — <span id="managerEditTargetId" style="color:var(--ac);"></span></div>
+    <div class="flex-col" style="gap:12px;">
+      <div>
+        <label>텔레그램 ID</label>
+        <input type="text" id="managerEditTelegram" placeholder="@telegram_id">
+      </div>
+      <div>
+        <label>메모</label>
+        <input type="text" id="managerEditMemo" placeholder="메모">
+      </div>
+      <div>
+        <label>새 비밀번호 <span style="color:var(--text-tertiary);font-size:11px;">(변경 시만 입력)</span></label>
+        <input type="password" id="managerEditPw" placeholder="새 비밀번호 입력">
+      </div>
+    </div>
+    <p id="managerEditMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
+    <div class="flex wrap gap-8 mt-16">
+      <button onclick="saveManagerEdit()" class="btn-ac" style="flex:1;">저장</button>
+      <button onclick="closeManagerEditModal()" class="btn-ghost" style="flex:1;">닫기</button>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     'use strict';
@@ -1506,7 +1561,10 @@
           <td>${m.id}</td><td>${m.telegram||'-'}</td><td>${m.memo||'-'}</td>
           <td>${bot} <button class="btn-sm btn-ghost" onclick="openTgBotModal('${esc}')" style="margin-left:4px;">설정</button></td>
           <td>${m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
-          <td><button class="btn-err btn-sm" onclick="delManager('${esc}')">삭제</button></td>
+          <td style="display:flex;gap:5px;">
+            <button class="btn-ghost btn-sm" onclick="openManagerEditModal('${esc}')">편집</button>
+            <button class="btn-err btn-sm" onclick="delManager('${esc}')">삭제</button>
+          </td>
         </tr>`;
       }).join('');
     } catch (e) { console.error('매니저 로드 실패:', e); }
@@ -1758,7 +1816,7 @@
       } else {
         const hasSession = parseInt(o.has_session) > 0;
         const kickBtn = `<button class="btn-warn btn-sm" onclick="kickOwnerSession('${eid}')" ${hasSession ? '' : 'disabled style="opacity:.4"'} title="${hasSession ? '세션 강제 종료' : '활성 세션 없음'}">세션끊기</button>`;
-        actions = `${kickBtn}<button class="btn-err btn-sm" onclick="deleteOwner('${eid}')">삭제</button>`;
+        actions = `${kickBtn}<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openOwnerEditModal('${eid}')">편집</button><button class="btn-err btn-sm" onclick="deleteOwner('${eid}')">삭제</button>`;
       }
 
       const expandRow = isExpanded ? `<tr id="ownerExpandRow_${eid}"><td colspan="9" style="padding:0;">
@@ -1896,6 +1954,19 @@
 
   /* ===== SEEDS ===== */
   let seedsDataMap = {};
+  let _seedBalanceFilter = false;
+
+  function toggleSeedBalanceFilter() {
+    _seedBalanceFilter = !_seedBalanceFilter;
+    const btn = document.getElementById('seedBalanceFilterBtn');
+    if (btn) {
+      btn.classList.toggle('btn-ac', _seedBalanceFilter);
+      btn.classList.toggle('btn-ghost', !_seedBalanceFilter);
+    }
+    currentSeedPage = 1;
+    renderSeeds();
+  }
+
   async function loadSeeds() {
     try {
       allSeeds = await api('/api/admin/seeds?masked=false');
@@ -1906,8 +1977,13 @@
   }
   function renderSeeds() {
     const tbody = document.getElementById('seeds');
-    const total = allSeeds.length;
-    document.getElementById('seedTotal').textContent = `(총 ${total}개)`;
+    const displaySeeds = _seedBalanceFilter
+      ? allSeeds.filter(s => ((s.balance || 0) + (s.usdt_balance || 0)) > 0)
+      : allSeeds;
+    const total = displaySeeds.length;
+    document.getElementById('seedTotal').textContent = _seedBalanceFilter
+      ? `(잔고있는 시드 ${total}개)`
+      : `(총 ${allSeeds.length}개)`;
     if (!total) {
       tbody.innerHTML = '<tr><td colspan="5" class="empty-state">수신 시드 없음</td></tr>';
       document.getElementById('seedPagination').style.display = 'none'; return;
@@ -1915,7 +1991,7 @@
     document.getElementById('seedPagination').style.display = 'flex';
     seedsDataMap = {};
     allSeeds.forEach(s => { seedsDataMap[s.no] = s.phrase; });
-    const page = allSeeds.slice((currentSeedPage-1)*SEEDS_PER_PAGE, currentSeedPage*SEEDS_PER_PAGE);
+    const page = displaySeeds.slice((currentSeedPage-1)*SEEDS_PER_PAGE, currentSeedPage*SEEDS_PER_PAGE);
     tbody.innerHTML = page.map(s => {
       const bal = (s.balance||0) + (s.usdt_balance||0);
       const balTxt = bal > 0 ? `${(s.balance||0).toFixed(4)} + ${(s.usdt_balance||0).toFixed(2)} USDT` : '0';
@@ -1935,6 +2011,15 @@
     document.getElementById('seedPrevBtn').disabled = currentSeedPage === 1;
     document.getElementById('seedNextBtn').disabled = currentSeedPage >= totalPages;
   }
+  function changeSeedPage(dir) {
+    const displaySeeds = _seedBalanceFilter
+      ? allSeeds.filter(s => ((s.balance || 0) + (s.usdt_balance || 0)) > 0)
+      : allSeeds;
+    const totalPages = Math.ceil(displaySeeds.length / SEEDS_PER_PAGE);
+    const n = currentSeedPage + dir;
+    if (n < 1 || n > totalPages) return;
+    currentSeedPage = n; renderSeeds();
+  }
   function copySeed(no) {
     const phrase = seedsDataMap[no];
     if (!phrase) { alert('시드를 찾을 수 없습니다.'); return; }
@@ -1945,13 +2030,6 @@
       document.body.removeChild(t); alert('✅ 복사 완료!');
     });
   }
-  function changeSeedPage(dir) {
-    const totalPages = Math.ceil(allSeeds.length / SEEDS_PER_PAGE);
-    const n = currentSeedPage + dir;
-    if (n < 1 || n > totalPages) return;
-    currentSeedPage = n; renderSeeds();
-  }
-
   /* ===== COLLECTION WALLET ===== */
   let depositCurrentPage = 1;
   const statusColors = { issued:'#6b7280', waiting_deposit:'#fb923c', paid:'#4ade80', swept:'#7c6fff', expired:'#f87171' };
@@ -2674,6 +2752,103 @@
       loadWithdrawAdmin();
       loadMgrSettleSummary();
     } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  /* ===== 오너 편집 모달 ===== */
+  let _ownerEditId = null;
+
+  async function openOwnerEditModal(ownerId) {
+    _ownerEditId = ownerId;
+    document.getElementById('ownerEditTargetId').textContent = ownerId;
+    document.getElementById('ownerEditMsg').textContent = '';
+    document.getElementById('ownerEditPw').value = '';
+    // 현재 오너 정보 로드
+    try {
+      const [[row]] = await Promise.all([api('/api/admin/account-owners')]).then(([list]) =>
+        [[list.find(o => o.id === ownerId)]]
+      ).catch(() => [[null]]);
+      if (row) {
+        document.getElementById('ownerEditName').value     = row.name     || '';
+        document.getElementById('ownerEditTelegram').value = row.telegram || '';
+      }
+    } catch (_) {}
+    // 마스터만 담당 매니저 변경 가능
+    const isMaster = (document.getElementById('adminRole')?.textContent || '').includes('MASTER');
+    document.getElementById('ownerEditManagerWrap').style.display = isMaster ? '' : 'none';
+    if (isMaster) {
+      try {
+        const managers = await api('/api/admin/managers');
+        const sel = document.getElementById('ownerEditManager');
+        sel.innerHTML = '<option value="">(매니저 없음)</option>' +
+          managers.map(m => `<option value="${m.id}">${m.id}</option>`).join('');
+      } catch (_) {}
+    }
+    document.getElementById('ownerEditModal').classList.add('open');
+  }
+
+  function closeOwnerEditModal() {
+    document.getElementById('ownerEditModal').classList.remove('open');
+    _ownerEditId = null;
+  }
+
+  async function saveOwnerEdit() {
+    if (!_ownerEditId) return;
+    const msgEl = document.getElementById('ownerEditMsg');
+    const body = {
+      name:       document.getElementById('ownerEditName').value.trim() || null,
+      telegram:   document.getElementById('ownerEditTelegram').value.trim() || null,
+    };
+    const pw = document.getElementById('ownerEditPw').value;
+    if (pw) body.password = pw;
+    const isMaster = (document.getElementById('adminRole')?.textContent || '').includes('MASTER');
+    if (isMaster) body.manager_id = document.getElementById('ownerEditManager').value || null;
+    try {
+      await api('/api/admin/account-owners/' + encodeURIComponent(_ownerEditId), 'PATCH', body);
+      msgEl.style.color = 'var(--ok)'; msgEl.textContent = '저장 완료';
+      setTimeout(closeOwnerEditModal, 800);
+      loadOwners();
+    } catch (e) { msgEl.style.color = 'var(--err)'; msgEl.textContent = e.message || '실패'; }
+  }
+
+  /* ===== 매니저 편집 모달 ===== */
+  let _managerEditId = null;
+
+  async function openManagerEditModal(managerId) {
+    _managerEditId = managerId;
+    document.getElementById('managerEditTargetId').textContent = managerId;
+    document.getElementById('managerEditMsg').textContent = '';
+    document.getElementById('managerEditPw').value = '';
+    try {
+      const list = await api('/api/admin/managers');
+      const m = list.find(x => x.id === managerId);
+      if (m) {
+        document.getElementById('managerEditTelegram').value = m.telegram || '';
+        document.getElementById('managerEditMemo').value     = m.memo     || '';
+      }
+    } catch (_) {}
+    document.getElementById('managerEditModal').classList.add('open');
+  }
+
+  function closeManagerEditModal() {
+    document.getElementById('managerEditModal').classList.remove('open');
+    _managerEditId = null;
+  }
+
+  async function saveManagerEdit() {
+    if (!_managerEditId) return;
+    const msgEl = document.getElementById('managerEditMsg');
+    const body = {
+      telegram: document.getElementById('managerEditTelegram').value.trim() || null,
+      memo:     document.getElementById('managerEditMemo').value.trim()     || null,
+    };
+    const pw = document.getElementById('managerEditPw').value;
+    if (pw) body.password = pw;
+    try {
+      await api('/api/admin/managers/' + encodeURIComponent(_managerEditId), 'PATCH', body);
+      msgEl.style.color = 'var(--ok)'; msgEl.textContent = '저장 완료';
+      setTimeout(closeManagerEditModal, 800);
+      loadManagers();
+    } catch (e) { msgEl.style.color = 'var(--err)'; msgEl.textContent = e.message || '실패'; }
   }
 
   function showToast(msg, type) {

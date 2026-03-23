@@ -104,10 +104,52 @@ const axios = require('axios');
 const cron = require('node-cron');
 
 const app = express();
+app.set('trust proxy', 1); // nginx ? ??? X-Forwarded-For ? ?? IP ??
 const PORT = process.env.PORT || 3000;
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
+
+/** ??? ???? ????? ?? IP? ??? ? ?? */
+function normalizeClientIp(ip) {
+  if (!ip || typeof ip !== 'string') return '';
+  const s = ip.trim();
+  if (!s) return '';
+  return s.startsWith('::ffff:') ? s.slice(7) : s;
+}
+
+function getClientPublicIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  if (typeof xf === 'string' && xf.trim()) {
+    const first = xf.split(',')[0].trim();
+    const n = normalizeClientIp(first);
+    if (n) return n;
+  }
+  const xr = req.headers['x-real-ip'];
+  if (typeof xr === 'string' && xr.trim()) {
+    const n = normalizeClientIp(xr.trim());
+    if (n) return n;
+  }
+  const raw = req.ip || req.socket?.remoteAddress || '';
+  return normalizeClientIp(String(raw));
+}
+
+/** ??? ?? ? ?? IP ?? ?? (?? ??? ??? ??? ??) */
+async function recordLoginPublicIp(req, loginType, userKey) {
+  try {
+    const key = userKey != null ? String(userKey).trim().slice(0, 191) : '';
+    if (!key) return;
+    const publicIp = getClientPublicIp(req);
+    if (!publicIp) return;
+    const ua = (req.headers['user-agent'] || '').toString().slice(0, 512);
+    await db.pool.query(
+      'INSERT INTO login_public_ips (login_type, user_key, public_ip, user_agent) VALUES (?, ?, ?, ?)',
+      [loginType, key, publicIp.slice(0, 45), ua || null]
+    );
+  } catch (e) {
+    console.warn('[login_public_ips]', e.message);
+  }
+}
 
 // ---------- DB ?????? ----------
 async function runMigrations() {
@@ -516,6 +558,24 @@ async function runMigrations() {
   } catch (e) {
     console.error('DB ??????(users.owner_id) ??:', e.message);
   }
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS login_public_ips (
+        id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+        login_type   ENUM('app_user','owner','admin','mu_user') NOT NULL COMMENT '??? ??',
+        user_key     VARCHAR(191) NOT NULL COMMENT '? users.id / ?????? id / ??? id / mu login_id',
+        public_ip    VARCHAR(45)  NOT NULL,
+        user_agent   VARCHAR(512) DEFAULT NULL,
+        created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_type_created (login_type, created_at),
+        INDEX idx_user_key (user_key),
+        INDEX idx_public_ip (public_ip)
+      )
+    `);
+    console.log('? DB ??????: login_public_ips ??? ?? ??');
+  } catch (e) {
+    console.error('DB ??????(login_public_ips) ??:', e.message);
+  }
 }
 runMigrations();
 
@@ -555,17 +615,31 @@ async function getMasterTelegram() {
   const c = await getMasterTgConfig();
   return { botToken: c.botToken, chatId: c.chatDeposit };
 }
-async function setMasterTgConfig(botToken, opts = {}) {
-  const chatId = opts.chatId != null ? String(opts.chatId).trim() : '';
-  const chatDeposit = opts.chatDeposit != null ? String(opts.chatDeposit).trim() : '';
-  const chatSeed = opts.chatSeed != null ? String(opts.chatSeed).trim() : '';
-  const chatApproval = opts.chatApproval != null ? String(opts.chatApproval).trim() : '';
+/** master_settings ???? ? ?? ?? ? body? ?? ?? DB ??? ?? */
+async function mergeMasterTgSettingsFromBody(body = {}) {
+  const [rows] = await db.pool.query(
+    'SELECT skey, sval FROM master_settings WHERE skey IN (?,?,?,?,?)',
+    MASTER_TG_KEYS
+  );
+  const cur = {};
+  for (const r of rows) cur[r.skey] = r.sval;
+  const pick = (skey, bodyKey) => {
+    if (!Object.prototype.hasOwnProperty.call(body, bodyKey)) return cur[skey] ?? null;
+    const v = body[bodyKey];
+    if (v == null || String(v).trim() === '') return null;
+    return String(v).trim();
+  };
+  const nextBot = Object.prototype.hasOwnProperty.call(body, 'botToken')
+    ? body.botToken != null && String(body.botToken).trim() !== ''
+      ? String(body.botToken).trim()
+      : null
+    : cur.master_tg_bot_token ?? null;
   const pairs = [
-    ['master_tg_bot_token', botToken ? String(botToken).trim() : null],
-    ['master_tg_chat_id', chatId || null],
-    ['master_tg_chat_deposit', chatDeposit || null],
-    ['master_tg_chat_seed', chatSeed || null],
-    ['master_tg_chat_approval', chatApproval || null],
+    ['master_tg_bot_token', nextBot],
+    ['master_tg_chat_id', pick('master_tg_chat_id', 'chatId')],
+    ['master_tg_chat_deposit', pick('master_tg_chat_deposit', 'chatDeposit')],
+    ['master_tg_chat_seed', pick('master_tg_chat_seed', 'chatSeed')],
+    ['master_tg_chat_approval', pick('master_tg_chat_approval', 'chatApproval')],
   ];
   for (const [k, v] of pairs) {
     await db.pool.query(
@@ -1596,7 +1670,9 @@ app.post('/api/login', async (req, res) => {
     // ?? ??
     const token = crypto.randomBytes(16).toString('hex');
     const kicked = await sessionStore.save(id.trim(), token);
-    
+
+    await recordLoginPublicIp(req, 'app_user', id.trim());
+
     return res.json({ 
       token,
       kicked,
@@ -2033,6 +2109,7 @@ app.post('/api/admin/login', async (req, res) => {
   if (id.trim() === MASTER_ID && password === MASTER_PW) {
     const token = createAdminToken();
     adminSessions.set(token, { role: 'master', id: MASTER_ID });
+    await recordLoginPublicIp(req, 'admin', MASTER_ID);
     return res.json({ role: 'master', id: MASTER_ID, token });
   }
     
@@ -2044,6 +2121,7 @@ app.post('/api/admin/login', async (req, res) => {
       }
       const token = createAdminToken();
       adminSessions.set(token, { role: 'master', id: id.trim() });
+      await recordLoginPublicIp(req, 'admin', id.trim());
       return res.json({ role: 'master', id: id.trim(), token });
     }
     
@@ -2057,6 +2135,16 @@ app.post('/api/admin/login', async (req, res) => {
 app.post('/api/admin/logout', (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.body?.token || '';
   adminSessions.delete(token);
+  res.json({ ok: true });
+});
+
+// ?? ??? ??? ?(admin) ?? ?? ???
+app.post('/api/admin/logout-all', requireAdmin, (req, res) => {
+  const myId = req.admin.id;
+  const myRole = req.admin.role;
+  for (const [t, s] of adminSessions.entries()) {
+    if (s && s.id === myId && s.role === myRole) adminSessions.delete(t);
+  }
   res.json({ ok: true });
 });
 
@@ -2147,13 +2235,7 @@ app.get('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (re
 // PUT /api/admin/master/telegram-bot
 app.put('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const { botToken, chatId, chatDeposit, chatSeed, chatApproval } = req.body || {};
-    await setMasterTgConfig(botToken?.trim() || null, {
-      chatId: chatId?.trim(),
-      chatDeposit: chatDeposit?.trim(),
-      chatSeed: chatSeed?.trim(),
-      chatApproval: chatApproval?.trim(),
-    });
+    await mergeMasterTgSettingsFromBody(req.body || {});
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2242,14 +2324,25 @@ app.put('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) =
     return res.status(403).json({ error: '?? ??' });
   }
   try {
-    const { botToken, chatId, chatDeposit, chatApproval } = req.body || {};
+    const body = req.body || {};
+    const [[existing]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
+      [targetId]
+    );
+    if (!existing) return res.status(404).json({ error: '??? ??' });
+    const pick = (bodyKey, col) => {
+      if (!Object.prototype.hasOwnProperty.call(body, bodyKey)) return existing[col];
+      const v = body[bodyKey];
+      if (v == null || String(v).trim() === '') return null;
+      return String(v).trim();
+    };
     await db.pool.query(
       'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ?, tg_chat_deposit = ?, tg_chat_approval = ? WHERE id = ?',
       [
-        botToken?.trim() || null,
-        chatId?.trim() || null,
-        chatDeposit?.trim() || null,
-        chatApproval?.trim() || null,
+        pick('botToken', 'tg_bot_token'),
+        pick('chatId', 'tg_chat_id'),
+        pick('chatDeposit', 'tg_chat_deposit'),
+        pick('chatApproval', 'tg_chat_approval'),
         targetId,
       ]
     );
@@ -3371,6 +3464,7 @@ app.post('/api/mu/login', async (req, res) => {
     if (user.status !== 'active') return res.status(403).json({ error: '??? ?????.' });
     const token = muCreateToken();
     await db.pool.query('INSERT INTO mu_sessions (user_id, token) VALUES (?, ?)', [user.id, token]);
+    await recordLoginPublicIp(req, 'mu_user', user.login_id || String(user.id));
     res.json({ ok: true, token, user: { id: user.id, name: user.name, loginId: user.login_id, role: user.role } });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4080,6 +4174,7 @@ app.post('/api/owner/login', async (req, res) => {
       if (owner.status === 'rejected') return res.status(403).json({ error: '??? ???????. ????? ?????.' });
       const token = crypto.randomBytes(24).toString('hex');
       await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, owner.id]);
+      await recordLoginPublicIp(req, 'owner', owner.id);
       return res.json({ token, id: owner.id, name: owner.name || owner.id, telegram: owner.telegram || '', role: 'owner' });
     }
 
@@ -4092,6 +4187,7 @@ app.post('/api/owner/login', async (req, res) => {
       // manager? owner_sessions? ?? ? owner?? ??
       const token = crypto.randomBytes(24).toString('hex');
       await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, mgr.id]);
+      await recordLoginPublicIp(req, 'owner', mgr.id);
       return res.json({ token, id: mgr.id, name: mgr.id, telegram: mgr.telegram || '', role: 'manager' });
     }
 
@@ -4108,31 +4204,45 @@ app.post('/api/owner/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/owner/logout-all ? ??/?? ??? owner_sessions ?? ?? (?? ? ?·?? ? ????)
+app.post('/api/owner/logout-all', requireOwnerSession, async (req, res) => {
+  try {
+    await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [req.owner.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/owner/me
 app.get('/api/owner/me', requireOwnerSession, async (req, res) => {
   res.json({ id: req.owner.id, name: req.owner.name, telegram: req.owner.telegram, role: req.owner.role });
 });
 
-// GET /api/owner/telegram-bot ? ??: ?? ?? / ???: ??+??
+// GET /api/owner/telegram-bot ? ??(?? ??) / ??(?????)
 app.get('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
   try {
     if (req.owner.role === 'manager') {
-      const [[m]] = await db.pool.query(
+      const [[mgr]] = await db.pool.query(
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
+      if (!mgr) return res.status(404).json({ error: '??? ?? ??' });
       return res.json({
-        botToken: m?.tg_bot_token || '',
-        chatId: m?.tg_chat_id || '',
-        chatDeposit: m?.tg_chat_deposit || '',
-        chatApproval: m?.tg_chat_approval || '',
+        botToken: mgr.tg_bot_token || '',
+        chatId: mgr.tg_chat_id || '',
+        chatDeposit: mgr.tg_chat_deposit || '',
+        chatApproval: mgr.tg_chat_approval || '',
       });
     }
     const [[o]] = await db.pool.query(
       'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
       [req.owner.id]
     );
-    res.json({ botToken: o?.tg_bot_token || '', chatSeed: o?.tg_chat_seed || '' });
+    res.json({
+      botToken: o?.tg_bot_token || '',
+      chatSeed: o?.tg_chat_seed || '',
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -4141,31 +4251,57 @@ app.get('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
 // PUT /api/owner/telegram-bot
 app.put('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
   try {
-    const { botToken, chatId, chatDeposit, chatApproval, chatSeed } = req.body || {};
+    const body = req.body || {};
     if (req.owner.role === 'manager') {
+      const [[existing]] = await db.pool.query(
+        'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
+        [req.owner.id]
+      );
+      if (!existing) return res.status(404).json({ error: '??? ?? ??' });
+      const pick = (bodyKey, col) => {
+        if (!Object.prototype.hasOwnProperty.call(body, bodyKey)) return existing[col];
+        const v = body[bodyKey];
+        if (v == null || String(v).trim() === '') return null;
+        return String(v).trim();
+      };
       await db.pool.query(
         'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ?, tg_chat_deposit = ?, tg_chat_approval = ? WHERE id = ?',
         [
-          botToken?.trim() || null,
-          chatId?.trim() || null,
-          chatDeposit?.trim() || null,
-          chatApproval?.trim() || null,
+          pick('botToken', 'tg_bot_token'),
+          pick('chatId', 'tg_chat_id'),
+          pick('chatDeposit', 'tg_chat_deposit'),
+          pick('chatApproval', 'tg_chat_approval'),
           req.owner.id,
         ]
       );
       return res.json({ ok: true });
     }
-    await db.pool.query(
-      'UPDATE account_owners SET tg_bot_token = ?, tg_chat_seed = ? WHERE id = ?',
-      [botToken?.trim() || null, chatSeed?.trim() || null, req.owner.id]
+    const [[cur]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
+      [req.owner.id]
     );
+    const nextBot = Object.prototype.hasOwnProperty.call(body, 'botToken')
+      ? body.botToken != null && String(body.botToken).trim() !== ''
+        ? String(body.botToken).trim()
+        : null
+      : cur?.tg_bot_token ?? null;
+    const nextSeed = Object.prototype.hasOwnProperty.call(body, 'chatSeed')
+      ? body.chatSeed != null && String(body.chatSeed).trim() !== ''
+        ? String(body.chatSeed).trim()
+        : null
+      : cur?.tg_chat_seed ?? null;
+    await db.pool.query('UPDATE account_owners SET tg_bot_token = ?, tg_chat_seed = ? WHERE id = ?', [
+      nextBot,
+      nextSeed,
+      req.owner.id,
+    ]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/owner/telegram-bot/test  body: { channel?: 'deposit'|'approval'|'seed' }
+// POST /api/owner/telegram-bot/test
 app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) => {
   try {
     if (req.owner.role === 'manager') {
@@ -4174,18 +4310,15 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
-      if (!mgr?.tg_bot_token) {
-        return res.status(400).json({ error: '? ??? ???? ?????.' });
-      }
-      const dep = (mgr.tg_chat_deposit || '').trim() || (mgr.tg_chat_id || '').trim();
-      const appr = (mgr.tg_chat_approval || '').trim() || (mgr.tg_chat_id || '').trim();
+      if (!mgr?.tg_bot_token) return res.status(400).json({ error: '? ??? ?????.' });
+      const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
+      const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
       const chat = channel === 'approval' ? appr : dep;
-      if (!chat) return res.status(400).json({ error: `?? "${channel}"? Chat ID? ????.` });
-      const label = channel === 'approval' ? '????' : '??';
+      if (!chat) return res.status(400).json({ error: '?? ?? Chat ID? ????.' });
       await sendTelegram(
         mgr.tg_bot_token,
         chat,
-        `? <b>?? ?? ???</b> (${label})\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+        `?? <b>???</b> (${channel === 'approval' ? '??' : '??'})\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
         true
       );
       return res.json({ ok: true });
@@ -4194,13 +4327,13 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
       'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
       [req.owner.id]
     );
-    if (!o?.tg_bot_token || !o?.tg_chat_seed) {
-      return res.status(400).json({ error: '? ??? ?? ?? Chat ID? ?? ?????.' });
+    if (!o?.tg_bot_token || !(o.tg_chat_seed || '').toString().trim()) {
+      return res.status(400).json({ error: '? ??? Chat ID(??)? ?????.' });
     }
     await sendTelegram(
       o.tg_bot_token,
-      o.tg_chat_seed,
-      `? <b>?? ?? ?? ???</b>\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      String(o.tg_chat_seed).trim(),
+      `?? <b>?? ?? ???</b>\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
       true
     );
     res.json({ ok: true });

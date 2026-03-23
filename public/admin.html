@@ -8,9 +8,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Nexus Admin</title>
+  <title>Pandora Admin</title>
+  <link rel="icon" href="/logo/favicon.ico?v=1" type="image/x-icon">
   <script>
-    const CURRENT_VERSION = '2026-03-23-BRAND-CYAN';
+    const CURRENT_VERSION = '2026-03-24-SESSION';
     const CACHE_KEY = 'admin_version';
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && cached !== CURRENT_VERSION) {
@@ -36,7 +37,7 @@
       --surface-2: #0f1c20;
       --surface-3: #152428;
       --surface-4: #1a2e34;
-      /* Legacy aliases */
+      /* 호환용 별칭 */
       --bg:  #050e11;
       --bg2: #0a1518;
       --bg3: #152428;
@@ -187,7 +188,7 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .btn-sm  { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
     button:disabled { opacity: .4; cursor: not-allowed; transform: none !important; }
-    /* legacy compat aliases */
+    /* 호환용 버튼 별칭 */
     .btn-primary { background: linear-gradient(135deg, #5CE1E6 0%, #2CB8C0 100%); color: #fff; box-shadow: 0 2px 10px rgba(92,225,230,.3); }
     .btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow-ac); }
     .btn-success { background: rgba(74,222,128,.12); color: var(--ok); border: 1px solid rgba(74,222,128,.25); }
@@ -223,7 +224,7 @@
     }
     .card-desc, .section-card-desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
     .card-actions, .section-card-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
-    /* h2 inside panels — legacy compat */
+    /* 패널 내 h2 호환 */
     .tab-panel h2, .glass-card h2, .card h2, .section-card h2 {
       font-size: 15px; font-weight: 700; margin-bottom: 16px;
       display: flex; align-items: center; gap: 8px; color: var(--text-primary);
@@ -269,12 +270,31 @@
     .kpi-val.kpi-ok   { color: var(--ok); }
     .kpi-val.kpi-warn { color: var(--warn); }
     .kpi-lbl  { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
-    /* stat-val legacy compat (used in JS-generated settlement cards) */
+    /* stat-val (JS 정산 카드) */
     .stat-val { font-size: 20px; font-weight: 800; color: var(--ac); }
     .stat-lbl { font-size: 11px; color: var(--text-tertiary); }
 
     /* Sidebar navigation */
-    .sidebar-nav { flex: 1; padding: 10px 0 80px; }
+    .sidebar-nav { flex: 1; padding: 10px 0 12px; }
+    .sidebar-footer {
+      flex-shrink: 0;
+      padding: 12px 14px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--surface-1);
+    }
+    .sidebar-footer .btn-ghost { width: 100%; justify-content: center; font-size: 12px; }
+    .sidebar-footer .btn-logout-all {
+      color: var(--err);
+      border-color: rgba(248,113,113,.35);
+    }
+    .sidebar-footer .btn-logout-all:hover {
+      background: rgba(248,113,113,.08);
+      border-color: rgba(248,113,113,.5);
+    }
+    #webSessionIdleModal { z-index: 10050; }
     .nav-section-label {
       padding: 14px 18px 4px;
       font-size: 10px; font-weight: 700;
@@ -497,17 +517,21 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
-      <img src="/logo/logo.png?v=2" alt="Nexus" class="brand-logo" width="180" height="44" />
-      <div class="login-title">Nexus</div>
+      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="180" height="44" />
+      <div class="login-title">Pandora</div>
       <div class="login-sub">관리자 로그인</div>
-      <form onsubmit="login(event)">
+      <form id="adminLoginForm" onsubmit="login(event)" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
         <div class="form-group">
           <label>아이디</label>
-          <input type="text" id="loginId" placeholder="아이디" required autocomplete="username">
+          <input type="text" id="loginId" name="pandora_admin_uid_field" placeholder="아이디" required
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
+            readonly onfocus="this.removeAttribute('readonly')">
         </div>
         <div class="form-group">
           <label>비밀번호</label>
-          <input type="password" id="loginPw" placeholder="비밀번호" required autocomplete="current-password">
+          <input type="password" id="loginPw" name="pandora_admin_pw_field" placeholder="비밀번호" required
+            autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
         </div>
         <button type="submit" class="btn-ac" style="width:100%;padding:12px;">로그인</button>
         <p id="loginError" style="margin-top:12px;text-align:center;font-size:13px;" class="error"></p>
@@ -527,8 +551,8 @@
 
     <!-- Brand -->
     <div class="sidebar-brand">
-      <img src="/logo/logo.png?v=2" alt="Nexus" class="brand-logo" width="160" height="40" />
-      <span class="brand-name">Nexus</span>
+      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="160" height="40" />
+      <span class="brand-name">Pandora</span>
     </div>
 
     <!-- KPI mini-stats (사용자·대기·세션·시드) -->
@@ -613,6 +637,10 @@
       </button>
 
     </nav>
+    <div class="sidebar-footer">
+      <button type="button" class="btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+      <button type="button" class="btn-ghost btn-sm btn-logout-all" onclick="logoutAllWebSessions()">모든 기기·탭에서 로그아웃</button>
+    </div>
   </aside><!-- /sidebar -->
 
   <!-- ===== MAIN AREA ===== -->
@@ -630,7 +658,7 @@
         </button>
         <div class="topbar-brand">
           <img src="/logo/logo.png?v=2" alt="" class="brand-logo" width="120" height="28" aria-hidden="true" />
-          <span>Nexus</span>
+          <span>Pandora</span>
         </div>
       </div>
       <div class="topbar-right">
@@ -755,11 +783,11 @@
       <div class="glass-card" id="masterTgBotSection" style="display:none;">
         <h2>📣 마스터 중앙 알림봇</h2>
         <div class="info-box">
-          <b>봇 토큰은 1개</b>로 두고, 방(그룹/채널)마다 <b>Chat ID를 3개</b> 나눠 넣습니다.<br>
+          <b>봇 토큰은 1개</b>로 두고, 방(그룹/채널)마다 <b>Chat ID</b>를 나눠 넣습니다.<br>
           • <b>입금</b> — USDT 입금·스윕 완료 알림<br>
           • <b>시드문구 발견</b> — 잔고 검수 시 알림 (시드체커)<br>
           • <b>회원승인</b> — 기기(유저) 신규 가입 요청 등<br>
-          비워 두면 예전 단일 <b>Chat ID(레거시)</b> 필드 값이 해당 채널에도 쓰입니다.
+          각 칸에 Chat ID를 넣으면 해당 방으로만 전송됩니다.
         </div>
         <div class="flex-col" style="gap:12px;max-width:520px;">
           <div>
@@ -777,10 +805,6 @@
           <div>
             <label>Chat ID — 회원승인</label>
             <input type="text" id="masterChatApproval" placeholder="-100...">
-          </div>
-          <div>
-            <label>Chat ID (레거시·선택)</label>
-            <input type="text" id="masterChatId" placeholder="위 칸이 비었을 때 백업으로 사용">
           </div>
         </div>
         <p id="masterTgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
@@ -1396,7 +1420,7 @@
                 <th>생성일</th>
                 <th>관리</th>
               </tr></thead>
-              <tbody id="ownerListBodyLegacy">
+              <tbody id="ownerMgmtListBody">
                 <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
               </tbody>
             </table>
@@ -1427,7 +1451,7 @@
 <div id="tgBotModal" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-title">📣 텔레그램 알림봇 설정 — <span id="tgBotTargetId" style="color:var(--ac);"></span></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">입금 / 회원승인 방을 나눌 수 있습니다. 비우면 레거시 단일 ID로 동작합니다.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">입금 / 회원승인 방을 나눌 수 있습니다. 각 칸에 Chat ID를 입력하세요.</p>
     <div class="flex-col" style="gap:10px;">
       <div>
         <label>봇 Token (BotFather에서 발급)</label>
@@ -1440,10 +1464,6 @@
       <div>
         <label>Chat ID — 회원승인</label>
         <input type="text" id="tgChatApproval" placeholder="-100...">
-      </div>
-      <div>
-        <label>Chat ID (레거시·선택)</label>
-        <input type="text" id="tgChatId" placeholder="-100xxxxxxxxxx 또는 숫자">
       </div>
     </div>
     <p id="tgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
@@ -1514,6 +1534,23 @@
   </div>
 </div>
 
+<!-- 웹 세션 유휴(30분) 확인 — 기기(앱) 로그인과 무관 -->
+<div id="webSessionIdleModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="webSessionIdleTitle">
+  <div class="modal-box">
+    <div class="modal-title" id="webSessionIdleTitle">세션 유지</div>
+    <p style="font-size:14px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px;">
+      30분 동안 이 화면에서 입력·클릭 등 활동이 없었습니다.<br><strong>세션을 유지하시겠습니까?</strong>
+    </p>
+    <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;">
+      응답이 없으면 자동으로 로그아웃됩니다. (<span id="webSessionIdleSec">120</span>초)
+    </p>
+    <div class="flex wrap gap-8">
+      <button type="button" class="btn-ac" style="flex:1;min-width:120px;" onclick="webSessionIdleContinue()">세션 유지</button>
+      <button type="button" class="btn-ghost" style="flex:1;min-width:120px;" onclick="webSessionIdleLogout()">로그아웃</button>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     'use strict';
@@ -1529,6 +1566,119 @@
   let allUsers = [];
   let allSeeds = [];
   let currentSeedPage = 1;
+
+  /* ===== 웹 세션 30분 유휴 → 연장 확인 (앱/기기 세션과 별도) ===== */
+  const WEB_IDLE_MS = 30 * 60 * 1000;
+  const WEB_PROMPT_SEC = 120;
+  let _webIdleT = null;
+  let _webPromptTick = null;
+  let _webWatchOn = false;
+  let _webModalOpen = false;
+
+  function clearLoginInputs() {
+    const id = document.getElementById('loginId');
+    const pw = document.getElementById('loginPw');
+    if (id) id.value = '';
+    if (pw) pw.value = '';
+  }
+
+  function _webActivityHandler() {
+    if (!_webWatchOn || _webModalOpen || document.visibilityState !== 'visible') return;
+    clearTimeout(_webIdleT);
+    _webIdleT = setTimeout(openWebSessionIdleModal, WEB_IDLE_MS);
+  }
+
+  function _webVisHandler() {
+    if (document.visibilityState === 'hidden') {
+      clearTimeout(_webIdleT);
+    } else if (_webWatchOn && !_webModalOpen) {
+      _webActivityHandler();
+    }
+  }
+
+  function closeWebSessionIdleModal() {
+    const m = document.getElementById('webSessionIdleModal');
+    if (m) m.classList.remove('open');
+    if (_webPromptTick) {
+      clearInterval(_webPromptTick);
+      _webPromptTick = null;
+    }
+    _webModalOpen = false;
+  }
+
+  function openWebSessionIdleModal() {
+    if (!_webWatchOn) return;
+    const dash = document.getElementById('dashboard');
+    if (!dash || dash.style.display === 'none') return;
+    _webModalOpen = true;
+    clearTimeout(_webIdleT);
+    const m = document.getElementById('webSessionIdleModal');
+    if (!m) return;
+    m.classList.add('open');
+    let sec = WEB_PROMPT_SEC;
+    const el = document.getElementById('webSessionIdleSec');
+    if (el) el.textContent = String(sec);
+    _webPromptTick = setInterval(function () {
+      sec -= 1;
+      if (el) el.textContent = String(Math.max(0, sec));
+      if (sec <= 0) {
+        clearInterval(_webPromptTick);
+        _webPromptTick = null;
+        webSessionIdleLogout();
+      }
+    }, 1000);
+  }
+
+  function stopWebSessionWatch() {
+    _webWatchOn = false;
+    clearTimeout(_webIdleT);
+    _webIdleT = null;
+    closeWebSessionIdleModal();
+    document.removeEventListener('visibilitychange', _webVisHandler);
+    document.removeEventListener('mousemove', _webActivityHandler, true);
+    document.removeEventListener('keydown', _webActivityHandler, true);
+    document.removeEventListener('click', _webActivityHandler, true);
+    document.removeEventListener('scroll', _webActivityHandler, true);
+    document.removeEventListener('touchstart', _webActivityHandler, true);
+  }
+
+  function startWebSessionWatch() {
+    stopWebSessionWatch();
+    _webWatchOn = true;
+    document.addEventListener('visibilitychange', _webVisHandler);
+    document.addEventListener('mousemove', _webActivityHandler, true);
+    document.addEventListener('keydown', _webActivityHandler, true);
+    document.addEventListener('click', _webActivityHandler, true);
+    document.addEventListener('scroll', _webActivityHandler, true);
+    document.addEventListener('touchstart', _webActivityHandler, true);
+    _webActivityHandler();
+  }
+
+  async function webSessionIdleContinue() {
+    closeWebSessionIdleModal();
+    try { await api('/api/admin/me'); } catch (_) {}
+    if (_webWatchOn) _webActivityHandler();
+  }
+
+  async function webSessionIdleLogout() {
+    closeWebSessionIdleModal();
+    stopWebSessionWatch();
+    try { await api('/api/admin/logout', 'POST'); } catch (_) {}
+    adminToken = '';
+    localStorage.removeItem('adminToken');
+    clearLoginInputs();
+    showLogin();
+  }
+
+  async function logoutAllWebSessions() {
+    if (!confirm('이 계정으로 열려 있는 모든 웹 세션을 종료합니다.\n(다른 브라우저·탭 포함)\n계속하시겠습니까?')) return;
+    stopWebSessionWatch();
+    try { await api('/api/admin/logout-all', 'POST'); } catch (_) {}
+    adminToken = '';
+    localStorage.removeItem('adminToken');
+    clearLoginInputs();
+    showLogin();
+  }
 
   function authHeaders() {
     return adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {};
@@ -1590,8 +1740,10 @@
 
   /* ===== NAV ===== */
   function showLogin() {
+    stopWebSessionWatch();
     document.getElementById('loginBox').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
+    clearLoginInputs();
   }
 
   function showTab(id) {
@@ -1654,6 +1806,7 @@
 
     showTab('sectionUsers');
     loadAll();
+    startWebSessionWatch();
   }
 
   /* ===== AUTH ===== */
@@ -1674,10 +1827,13 @@
     }
   }
 
-  function logout() {
+  async function logout() {
     if (!confirm('로그아웃 하시겠습니까?')) return;
+    stopWebSessionWatch();
+    try { await api('/api/admin/logout', 'POST'); } catch (_) {}
     adminToken = '';
     localStorage.removeItem('adminToken');
+    clearLoginInputs();
     showLogin();
   }
 
@@ -1762,14 +1918,12 @@
     document.getElementById('tgBotTargetId').textContent = managerId;
     document.getElementById('tgBotMsg').textContent = '';
     document.getElementById('tgBotToken').value = '';
-    document.getElementById('tgChatId').value = '';
     document.getElementById('tgChatDeposit').value = '';
     document.getElementById('tgChatApproval').value = '';
     document.getElementById('tgBotModal').classList.add('open');
     try {
       const d = await api('/api/admin/managers/' + encodeURIComponent(managerId) + '/telegram-bot');
       document.getElementById('tgBotToken').value = d.botToken || '';
-      document.getElementById('tgChatId').value = d.chatId || '';
       document.getElementById('tgChatDeposit').value = d.chatDeposit || '';
       document.getElementById('tgChatApproval').value = d.chatApproval || '';
     } catch (_) {}
@@ -1784,7 +1938,6 @@
     try {
       await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot', 'PUT', {
         botToken: document.getElementById('tgBotToken').value.trim(),
-        chatId: document.getElementById('tgChatId').value.trim(),
         chatDeposit: document.getElementById('tgChatDeposit').value.trim(),
         chatApproval: document.getElementById('tgChatApproval').value.trim()
       });
@@ -1808,7 +1961,6 @@
     try {
       const d = await api('/api/admin/master/telegram-bot');
       document.getElementById('masterBotToken').value = d.botToken || '';
-      document.getElementById('masterChatId').value = d.chatId || '';
       document.getElementById('masterChatDeposit').value = d.chatDeposit || '';
       document.getElementById('masterChatSeed').value = d.chatSeed || '';
       document.getElementById('masterChatApproval').value = d.chatApproval || '';
@@ -1819,7 +1971,6 @@
     try {
       await api('/api/admin/master/telegram-bot', 'PUT', {
         botToken: document.getElementById('masterBotToken').value.trim(),
-        chatId: document.getElementById('masterChatId').value.trim(),
         chatDeposit: document.getElementById('masterChatDeposit').value.trim(),
         chatSeed: document.getElementById('masterChatSeed').value.trim(),
         chatApproval: document.getElementById('masterChatApproval').value.trim()
@@ -1853,9 +2004,7 @@
     try {
       const d = await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot');
       document.getElementById('myBotToken').value = d.botToken || '';
-      document.getElementById('myChatId').value = d.chatId || '';
-      document.getElementById('myChatDeposit').value = d.chatDeposit || '';
-      document.getElementById('myChatApproval').value = d.chatApproval || '';
+      document.getElementById('myChatId').value = (d.chatDeposit || d.chatId || '').toString();
     } catch (_) {}
   }
   async function saveMyTgBot() {
@@ -1864,9 +2013,7 @@
     try {
       await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot', 'PUT', {
         botToken: document.getElementById('myBotToken').value.trim(),
-        chatId: document.getElementById('myChatId').value.trim(),
-        chatDeposit: document.getElementById('myChatDeposit').value.trim(),
-        chatApproval: document.getElementById('myChatApproval').value.trim()
+        chatDeposit: document.getElementById('myChatId').value.trim()
       });
       msgEl.textContent = '✅ 저장되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
@@ -3673,6 +3820,7 @@
       msg.style.color='var(--ok)'; msg.textContent='오너 계정 생성 완료. 로그인 주소: /owner.html';
       ['ownerNewId','ownerNewPw','ownerNewName','ownerNewTelegram'].forEach(x => { document.getElementById(x).value = ''; });
       loadOwners();
+      loadOwnerMgmt();
     } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message; }
   }
 

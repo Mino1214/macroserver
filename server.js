@@ -3772,7 +3772,7 @@ app.post('/api/owner/create-account', requireOwnerSession, async (req, res) => {
     // owner의 manager_id를 referral로 사용
     const managerId = req.owner.managerId || '';
     await db.pool.query(
-      'INSERT INTO users (id, password, manager_id, telegram, status, owner_id) VALUES (?, ?, ?, ?, "pending", ?)',
+      'INSERT INTO users (id, pw, manager_id, telegram, status, owner_id) VALUES (?, ?, ?, ?, "pending", ?)',
       [newId, password.trim(), managerId, telegram?.trim() || '', req.owner.id]
     );
     res.json({ ok: true, id: newId });

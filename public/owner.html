@@ -700,10 +700,10 @@
       const statusTxt = a.isExpired ? '만료' : a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
       const uid = escJs(a.id);
       const isSel = _bulkSelected.has(a.id);
-      return `<div class="account-card${isSel ? ' selected' : ''}" id="card_${esc(a.id)}">
+      return `<div class="account-card${isSel ? ' selected' : ''}" id="card_${esc(a.id)}" onclick="toggleBulkSelect('${uid}')" style="cursor:pointer;">
         <div class="ac-header">
           <div style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" class="dev-chk" id="chk_${esc(a.id)}" ${isSel ? 'checked' : ''} onchange="toggleBulkSelect('${uid}')">
+            <input type="checkbox" class="dev-chk" id="chk_${esc(a.id)}" ${isSel ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleBulkSelect('${uid}')">
             <span class="status-dot ${dotCls}"></span>
             <span class="ac-id">${esc(a.id)}</span>
           </div>
@@ -717,7 +717,7 @@
           <div class="ac-row"><span class="ac-label">만료일</span><span style="font-size:12px;color:var(--muted)">${expStr}</span></div>
           <div class="ac-row"><span class="ac-label">남은 일수</span><span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span></div>
         </div>
-        <div class="ac-actions">
+        <div class="ac-actions" onclick="event.stopPropagation()">
           <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
           <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
         </div>

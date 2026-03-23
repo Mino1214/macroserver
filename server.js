@@ -3820,12 +3820,16 @@ app.patch('/api/admin/managers/:id/settlement-rate', requireAdmin, requireMaster
   }
 });
 
-// GET /api/admin/withdrawals — 전체 출금 신청 목록
+// GET /api/admin/withdrawals — 전체 출금 신청 목록 (status, manager_id 필터 지원)
 app.get('/api/admin/withdrawals', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const status = req.query.status || null;
-    const whereClause = status ? 'WHERE status = ?' : '';
-    const params = status ? [status] : [];
+    const status    = req.query.status     || null;
+    const managerId = req.query.manager_id || null;
+    const conds  = [];
+    const params = [];
+    if (status)    { conds.push('status = ?');     params.push(status); }
+    if (managerId) { conds.push('manager_id = ?'); params.push(managerId); }
+    const whereClause = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const [rows] = await db.pool.query(
       `SELECT id, manager_id, amount, wallet_address, status, reject_reason, requested_at, processed_at
        FROM withdrawal_requests ${whereClause} ORDER BY requested_at DESC`,
@@ -3894,7 +3898,7 @@ app.get('/api/admin/master/settlement-overview', requireAdmin, requireMaster, as
 app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, async (req, res) => {
   try {
     const [rows] = await db.pool.query(
-      `SELECT m.id, m.telegram, m.settlement_rate,
+      `SELECT m.id, m.telegram, m.memo, m.settlement_rate,
               COALESCE(s.total_earned, 0) as total_earned,
               COALESCE(w.total_withdrawn, 0) as total_withdrawn,
               COALESCE(s.total_earned, 0) - COALESCE(w.total_withdrawn, 0) as balance

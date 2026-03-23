@@ -1224,11 +1224,27 @@
         </div>
       </div>
 
-      <!-- 총판별 정산 요약 -->
+      <!-- 총판 카드 목록 -->
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h2 style="margin:0">총판 목록</h2>
+            <span id="mgrFilterBadge" style="display:none;background:var(--ac);color:#fff;font-size:11px;padding:2px 10px;border-radius:20px;font-weight:600;"></span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button id="clearMgrFilterBtn" class="btn-ghost btn-sm" onclick="clearMgrFilter()" style="display:none;">✕ 전체 보기</button>
+            <button class="btn-ghost btn-sm" onclick="loadSettleMgmt()">새로고침</button>
+          </div>
+        </div>
+        <div id="mgrCardGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">
+          <div style="color:var(--muted);font-size:13px;">불러오는 중...</div>
+        </div>
+      </div>
+
+      <!-- 총판별 정산 현황 테이블 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-          <h2 style="margin:0">총판별 정산 현황</h2>
-          <button class="btn-ac btn-sm" onclick="loadSettleMgmt()">새로고침</button>
+          <h2 style="margin:0" id="settleTableTitle">총판별 정산 현황</h2>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
@@ -1236,6 +1252,7 @@
               <thead><tr>
                 <th>총판 ID</th>
                 <th>메신저 ID</th>
+                <th>메모</th>
                 <th>정산 비율</th>
                 <th>누적 수익</th>
                 <th>출금 완료</th>
@@ -1243,12 +1260,13 @@
                 <th>비율 변경</th>
               </tr></thead>
               <tbody id="mgrSettleBody">
-                <tr><td colspan="7" class="no-data">불러오는 중...</td></tr>
+                <tr><td colspan="8" class="no-data">불러오는 중...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
       <!-- 출금 신청 관리 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
@@ -2955,6 +2973,9 @@
   // =============================================
   // 정산 관리 (마스터)
   // =============================================
+  let _selectedMgr    = null;  // 현재 선택된 총판 ID (null = 전체)
+  let _mgrSettleData  = [];   // 마지막 로드한 매니저 정산 데이터 캐시
+
   async function loadSettleMgmt() {
     await Promise.all([loadMasterOverview(), loadMgrSettleSummary(), loadWithdrawAdmin()]);
   }
@@ -2987,32 +3008,123 @@
 
   async function loadMgrSettleSummary() {
     const tbody = document.getElementById('mgrSettleBody');
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">불러오는 중...</td></tr>';
+    const grid  = document.getElementById('mgrCardGrid');
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">불러오는 중...</td></tr>';
+    if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:13px;">불러오는 중...</div>';
     try {
       const data = await api('/api/admin/managers/settlement-summary');
-      const managers = data.managers || [];
-      if (!managers.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="no-data">총판이 없습니다.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = managers.map(function(m) {
-        const mid = String(m.id).replace(/'/g,"'");
-        return '<tr>' +
-          '<td><b>' + String(m.id).replace(/</g,'&lt;') + '</b></td>' +
-          '<td style="color:var(--muted)">' + (m.telegram ? String(m.telegram).replace(/</g,'&lt;') : '-') + '</td>' +
-          '<td><span style="color:var(--ac);font-weight:600">' + m.settlement_rate + '%</span></td>' +
-          '<td>' + Number(m.total_earned).toFixed(4) + ' USDT</td>' +
-          '<td>' + Number(m.total_withdrawn).toFixed(4) + ' USDT</td>' +
-          '<td style="color:var(--ok);font-weight:600">' + Number(m.balance).toFixed(4) + ' USDT</td>' +
-          '<td><div style="display:flex;gap:4px;align-items:center">' +
-            '<input type="number" id="rateInput_' + mid + '" min="0" max="100" step="0.1" value="' + m.settlement_rate + '" style="width:65px;padding:4px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
-            '<button class="btn-ghost btn-sm" onclick="saveSettleRate(\'' + mid + '\')">적용</button>' +
-          '</div></td>' +
-          '</tr>';
-      }).join('');
+      _mgrSettleData = data.managers || [];
+      renderMgrCards();
+      renderMgrSettleTable();
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + String(e.message).replace(/</g,'&lt;') + '</td></tr>';
+      if (grid)  grid.innerHTML  = '<div style="color:var(--err);font-size:13px;">' + String(e.message).replace(/</g,'&lt;') + '</div>';
     }
+  }
+
+  function renderMgrCards() {
+    const grid = document.getElementById('mgrCardGrid');
+    if (!grid) return;
+    if (!_mgrSettleData.length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;">등록된 총판 없음</div>';
+      return;
+    }
+    grid.innerHTML = _mgrSettleData.map(m => {
+      const mid      = String(m.id);
+      const midEsc   = mid.replace(/'/g, "\\'").replace(/</g,'&lt;');
+      const midDisp  = mid.replace(/</g,'&lt;');
+      const selected = _selectedMgr === mid;
+      const bal      = Number(m.balance);
+      const tg       = m.telegram ? String(m.telegram).replace(/</g,'&lt;') : '';
+      const memo     = m.memo     ? String(m.memo).replace(/</g,'&lt;').replace(/"/g,'&quot;') : '';
+      return `<div onclick="selectMgrFilter('${midEsc}')"
+        style="background:var(--bg3);border:2px solid ${selected ? 'var(--ac)' : 'var(--border)'};border-radius:14px;padding:14px 15px;cursor:pointer;transition:border-color .15s;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-weight:700;font-size:14px;">${midDisp}</span>
+          ${selected ? '<span style="background:var(--ac);color:#fff;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;">선택됨</span>' : ''}
+        </div>
+        ${tg ? `<div style="font-size:11px;color:var(--muted);margin-bottom:5px;">📣 ${tg}</div>` : ''}
+        <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <div style="font-size:12px;">정산율 <b style="color:var(--ac);">${m.settlement_rate}%</b></div>
+          <div style="font-size:12px;">잔액 <b style="color:${bal > 0 ? 'var(--ok)' : 'var(--muted)'};">${bal.toFixed(2)} USDT</b></div>
+        </div>
+        <div onclick="event.stopPropagation();" style="display:flex;gap:5px;align-items:center;">
+          <input type="text" id="memoInput_${midDisp}" value="${memo}"
+            placeholder="메모 (이름, 연락처 등)"
+            style="flex:1;min-width:0;font-size:12px;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--fg);">
+          <button class="btn-ghost btn-xs" onclick="saveMgrMemo('${midEsc}')">저장</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderMgrSettleTable() {
+    const tbody    = document.getElementById('mgrSettleBody');
+    const titleEl  = document.getElementById('settleTableTitle');
+    const list     = _selectedMgr
+      ? _mgrSettleData.filter(m => String(m.id) === _selectedMgr)
+      : _mgrSettleData;
+
+    if (titleEl) titleEl.textContent = _selectedMgr
+      ? `정산 현황 — ${_selectedMgr}`
+      : '총판별 정산 현황';
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">총판이 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function(m) {
+      const mid = String(m.id).replace(/'/g,"\'");
+      return '<tr>' +
+        '<td><b>' + String(m.id).replace(/</g,'&lt;') + '</b></td>' +
+        '<td style="color:var(--muted)">' + (m.telegram ? String(m.telegram).replace(/</g,'&lt;') : '-') + '</td>' +
+        '<td style="font-size:12px;color:var(--muted)">' + (m.memo ? String(m.memo).replace(/</g,'&lt;') : '-') + '</td>' +
+        '<td><span style="color:var(--ac);font-weight:600">' + m.settlement_rate + '%</span></td>' +
+        '<td>' + Number(m.total_earned).toFixed(4) + ' USDT</td>' +
+        '<td>' + Number(m.total_withdrawn).toFixed(4) + ' USDT</td>' +
+        '<td style="color:var(--ok);font-weight:600">' + Number(m.balance).toFixed(4) + ' USDT</td>' +
+        '<td><div style="display:flex;gap:4px;align-items:center">' +
+          '<input type="number" id="rateInput_' + mid + '" min="0" max="100" step="0.1" value="' + m.settlement_rate + '" style="width:65px;padding:4px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+          '<button class="btn-ghost btn-sm" onclick="saveSettleRate(\'' + mid + '\')">적용</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function selectMgrFilter(id) {
+    _selectedMgr = (_selectedMgr === id) ? null : id;
+    const badge  = document.getElementById('mgrFilterBadge');
+    const clrBtn = document.getElementById('clearMgrFilterBtn');
+    if (badge)  { badge.textContent = _selectedMgr ? _selectedMgr + ' 선택됨' : ''; badge.style.display = _selectedMgr ? '' : 'none'; }
+    if (clrBtn) { clrBtn.style.display = _selectedMgr ? '' : 'none'; }
+    renderMgrCards();
+    renderMgrSettleTable();
+    loadWithdrawAdmin();
+  }
+
+  function clearMgrFilter() {
+    _selectedMgr = null;
+    const badge  = document.getElementById('mgrFilterBadge');
+    const clrBtn = document.getElementById('clearMgrFilterBtn');
+    if (badge)  badge.style.display = 'none';
+    if (clrBtn) clrBtn.style.display = 'none';
+    renderMgrCards();
+    renderMgrSettleTable();
+    loadWithdrawAdmin();
+  }
+
+  async function saveMgrMemo(managerId) {
+    const inputEl = document.getElementById('memoInput_' + managerId);
+    if (!inputEl) return;
+    const memo = inputEl.value.trim();
+    try {
+      await api('/api/admin/managers/' + encodeURIComponent(managerId), 'PATCH', { memo });
+      showToast(managerId + ' 메모 저장됨', 'ok');
+      // 캐시 갱신
+      const m = _mgrSettleData.find(x => String(x.id) === managerId);
+      if (m) m.memo = memo;
+      renderMgrSettleTable();
+    } catch (e) { showToast(e.message || '저장 실패', 'err'); }
   }
 
   async function saveSettleRate(managerId) {
@@ -3032,7 +3144,9 @@
     const status = selEl ? selEl.value : '';
     tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
     try {
-      const data = await api('/api/admin/withdrawals' + (status ? '?status=' + status : ''));
+      let qs = status ? '?status=' + status : '';
+      if (_selectedMgr) qs += (qs ? '&' : '?') + 'manager_id=' + encodeURIComponent(_selectedMgr);
+      const data = await api('/api/admin/withdrawals' + qs);
       const rows = data.withdrawals || [];
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-data">출금 신청이 없습니다.</td></tr>';

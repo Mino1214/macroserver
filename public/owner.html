@@ -514,16 +514,26 @@
       <span style="color:var(--muted)">접속:</span>
       <span class="sidebar-user-chip" id="sidebarUser">-</span>
     </div>
+    <div id="sidebarRoleBadge" style="display:none;margin:0 14px 8px;padding:4px 10px;background:rgba(124,111,255,.15);border:1px solid rgba(124,111,255,.3);border-radius:20px;font-size:11px;font-weight:700;color:var(--ac);text-align:center;">총판</div>
     <nav class="sidebar-nav">
-      <button class="nav-item active" data-tab="tabDevices" onclick="switchTab('tabDevices')">
+      <!-- 오너 전용 탭 -->
+      <button class="nav-item active owner-tab" data-tab="tabDevices" onclick="switchTab('tabDevices')">
         <span class="nav-icon">💻</span><span>기기 목록</span>
       </button>
-      <button class="nav-item" data-tab="tabCreate" onclick="switchTab('tabCreate')">
+      <button class="nav-item owner-tab" data-tab="tabCreate" onclick="switchTab('tabCreate')">
         <span class="nav-icon">➕</span><span>계정 생성</span>
       </button>
-      <button class="nav-item" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds(true)">
+      <button class="nav-item owner-tab" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds(true)">
         <span class="nav-icon">🌱</span><span>시드 현황</span>
       </button>
+      <!-- 매니저 전용 탭 -->
+      <button class="nav-item mgr-tab" data-tab="tabMgrOwners" onclick="switchTab('tabMgrOwners');loadMgrOwners()">
+        <span class="nav-icon">🗂️</span><span>내 오너 목록</span>
+      </button>
+      <button class="nav-item mgr-tab" data-tab="tabMgrSettle" onclick="switchTab('tabMgrSettle');loadMgrSettlement(1)">
+        <span class="nav-icon">💵</span><span>정산/출금</span>
+      </button>
+      <!-- 공통 탭 -->
       <button class="nav-item" data-tab="tabDownloads" onclick="switchTab('tabDownloads');loadDownloadItems()">
         <span class="nav-icon">⬇️</span><span>다운로드</span>
       </button>
@@ -684,6 +694,87 @@
       </div>
     </div><!-- /tabMyAccount -->
 
+    <!-- ===== 탭: 내 오너 목록 (매니저 전용) ===== -->
+    <div class="tab-panel" id="tabMgrOwners">
+      <!-- 오너 생성 카드 -->
+      <div class="glass-card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrOwnerCreateForm()">
+          <span style="font-weight:700;font-size:14px;">➕ 오너 계정 생성 <span style="font-size:11px;color:var(--muted);font-weight:400;">(내 레퍼럴로 즉시 활성)</span></span>
+          <span id="mgrOwnerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
+        </div>
+        <div id="mgrOwnerCreateForm" style="display:none;margin-top:12px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
+            <div><label>오너 ID</label><input type="text"     id="mgrNewOwnerId"   placeholder="로그인 ID"></div>
+            <div><label>비밀번호</label><input type="password" id="mgrNewOwnerPw"   placeholder="비밀번호"></div>
+            <div><label>이름 (선택)</label><input type="text"  id="mgrNewOwnerName" placeholder="홍길동"></div>
+            <div><label>메신저 (선택)</label><input type="text" id="mgrNewOwnerTg"  placeholder="@id"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+            <button class="btn-ac btn-sm" onclick="createOwnerByMgr()">생성</button>
+            <span id="mgrOwnerCreateMsg" style="font-size:13px;min-height:18px;"></span>
+          </div>
+        </div>
+      </div>
+      <!-- 오너 목록 -->
+      <div class="glass-card">
+        <div class="section-header">
+          <span class="section-title">내 오너 목록</span>
+          <button class="btn-ghost btn-sm" onclick="loadMgrOwners()">새로고침</button>
+        </div>
+        <div id="mgrOwnersBody">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div><!-- /tabMgrOwners -->
+
+    <!-- ===== 탭: 정산/출금 (매니저 전용) ===== -->
+    <div class="tab-panel" id="tabMgrSettle">
+      <!-- 요약 KPI -->
+      <div id="mgrSettleSummary" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;"></div>
+      <!-- 정산 내역 -->
+      <div class="glass-card" style="margin-bottom:12px;">
+        <div class="section-header">
+          <span class="section-title">정산 내역</span>
+          <button class="btn-ghost btn-sm" onclick="loadMgrSettlement(1)">새로고침</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>일시</th><th>기기 ID</th><th>결제금액</th><th>정산율</th><th>정산금액</th><th>유형</th>
+            </tr></thead>
+            <tbody id="mgrSettleBody">
+              <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">불러오는 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="mgrSettlePagination" style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px;"></div>
+      </div>
+      <!-- 출금 신청 -->
+      <div class="glass-card">
+        <div class="section-header" style="margin-bottom:14px;">
+          <span class="section-title">출금 신청</span>
+          <button class="btn-ghost btn-sm" onclick="loadMgrWithdrawals()">내역 새로고침</button>
+        </div>
+        <div id="mgrWithdrawBalance" style="font-size:13px;color:var(--muted);margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+          <div style="flex:1;min-width:130px;"><label>금액 (USDT)</label><input type="number" id="mgrWithdrawAmount" placeholder="0.0000" min="0" step="0.0001"></div>
+          <div style="flex:2;min-width:180px;"><label>지갑 주소 (TRC-20)</label><input type="text" id="mgrWithdrawWallet" placeholder="T..."></div>
+          <button class="btn-ac btn-sm" onclick="requestMgrWithdrawal()">출금 신청</button>
+        </div>
+        <p id="mgrWithdrawMsg" style="font-size:13px;min-height:18px;"></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>신청일</th><th>금액</th><th>지갑 주소</th><th>상태</th><th>처리일</th><th>거절 사유</th>
+            </tr></thead>
+            <tbody id="mgrWithdrawBody">
+              <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">불러오는 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /tabMgrSettle -->
+
     </div><!-- /content -->
   </div><!-- /main-area -->
 </div><!-- /appBox -->
@@ -814,6 +905,7 @@
   const API = '';
   let _token    = localStorage.getItem('owner_token') || '';
   let _ownerId  = localStorage.getItem('owner_id')    || '';
+  let _role     = localStorage.getItem('owner_role')  || 'owner'; // 'owner' | 'manager'
   let _accounts = [];
   let _deviceFilter = 'all';
   let _qrUserId = null;
@@ -846,7 +938,11 @@
   async function tryAutoLogin() {
     try {
       const r = await ownerFetch('/api/owner/me');
-      if (r.ok) showApp(); else { clearSession(); showLogin(); }
+      if (r.ok) {
+        const d = await r.json();
+        if (d.role) { _role = d.role; localStorage.setItem('owner_role', _role); }
+        showApp();
+      } else { clearSession(); showLogin(); }
     } catch { clearSession(); showLogin(); }
   }
 
@@ -860,14 +956,36 @@
     document.getElementById('appBox').style.display = 'flex';
     document.getElementById('topUser').textContent = _ownerId;
     if (document.getElementById('sidebarUser')) document.getElementById('sidebarUser').textContent = _ownerId;
-    loadAccounts();
+
+    const isManager = _role === 'manager';
+    // 역할 배지
+    const badge = document.getElementById('sidebarRoleBadge');
+    if (badge) { badge.style.display = isManager ? '' : 'none'; }
+    // 탭 가시성 설정
+    document.querySelectorAll('.owner-tab').forEach(el => el.style.display = isManager ? 'none' : '');
+    document.querySelectorAll('.mgr-tab').forEach(el => el.style.display = isManager ? '' : 'none');
+
+    if (isManager) {
+      // 매니저: 첫 탭 = 내 오너 목록
+      document.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
+      const mgrBtn = document.querySelector('.nav-item[data-tab="tabMgrOwners"]');
+      if (mgrBtn) mgrBtn.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const mgrPanel = document.getElementById('tabMgrOwners');
+      if (mgrPanel) mgrPanel.classList.add('active');
+      loadMgrOwners();
+    } else {
+      // 오너: 기존 플로우
+      loadAccounts();
+    }
     loadPricing();
     loadNoticePopup();
   }
   function clearSession() {
-    _token = ''; _ownerId = '';
+    _token = ''; _ownerId = ''; _role = 'owner';
     localStorage.removeItem('owner_token');
     localStorage.removeItem('owner_id');
+    localStorage.removeItem('owner_role');
   }
 
   /* ===================== LOGIN ===================== */
@@ -886,9 +1004,10 @@
       });
       const data = await r.json();
       if (!r.ok) { err.textContent = data.error || '로그인 실패'; return; }
-      _token = data.token; _ownerId = data.id;
+      _token = data.token; _ownerId = data.id; _role = data.role || 'owner';
       localStorage.setItem('owner_token', _token);
       localStorage.setItem('owner_id', _ownerId);
+      localStorage.setItem('owner_role', _role);
       showApp();
     } catch { err.textContent = '서버 연결 오류'; }
     finally { btn.disabled = false; btn.textContent = '로그인'; }
@@ -1830,6 +1949,171 @@
     t.className = 'show ' + (type || 'ok');
     clearTimeout(t._tid);
     t._tid = setTimeout(() => { t.className = ''; }, 2800);
+  }
+
+  /* ===================== 매니저 전용 기능 ===================== */
+  const _fmtDt = d => {
+    if (!d) return '-';
+    const dt = new Date(d);
+    const p = n => String(n).padStart(2,'0');
+    return isNaN(dt) ? String(d) : `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+  };
+
+  function toggleMgrOwnerCreateForm() {
+    const box = document.getElementById('mgrOwnerCreateForm');
+    const lbl = document.getElementById('mgrOwnerCreateToggle');
+    const open = box.style.display === 'none';
+    box.style.display = open ? '' : 'none';
+    lbl.textContent   = open ? '▲ 닫기' : '▼ 열기';
+  }
+
+  async function createOwnerByMgr() {
+    const id  = document.getElementById('mgrNewOwnerId').value.trim();
+    const pw  = document.getElementById('mgrNewOwnerPw').value.trim();
+    const nm  = document.getElementById('mgrNewOwnerName').value.trim();
+    const tg  = document.getElementById('mgrNewOwnerTg').value.trim();
+    const msg = document.getElementById('mgrOwnerCreateMsg');
+    if (!id || !pw) { msg.style.color='var(--err)'; msg.textContent='ID와 비밀번호는 필수입니다.'; return; }
+    msg.style.color='var(--muted)'; msg.textContent='생성 중...';
+    try {
+      const r = await ownerFetch('/api/owner/mgr/owners', 'POST', { id, password: pw, name: nm||undefined, telegram: tg||undefined });
+      const data = await r.json();
+      if (!r.ok) { msg.style.color='var(--err)'; msg.textContent=data.error||'생성 실패'; return; }
+      msg.style.color='var(--ok)'; msg.textContent='✅ 오너 계정 생성 완료 (로그인: /owner.html)';
+      ['mgrNewOwnerId','mgrNewOwnerPw','mgrNewOwnerName','mgrNewOwnerTg'].forEach(x => { document.getElementById(x).value=''; });
+      loadMgrOwners();
+    } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message||'오류'; }
+  }
+
+  async function loadMgrOwners() {
+    const body = document.getElementById('mgrOwnersBody');
+    if (!body) return;
+    body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const r = await ownerFetch('/api/owner/mgr/owners');
+      const data = await r.json();
+      if (!r.ok) { body.innerHTML = `<div style="color:var(--err);padding:16px;">${data.error||'오류'}</div>`; return; }
+      const owners = data.owners || [];
+      if (!owners.length) {
+        body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px;">등록된 오너가 없습니다.</div>';
+        return;
+      }
+      body.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>오너 ID</th><th>이름</th><th>메신저</th><th>기기수</th><th>상태</th><th>가입일</th></tr></thead>
+        <tbody>${owners.map(o => {
+          const dotCls = o.status==='approved'?'dot-blue':o.status==='rejected'?'dot-red':'dot-orange';
+          const lbl    = o.status==='approved'?'활성':o.status==='rejected'?'거절':'대기';
+          return `<tr>
+            <td><b>${String(o.id).replace(/</g,'&lt;')}</b></td>
+            <td>${o.name?String(o.name).replace(/</g,'&lt;'):'<span style="color:var(--muted)">-</span>'}</td>
+            <td style="color:var(--muted);font-size:12px;">${o.telegram||'-'}</td>
+            <td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">${o.device_count}개</span></td>
+            <td><span class="status-dot ${dotCls}"></span> <span style="font-size:12px;">${lbl}</span></td>
+            <td style="font-size:11px;color:var(--muted);">${_fmtDt(o.created_at)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+    } catch (e) { body.innerHTML = `<div style="color:var(--err);padding:16px;">${e.message}</div>`; }
+  }
+
+  let _mgrSettlePage = 1;
+
+  async function loadMgrSettlement(page) {
+    _mgrSettlePage = page || 1;
+    const tbody   = document.getElementById('mgrSettleBody');
+    const summary = document.getElementById('mgrSettleSummary');
+    const pageEl  = document.getElementById('mgrSettlePagination');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">불러오는 중...</td></tr>';
+    try {
+      const r = await ownerFetch(`/api/owner/mgr/settlements?page=${_mgrSettlePage}&pageSize=20`);
+      const data = await r.json();
+      if (!r.ok) { if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="color:var(--err);text-align:center;padding:16px;">${data.error||'오류'}</td></tr>`; return; }
+
+      // KPI
+      const mkBox = (label, val, unit, color, desc) =>
+        `<div style="flex:1;min-width:160px;background:var(--glass-bg);border:1px solid var(--border);border-radius:14px;padding:16px 14px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${label}</div>
+          <div style="font-size:20px;font-weight:700;color:${color};">${Number(val).toFixed(4)}<span style="font-size:11px;color:var(--muted);margin-left:4px;">${unit}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${desc}</div>
+        </div>`;
+      if (summary) summary.innerHTML =
+        mkBox('💰 누적 수익',   data.totalEarned,    'USDT', 'var(--ac)',  '') +
+        mkBox('✅ 출금 완료',   data.totalWithdrawn, 'USDT', 'var(--ok)',  '') +
+        mkBox('🏦 출금 가능',   data.balance,        'USDT', data.balance>0?'var(--ok)':'var(--muted)', '출금 신청 가능 잔액');
+
+      const records = data.records || [];
+      if (!records.length) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">정산 내역이 없습니다.</td></tr>';
+        if (pageEl) pageEl.innerHTML = '';
+        return;
+      }
+      if (tbody) tbody.innerHTML = records.map(r =>
+        `<tr>
+          <td style="font-size:11px;color:var(--muted);">${_fmtDt(r.created_at)}</td>
+          <td>${String(r.user_id).replace(/</g,'&lt;')}</td>
+          <td>${Number(r.payment_amount).toFixed(4)} USDT</td>
+          <td style="color:var(--ac);">${r.settlement_rate}%</td>
+          <td style="color:var(--ok);font-weight:600;">${Number(r.settlement_amount).toFixed(4)} USDT</td>
+          <td><span style="background:${r.payment_type==='new'?'var(--ac-dim)':'rgba(74,222,128,.1)'};color:${r.payment_type==='new'?'var(--ac)':'var(--ok)'};padding:2px 8px;border-radius:20px;font-size:11px;">${r.payment_type==='new'?'신규':'연장'}</span></td>
+        </tr>`
+      ).join('');
+      const totalPages = Math.ceil(data.total / 20);
+      if (pageEl && totalPages > 1) {
+        pageEl.innerHTML =
+          `<button class="btn-ghost btn-sm" onclick="loadMgrSettlement(${_mgrSettlePage-1})" ${_mgrSettlePage<=1?'disabled':''}>이전</button>
+           <span style="font-size:12px;color:var(--muted);">${_mgrSettlePage}/${totalPages}</span>
+           <button class="btn-ghost btn-sm" onclick="loadMgrSettlement(${_mgrSettlePage+1})" ${_mgrSettlePage>=totalPages?'disabled':''}>다음</button>`;
+      } else if (pageEl) pageEl.innerHTML = '';
+
+      // 출금 내역도 함께 로드
+      loadMgrWithdrawals();
+    } catch (e) { if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="color:var(--err);text-align:center;padding:16px;">${e.message}</td></tr>`; }
+  }
+
+  async function loadMgrWithdrawals() {
+    const tbody   = document.getElementById('mgrWithdrawBody');
+    const balance = document.getElementById('mgrWithdrawBalance');
+    if (!tbody) return;
+    try {
+      const r = await ownerFetch('/api/owner/mgr/withdrawals');
+      const data = await r.json();
+      if (!r.ok) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--err);padding:16px;">${data.error||'오류'}</td></tr>`; return; }
+      if (balance) balance.innerHTML = `출금 가능 잔액: <b style="color:var(--ok);font-size:17px;">${Number(data.balance).toFixed(4)} USDT</b>`;
+      const rows = data.withdrawals || [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">출금 신청 내역이 없습니다.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const stBadge = r.status==='approved'?'badge-run':r.status==='rejected'?'badge-stop':'';
+        const stTxt   = r.status==='approved'?'승인':r.status==='rejected'?'거절':'대기';
+        return `<tr>
+          <td style="font-size:11px;color:var(--muted);">${_fmtDt(r.requested_at)}</td>
+          <td style="font-weight:600;">${Number(r.amount).toFixed(4)} USDT</td>
+          <td style="font-size:11px;color:var(--muted);">${r.wallet_address||'-'}</td>
+          <td><span class="badge ${stBadge}">${stTxt}</span></td>
+          <td style="font-size:11px;color:var(--muted);">${_fmtDt(r.processed_at)}</td>
+          <td style="font-size:11px;color:var(--err);">${r.reject_reason||'-'}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--err);padding:16px;">${e.message}</td></tr>`; }
+  }
+
+  async function requestMgrWithdrawal() {
+    const amount = parseFloat(document.getElementById('mgrWithdrawAmount').value);
+    const wallet = document.getElementById('mgrWithdrawWallet').value.trim();
+    const msg    = document.getElementById('mgrWithdrawMsg');
+    if (!amount || amount <= 0) { msg.style.color='var(--err)'; msg.textContent='금액을 입력하세요.'; return; }
+    msg.style.color='var(--muted)'; msg.textContent='신청 중...';
+    try {
+      const r = await ownerFetch('/api/owner/mgr/withdrawals', 'POST', { amount, wallet_address: wallet });
+      const data = await r.json();
+      if (!r.ok) { msg.style.color='var(--err)'; msg.textContent=data.error||'신청 실패'; return; }
+      msg.style.color='var(--ok)'; msg.textContent='✅ 출금 신청이 완료되었습니다.';
+      document.getElementById('mgrWithdrawAmount').value = '';
+      document.getElementById('mgrWithdrawWallet').value = '';
+      loadMgrWithdrawals();
+    } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message||'오류'; }
   }
 </script>
 </body>

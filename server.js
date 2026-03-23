@@ -1314,20 +1314,34 @@ async function requireOwnerSession(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token || req.body?.token || '';
   if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
-    const [[session]] = await db.pool.query(
+    // 1) account_owners 에서 먼저 확인
+    const [[ownerSess]] = await db.pool.query(
       `SELECT s.owner_id, s.last_activity, o.name, o.telegram, o.manager_id
        FROM owner_sessions s JOIN account_owners o ON s.owner_id = o.id
-       WHERE s.token = ?`,
-      [token]
+       WHERE s.token = ?`, [token]
     );
-    if (!session) return res.status(401).json({ error: '세션이 만료되었습니다.' });
-    const lastActivity = new Date(session.last_activity).getTime();
-    if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
+    if (ownerSess) {
+      if (Date.now() - new Date(ownerSess.last_activity).getTime() > 24 * 60 * 60 * 1000) {
+        await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]);
+        return res.status(401).json({ error: '세션이 만료되었습니다.' });
+      }
+      await db.pool.query('UPDATE owner_sessions SET last_activity = NOW() WHERE token = ?', [token]);
+      req.owner = { id: ownerSess.owner_id, name: ownerSess.name, telegram: ownerSess.telegram, managerId: ownerSess.manager_id, role: 'owner' };
+      return next();
+    }
+    // 2) admins(manager) 에서 확인
+    const [[mgrSess]] = await db.pool.query(
+      `SELECT s.owner_id, s.last_activity, m.telegram
+       FROM owner_sessions s JOIN admins m ON s.owner_id = m.id AND m.role = 'manager'
+       WHERE s.token = ?`, [token]
+    );
+    if (!mgrSess) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+    if (Date.now() - new Date(mgrSess.last_activity).getTime() > 24 * 60 * 60 * 1000) {
       await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]);
       return res.status(401).json({ error: '세션이 만료되었습니다.' });
     }
     await db.pool.query('UPDATE owner_sessions SET last_activity = NOW() WHERE token = ?', [token]);
-    req.owner = { id: session.owner_id, name: session.name, telegram: session.telegram, managerId: session.manager_id };
+    req.owner = { id: mgrSess.owner_id, name: mgrSess.owner_id, telegram: mgrSess.telegram, managerId: null, role: 'manager' };
     next();
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1969,12 +1983,15 @@ app.post('/api/admin/login', async (req, res) => {
     return res.json({ role: 'master', id: MASTER_ID, token });
   }
     
-    // DB에서 매니저/마스터 확인
+    // DB에서 마스터 계정만 허용 (매니저는 owner.html 사용)
     const manager = await db.managerDB.validate(id, password);
     if (manager) {
-    const token = createAdminToken();
-      adminSessions.set(token, { role: manager.role, id: id.trim() });
-      return res.json({ role: manager.role, id: id.trim(), token });
+      if (manager.role !== 'master') {
+        return res.status(403).json({ error: '총판(매니저) 계정은 오너 페이지(/owner.html)를 이용해 주세요.' });
+      }
+      const token = createAdminToken();
+      adminSessions.set(token, { role: 'master', id: id.trim() });
+      return res.json({ role: 'master', id: id.trim(), token });
     }
     
     res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
@@ -4002,7 +4019,7 @@ app.post('/api/owner/logout', async (req, res) => {
 
 // GET /api/owner/me
 app.get('/api/owner/me', requireOwnerSession, async (req, res) => {
-  res.json({ id: req.owner.id, name: req.owner.name, telegram: req.owner.telegram });
+  res.json({ id: req.owner.id, name: req.owner.name, telegram: req.owner.telegram, role: req.owner.role });
 });
 
 // GET /api/owner/accounts — 연결된 유저 계정 목록 + 상태
@@ -4659,6 +4676,93 @@ app.delete('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
 
 // ========== 오너 자신 계정 수정 ==========
 
+// ─────────────────────────────────────────────
+// 매니저가 owner 페이지에서 사용하는 전용 API
+// ─────────────────────────────────────────────
+
+// GET /api/owner/mgr/settlements — 본인 정산 내역 (매니저 전용)
+app.get('/api/owner/mgr/settlements', requireOwnerSession, async (req, res) => {
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  try {
+    const page     = Math.max(1, parseInt(req.query.page)     || 1);
+    const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
+    const offset   = (page - 1) * pageSize;
+    const mid = req.owner.id;
+    const [[{ total }]] = await db.pool.query('SELECT COUNT(*) AS total FROM settlements WHERE manager_id = ?', [mid]);
+    const [records]     = await db.pool.query(
+      `SELECT user_id, payment_amount, settlement_rate, settlement_amount, payment_type, created_at
+       FROM settlements WHERE manager_id = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [mid, pageSize, offset]
+    );
+    const [[te]] = await db.pool.query('SELECT COALESCE(SUM(settlement_amount),0) AS v FROM settlements WHERE manager_id=?', [mid]);
+    const [[tw]] = await db.pool.query("SELECT COALESCE(SUM(amount),0) AS v FROM withdrawal_requests WHERE manager_id=? AND status='approved'", [mid]);
+    res.json({ records, total: Number(total), totalEarned: Number(te.v), totalWithdrawn: Number(tw.v), balance: Number(te.v) - Number(tw.v), page, pageSize });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/owner/mgr/withdrawals — 본인 출금 내역 (매니저 전용)
+app.get('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  try {
+    const [rows] = await db.pool.query(
+      'SELECT id, amount, wallet_address, status, reject_reason, requested_at, processed_at FROM withdrawal_requests WHERE manager_id = ? ORDER BY requested_at DESC',
+      [req.owner.id]
+    );
+    const [[te]] = await db.pool.query('SELECT COALESCE(SUM(settlement_amount),0) AS v FROM settlements WHERE manager_id=?', [req.owner.id]);
+    const [[tw]] = await db.pool.query("SELECT COALESCE(SUM(amount),0) AS v FROM withdrawal_requests WHERE manager_id=? AND status='approved'", [req.owner.id]);
+    res.json({ withdrawals: rows, balance: Number(te.v) - Number(tw.v) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/owner/mgr/withdrawals — 출금 신청 (매니저 전용)
+app.post('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  try {
+    const { amount, wallet_address } = req.body || {};
+    if (!amount || isNaN(amount) || Number(amount) <= 0) return res.status(400).json({ error: '금액을 입력하세요.' });
+    const mid = req.owner.id;
+    const [[te]] = await db.pool.query('SELECT COALESCE(SUM(settlement_amount),0) AS v FROM settlements WHERE manager_id=?', [mid]);
+    const [[tw]] = await db.pool.query("SELECT COALESCE(SUM(amount),0) AS v FROM withdrawal_requests WHERE manager_id=? AND status IN ('approved','pending')", [mid]);
+    const balance = Number(te.v) - Number(tw.v);
+    if (Number(amount) > balance) return res.status(400).json({ error: `출금 가능 잔액 초과 (잔액: ${balance.toFixed(4)} USDT)` });
+    await db.pool.query('INSERT INTO withdrawal_requests (manager_id, amount, wallet_address) VALUES (?, ?, ?)', [mid, Number(amount), wallet_address?.trim() || null]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/owner/mgr/owners — 본인 소속 오너 목록 (매니저 전용)
+app.get('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT o.id, o.name, o.telegram, o.status, o.created_at,
+              COUNT(u.id) AS device_count
+       FROM account_owners o LEFT JOIN users u ON u.owner_id = o.id
+       WHERE o.manager_id = ?
+       GROUP BY o.id ORDER BY o.id`,
+      [req.owner.id]
+    );
+    res.json({ owners: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/owner/mgr/owners — 새 오너 생성 (매니저 자신을 referral)
+app.post('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  try {
+    const { id, password, name, telegram } = req.body || {};
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'ID와 비밀번호는 필수입니다.' });
+    const ownerId = id.trim().toLowerCase();
+    const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
+    if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    await db.pool.query(
+      'INSERT INTO account_owners (id, pw, name, telegram, manager_id, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, req.owner.id, 'approved']
+    );
+    res.json({ ok: true, id: ownerId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PATCH /api/owner/me — 오너/매니저 자신의 계정 정보 수정
 app.patch('/api/owner/me', async (req, res) => {
   try {
@@ -4689,7 +4793,7 @@ app.patch('/api/owner/me', async (req, res) => {
       }
     }
 
-    // 이름/텔레그램 업데이트 (owner_accounts에만 해당)
+    // 이름/텔레그램 업데이트
     const [[existsOwner]] = await db.pool.query('SELECT id FROM account_owners WHERE id=?', [ownerId]);
     if (existsOwner) {
       const fields = []; const vals = [];
@@ -4697,7 +4801,12 @@ app.patch('/api/owner/me', async (req, res) => {
       if (telegram !== undefined) { fields.push('telegram=?'); vals.push(telegram||null); }
       if (fields.length) { vals.push(ownerId); await db.pool.query(`UPDATE account_owners SET ${fields.join(',')} WHERE id=?`, vals); }
     }
-
+    // 매니저인 경우 admins 테이블 telegram 업데이트
+    const [[existsMgr]] = await db.pool.query("SELECT id FROM admins WHERE id=? AND role='manager'", [ownerId]);
+    if (existsMgr && telegram !== undefined) {
+      await db.pool.query("UPDATE admins SET telegram=? WHERE id=? AND role='manager'", [telegram||null, ownerId]);
+    }
+    
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -592,6 +592,8 @@
         <span style="font-size:14px;font-weight:700;color:var(--muted);" id="topbarPageTitle">기기 목록</span>
       </div>
       <div class="topbar-right">
+        <button onclick="setTheme('dark')"  id="themeBtnTopDark"  title="다크모드" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 10px;font-size:14px;border-radius:8px;line-height:1;">🌙</button>
+        <button onclick="setTheme('light')" id="themeBtnTopLight" title="라이트모드" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 10px;font-size:14px;border-radius:8px;line-height:1;">☀️</button>
         <span class="top-user" id="topUser"></span>
         <button class="top-logout" onclick="doLogout()">로그아웃</button>
       </div>
@@ -962,10 +964,16 @@
   }
   function _updateThemeBtns() {
     const isLight = document.body.classList.contains('light');
+    // 내 계정 탭 버튼
     const d = document.getElementById('themeBtnDark');
     const l = document.getElementById('themeBtnLight');
     if (d) d.classList.toggle('active', !isLight);
     if (l) l.classList.toggle('active', isLight);
+    // 탑바 버튼 - 현재 모드 버튼을 accent 색으로 강조
+    const td = document.getElementById('themeBtnTopDark');
+    const tl = document.getElementById('themeBtnTopLight');
+    if (td) { td.style.color = !isLight ? 'var(--ac)' : 'var(--muted)'; td.style.borderColor = !isLight ? 'var(--ac)' : ''; }
+    if (tl) { tl.style.color =  isLight ? 'var(--ac)' : 'var(--muted)'; tl.style.borderColor =  isLight ? 'var(--ac)' : ''; }
   }
 
   const API = '';
@@ -1021,6 +1029,7 @@
     document.getElementById('loginBox').style.display = 'none';
     document.getElementById('appBox').style.display = 'flex';
     document.getElementById('topUser').textContent = _ownerId;
+    _updateThemeBtns();
     if (document.getElementById('sidebarUser')) document.getElementById('sidebarUser').textContent = _ownerId;
 
     const isManager = _role === 'manager';

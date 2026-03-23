@@ -4333,9 +4333,9 @@ app.delete('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
 app.get('/api/admin/account-owners/:id/accounts', requireAdmin, async (req, res) => {
   try {
     const [rows] = await db.pool.query(
-      `SELECT u.id, u.telegram, u.status, u.expire_date,
-              COALESCE(ms.status, 'stopped') AS miner_status,
-              IF(COUNT(s.id) > 0, 1, 0)      AS has_session
+       `SELECT u.id, u.telegram, u.status, u.expire_date,
+              COALESCE(ms.status, 'stopped')  AS miner_status,
+              IF(COUNT(s.token) > 0, 1, 0)    AS has_session
        FROM users u
        LEFT JOIN miner_status ms ON ms.user_id = u.id
        LEFT JOIN sessions s      ON s.user_id = u.id AND s.kicked = FALSE

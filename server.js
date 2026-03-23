@@ -1522,6 +1522,26 @@ app.get('/api/user/subscription', async (req, res) => {
   }
 });
 
+// POST /api/miner/report — 앱이 자동화 시작/종료 시 실제 상태 보고
+app.post('/api/miner/report', async (req, res) => {
+  try {
+    const { token, status } = req.body || {};
+    if (!token) return res.status(401).json({ error: 'token 필요' });
+    if (!['running', 'stopped'].includes(status)) return res.status(400).json({ error: 'status 오류' });
+    const userId = await sessionStore.getUserId(token);
+    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    await db.pool.query(
+      `INSERT INTO miner_status (user_id, status, assigned_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE status = VALUES(status), assigned_at = VALUES(assigned_at)`,
+      [userId, status, status === 'running' ? new Date() : null]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/session/validate', async (req, res) => {
   try {
     const token = req.query.token;

@@ -1980,7 +1980,7 @@
     grid.innerHTML = pkgs.map(p =>
       `<div class="pkg-btn ${p.days === _qrSelectedDays ? 'sel' : ''}" onclick="selectPkg(${p.days},${p.price||0})">
         <div style="font-weight:700">${p.label || p.days + '일'}</div>
-        <div style="color:var(--muted);font-size:11px;margin-top:2px">${p.price ? p.price + ' U' : '-'}</div>
+        <div style="color:var(--muted);font-size:11px;margin-top:2px">${p.price ? p.price + ' USDT' : '-'}</div>
       </div>`
     ).join('');
   }

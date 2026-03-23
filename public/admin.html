@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <meta name="theme-color" content="#0a0b14">
+  <meta name="theme-color" content="#061a1c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Nexus Admin</title>
   <script>
-    const CURRENT_VERSION = '2026-03-23-FIX-PERIOD';
+    const CURRENT_VERSION = '2026-03-23-BRAND-CYAN';
     const CACHE_KEY = 'admin_version';
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && cached !== CURRENT_VERSION) {
@@ -21,27 +21,34 @@
     }
   </script>
   <style>
+    @font-face {
+      font-family: 'SUIT';
+      src: url('/font/SUIT-Bold.ttf?v=2') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
     /* ===== DESIGN SYSTEM TOKENS ===== */
     :root {
-      /* Background scale */
-      --bg-page:   #07080e;
-      --surface-1: #0d0e1b;
-      --surface-2: #131425;
-      --surface-3: #1a1b30;
-      --surface-4: #22243a;
+      /* Background scale (cyan-tinted dark, 로고 톤과 조화) */
+      --bg-page:   #050e11;
+      --surface-1: #0a1518;
+      --surface-2: #0f1c20;
+      --surface-3: #152428;
+      --surface-4: #1a2e34;
       /* Legacy aliases */
-      --bg:  #07080e;
-      --bg2: #0d0e1b;
-      --bg3: #1a1b30;
+      --bg:  #050e11;
+      --bg2: #0a1518;
+      --bg3: #152428;
       /* Border */
-      --border:       rgba(124,111,255,.13);
-      --border-hover: rgba(124,111,255,.30);
-      /* Accent */
-      --ac:        #7c6fff;
-      --ac-dim:    rgba(124,111,255,.10);
-      --ac-soft:   rgba(124,111,255,.18);
-      --ac-glow:   rgba(124,111,255,.30);
-      --ac-strong: #9d93ff;
+      --border:       rgba(92,225,230,.14);
+      --border-hover: rgba(92,225,230,.32);
+      /* Accent — 브랜드 #5CE1E6 */
+      --ac:        #5CE1E6;
+      --ac-dim:    rgba(92,225,230,.10);
+      --ac-soft:   rgba(92,225,230,.18);
+      --ac-glow:   rgba(92,225,230,.30);
+      --ac-strong: #8FF5FA;
       /* Text */
       --text-primary:   #ededff;
       --text-secondary: #9aa3bb;
@@ -57,7 +64,7 @@
       --shadow-sm: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
       --shadow-md: 0 4px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
       --shadow-lg: 0 8px 32px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.35);
-      --shadow-ac: 0 4px 20px rgba(124,111,255,.3), 0 2px 8px rgba(124,111,255,.2);
+      --shadow-ac: 0 4px 20px rgba(92,225,230,.28), 0 2px 8px rgba(92,225,230,.18);
       /* Radius */
       --radius-sm:   8px;
       --radius-md:   12px;
@@ -79,8 +86,8 @@
       --bg:  #f2f3f9;
       --bg2: #ffffff;
       --bg3: #e6e8f2;
-      --border:       rgba(80,70,180,.14);
-      --border-hover: rgba(80,70,180,.32);
+      --border:       rgba(40,150,160,.18);
+      --border-hover: rgba(50,170,180,.35);
       --text-primary:   #151625;
       --text-secondary: #45506e;
       --text-tertiary:  #8892aa;
@@ -94,7 +101,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 15px; -webkit-font-smoothing: antialiased; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-family: 'SUIT', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-weight: 700;
       background: var(--bg-page);
       color: var(--text-primary);
       min-height: 100vh;
@@ -104,14 +112,14 @@
     /* ===== SCROLLBAR ===== */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(124,111,255,.22); border-radius: 99px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(124,111,255,.42); }
+    ::-webkit-scrollbar-thumb { background: rgba(92,225,230,.22); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(92,225,230,.42); }
 
     /* ===== LOGIN ===== */
     #loginBox {
       display: flex; align-items: center; justify-content: center;
       min-height: 100vh; padding: 24px;
-      background: radial-gradient(ellipse at 50% 0%, rgba(124,111,255,.08) 0%, transparent 60%);
+      background: radial-gradient(ellipse at 50% 0%, rgba(92,225,230,.08) 0%, transparent 60%);
     }
     .login-wrap { width: 100%; max-width: 380px; }
     .login-card {
@@ -119,8 +127,15 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-xl);
       padding: 40px 32px;
-      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(124,111,255,.04);
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(92,225,230,.04);
     }
+    .brand-logo {
+      height: 44px; width: auto; max-width: 220px; object-fit: contain;
+      display: block; margin: 0 auto 14px;
+      filter: drop-shadow(0 0 12px rgba(92,225,230,.25));
+    }
+    .sidebar-brand .brand-logo { height: 38px; margin: 0 0 6px; }
+    .topbar-brand .brand-logo { height: 26px; margin: 0; display: inline-block; vertical-align: middle; }
     .login-title {
       font-size: 26px; font-weight: 700; color: var(--ac);
       text-align: center; margin-bottom: 6px; letter-spacing: -0.5px;
@@ -142,7 +157,7 @@
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--ac);
-      box-shadow: 0 0 0 3px rgba(124,111,255,.14), 0 0 12px rgba(124,111,255,.07);
+      box-shadow: 0 0 0 3px rgba(92,225,230,.14), 0 0 12px rgba(92,225,230,.07);
     }
     select option { background: var(--surface-3); color: var(--text-primary); }
 
@@ -153,14 +168,14 @@
       transition: all .18s cubic-bezier(.4,0,.2,1); outline: none; font-family: inherit;
     }
     .btn-ac {
-      background: linear-gradient(135deg, #7c6fff 0%, #6355e8 100%);
-      color: #fff; box-shadow: 0 2px 10px rgba(124,111,255,.35);
+      background: linear-gradient(135deg, #5CE1E6 0%, #2CB8C0 100%);
+      color: #fff; box-shadow: 0 2px 10px rgba(92,225,230,.35);
     }
     .btn-ac:hover {
-      background: linear-gradient(135deg, #8d80ff 0%, #7468f0 100%);
+      background: linear-gradient(135deg, #7EECF1 0%, #4DC8CF 100%);
       box-shadow: var(--shadow-ac); transform: translateY(-1px);
     }
-    .btn-ac:active { transform: translateY(0) scale(.98); box-shadow: 0 1px 6px rgba(124,111,255,.25); }
+    .btn-ac:active { transform: translateY(0) scale(.98); box-shadow: 0 1px 6px rgba(92,225,230,.25); }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-tertiary); }
     .btn-ghost:hover { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
     .btn-ok   { background: rgba(74,222,128,.12);  color: var(--ok);  border: 1px solid rgba(74,222,128,.25); }
@@ -173,7 +188,7 @@
     .btn-sm  { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
     button:disabled { opacity: .4; cursor: not-allowed; transform: none !important; }
     /* legacy compat aliases */
-    .btn-primary { background: linear-gradient(135deg, #7c6fff 0%, #6355e8 100%); color: #fff; box-shadow: 0 2px 10px rgba(124,111,255,.3); }
+    .btn-primary { background: linear-gradient(135deg, #5CE1E6 0%, #2CB8C0 100%); color: #fff; box-shadow: 0 2px 10px rgba(92,225,230,.3); }
     .btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow-ac); }
     .btn-success { background: rgba(74,222,128,.12); color: var(--ok); border: 1px solid rgba(74,222,128,.25); }
     .btn-success:hover { background: rgba(74,222,128,.20); transform: translateY(-1px); }
@@ -203,7 +218,7 @@
     }
     .card-title::before, .section-card-title::before {
       content: ''; width: 3px; height: 16px; flex-shrink: 0;
-      background: linear-gradient(180deg, var(--ac) 0%, rgba(124,111,255,.35) 100%);
+      background: linear-gradient(180deg, var(--ac) 0%, rgba(92,225,230,.35) 100%);
       border-radius: 2px;
     }
     .card-desc, .section-card-desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
@@ -215,7 +230,7 @@
     }
     .tab-panel h2::before, .glass-card h2::before, .card h2::before, .section-card h2::before {
       content: ''; width: 3px; height: 16px; flex-shrink: 0;
-      background: linear-gradient(180deg, var(--ac) 0%, rgba(124,111,255,.35) 100%);
+      background: linear-gradient(180deg, var(--ac) 0%, rgba(92,225,230,.35) 100%);
       border-radius: 2px;
     }
 
@@ -233,12 +248,13 @@
       transition: transform .25s cubic-bezier(.4,0,.2,1);
     }
     .sidebar-brand {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; align-items: center;
       padding: 18px 20px 16px;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(92,225,230,.06) 0%, transparent 100%);
     }
-    .brand-icon { font-size: 22px; color: var(--ac); filter: drop-shadow(0 0 8px rgba(124,111,255,.45)); }
     .brand-name { font-size: 17px; font-weight: 800; color: var(--ac); letter-spacing: -0.5px; }
 
     /* Sidebar KPI mini-stats */
@@ -302,7 +318,10 @@
       flex-shrink: 0; gap: 12px;
     }
     .topbar-left  { display: flex; align-items: center; gap: 10px; }
-    .topbar-brand { font-weight: 800; font-size: 16px; color: var(--ac); letter-spacing: -0.5px; display: none; }
+    .topbar-brand {
+      font-weight: 800; font-size: 16px; color: var(--ac); letter-spacing: -0.5px;
+      display: none; flex-direction: row; align-items: center; gap: 8px;
+    }
     .hamburger {
       display: none; align-items: center; justify-content: center;
       width: 32px; height: 32px; padding: 0;
@@ -318,11 +337,11 @@
       border: 1px solid var(--border); border-radius: 20px;
       font-size: 13px; box-shadow: var(--shadow-sm);
     }
-    .user-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); box-shadow: 0 0 8px rgba(124,111,255,.6); }
+    .user-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); box-shadow: 0 0 8px rgba(92,225,230,.6); }
     .role-tag {
       font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
-      background: linear-gradient(135deg, rgba(124,111,255,.18) 0%, rgba(124,111,255,.07) 100%);
-      color: var(--ac); border: 1px solid rgba(124,111,255,.2);
+      background: linear-gradient(135deg, rgba(92,225,230,.18) 0%, rgba(92,225,230,.07) 100%);
+      color: var(--ac); border: 1px solid rgba(92,225,230,.2);
       text-transform: uppercase; letter-spacing: .5px;
     }
 
@@ -354,10 +373,10 @@
       color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .5px;
       border-bottom: 1px solid var(--border); white-space: nowrap;
     }
-    td { padding: 11px 14px; border-bottom: 1px solid rgba(124,111,255,.05); color: var(--text-primary); vertical-align: middle; }
+    td { padding: 11px 14px; border-bottom: 1px solid rgba(92,225,230,.05); color: var(--text-primary); vertical-align: middle; }
     tbody tr:last-child td { border-bottom: none; }
     tbody tr { transition: background .15s; }
-    tbody tr:hover { background: rgba(124,111,255,.04); }
+    tbody tr:hover { background: rgba(92,225,230,.04); }
     .table-container { border-radius: var(--radius-md); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow-sm); }
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
@@ -366,7 +385,7 @@
     .badge-ok   { background: rgba(74,222,128,.10);  color: var(--ok);  border: 1px solid rgba(74,222,128,.2); }
     .badge-warn { background: rgba(251,146,60,.10);  color: var(--warn); border: 1px solid rgba(251,146,60,.2); }
     .badge-err  { background: rgba(248,113,113,.10); color: var(--err);  border: 1px solid rgba(248,113,113,.2); }
-    .badge-ac   { background: var(--ac-dim);         color: var(--ac);   border: 1px solid rgba(124,111,255,.2); }
+    .badge-ac   { background: var(--ac-dim);         color: var(--ac);   border: 1px solid rgba(92,225,230,.2); }
     .badge-run  { background: rgba(74,222,128,.14);  color: var(--ok);  border: 1px solid rgba(74,222,128,.3); }
     .badge-stop { background: rgba(248,113,113,.10); color: var(--err);  border: 1px solid rgba(248,113,113,.25); }
     .status-badge    { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
@@ -436,7 +455,7 @@
     /* ===== INFO / WARN BOX ===== */
     .info-box {
       padding: 12px 16px; border-radius: var(--radius-sm);
-      background: rgba(124,111,255,.07); border: 1px solid rgba(124,111,255,.16);
+      background: rgba(92,225,230,.07); border: 1px solid rgba(92,225,230,.16);
       font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;
     }
     .warn-box {
@@ -462,7 +481,7 @@
       }
       .sidebar.open { transform: translateX(0); }
       .hamburger { display: flex; }
-      .topbar-brand { display: block; }
+      .topbar-brand { display: flex; }
       .tab-content { padding: 14px; }
       .card, .glass-card, .section-card { padding: 16px; }
     }
@@ -478,6 +497,7 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
+      <img src="/logo/logo.png?v=2" alt="Nexus" class="brand-logo" width="180" height="44" />
       <div class="login-title">Nexus</div>
       <div class="login-sub">관리자 로그인</div>
       <form onsubmit="login(event)">
@@ -507,7 +527,7 @@
 
     <!-- Brand -->
     <div class="sidebar-brand">
-      <span class="brand-icon">⬡</span>
+      <img src="/logo/logo.png?v=2" alt="Nexus" class="brand-logo" width="160" height="40" />
       <span class="brand-name">Nexus</span>
     </div>
 
@@ -608,7 +628,10 @@
             <rect y="13" width="18" height="2" rx="1" fill="currentColor"/>
           </svg>
         </button>
-        <div class="topbar-brand">⬡ Nexus</div>
+        <div class="topbar-brand">
+          <img src="/logo/logo.png?v=2" alt="" class="brand-logo" width="120" height="28" aria-hidden="true" />
+          <span>Nexus</span>
+        </div>
       </div>
       <div class="topbar-right">
         <button onclick="toggleTheme()" class="theme-toggle btn-ghost btn-sm" id="themeToggleBtn" title="라이트/다크 전환">🌙</button>
@@ -1074,12 +1097,12 @@
         <h2>🎁 지급 가능 시드 목록</h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
           <button onclick="loadEventSeeds(1)" class="btn-ghost btn-sm">새로고침</button>
-          <button onclick="recheckAllEventSeeds()" class="btn-sm" style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고확인</button>
+          <button onclick="recheckAllEventSeeds()" class="btn-sm" style="background:#5CE1E6;color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🔄 전체 잔고확인</button>
           <span style="font-size:12px;color:var(--muted);">랜덤 지급:</span>
           <input type="text" id="randomGiftUserId" placeholder="유저 ID" style="width:130px;padding:5px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
           <button onclick="assignRandomGift()" class="btn-sm" style="background:var(--acc);color:#fff;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-size:12px;">🎲 랜덤 지급</button>
         </div>
-        <div id="eventRecheckStatus" style="display:none;font-size:12px;color:#6c63ff;margin-bottom:8px;padding:6px 10px;background:rgba(108,99,255,0.1);border-radius:6px;border-left:3px solid #6c63ff;"></div>
+        <div id="eventRecheckStatus" style="display:none;font-size:12px;color:#5CE1E6;margin-bottom:8px;padding:6px 10px;background:rgba(92,225,230,0.1);border-radius:6px;border-left:3px solid #5CE1E6;"></div>
         <div class="table-container"><div class="table-wrapper">
           <table>
             <thead><tr>
@@ -2415,7 +2438,7 @@
   function copySeed(no) { adminCopySeed(no); }
   /* ===== COLLECTION WALLET ===== */
   let depositCurrentPage = 1;
-  const statusColors = { issued:'#6b7280', waiting_deposit:'#fb923c', paid:'#4ade80', swept:'#7c6fff', expired:'#f87171' };
+  const statusColors = { issued:'#6b7280', waiting_deposit:'#fb923c', paid:'#4ade80', swept:'#5CE1E6', expired:'#f87171' };
 
   async function loadCollectionWallet() {
     try {
@@ -2599,7 +2622,7 @@
           <td style="font-size:11px;">${new Date(s.created_at).toLocaleDateString()}</td>
           <td>
             <button onclick="recheckEventSeed(${s.id})" id="evRecheckBtn_${s.id}" class="btn-sm"
-              style="background:#6c63ff;color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;" title="seed_checker.py로 잔고 확인">🔄</button>
+              style="background:#5CE1E6;color:#fff;border:none;cursor:pointer;padding:3px 8px;border-radius:4px;font-size:11px;" title="seed_checker.py로 잔고 확인">🔄</button>
           </td>
           <td>
             <div style="display:flex;gap:4px;">
@@ -3712,12 +3735,12 @@
         '</tr></thead><tbody>' +
         accounts.map(function(a) {
           return '<tr>' +
-            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)"><b>' + String(a.id).replace(/</g,'&lt;') + '</b></td>' +
-            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)">' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(92,225,230,.07)"><b>' + String(a.id).replace(/</g,'&lt;') + '</b></td>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(92,225,230,.07)">' +
               '<span class="badge ' + (a.status==='approved'?'badge-run':'badge-stop') + '">' + a.status + '</span>' +
             '</td>' +
-            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07);font-size:12px;color:var(--muted)">' + fmtD(a.expire_date) + '</td>' +
-            '<td style="padding:10px;border-bottom:1px solid rgba(124,111,255,.07)">' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(92,225,230,.07);font-size:12px;color:var(--muted)">' + fmtD(a.expire_date) + '</td>' +
+            '<td style="padding:10px;border-bottom:1px solid rgba(92,225,230,.07)">' +
               '<button class="btn-err btn-sm" onclick="unlinkUser(\'' + String(a.id).replace(/'/g,"\\'") + '\')">연결 해제</button>' +
             '</td>' +
           '</tr>';

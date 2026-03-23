@@ -27,6 +27,44 @@
       --shadow-lg: 0 8px 32px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.35);
       --shadow-ac: 0 4px 20px rgba(124,111,255,.3), 0 2px 8px rgba(124,111,255,.2);
     }
+    /* ===== LIGHT MODE ===== */
+    body.light {
+      --bg:        #f2f3f9;
+      --bg2:       #ffffff;
+      --bg3:       #e6e8f2;
+      --border:    rgba(80,70,180,.14);
+      --fg:        #151625;
+      --muted:     #8892aa;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+      --shadow-md: 0 4px 16px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.07);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.13), 0 4px 12px rgba(0,0,0,.08);
+    }
+    body.light input[type=text], body.light input[type=password] {
+      background: var(--bg3); color: var(--fg);
+    }
+    body.light .glass-card, body.light .card { background: var(--bg2); }
+    body.light .sidebar { background: var(--bg2); border-right-color: var(--border); }
+    body.light .sidebar-nav a { color: var(--fg); }
+    body.light .topbar { background: var(--bg2); border-bottom-color: var(--border); }
+    body.light select { background: var(--bg3); color: var(--fg); }
+    body.light input[type=date] { background: var(--bg3); color: var(--fg); color-scheme: light; }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-switch {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .theme-switch label { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); text-transform: none; letter-spacing: 0; flex: 1; }
+    .theme-switch-inner { display: flex; gap: 6px; }
+    .theme-btn {
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700;
+      border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer;
+      transition: all .18s;
+    }
+    .theme-btn.active { background: linear-gradient(135deg,#7c6fff,#6355e8); color: #fff; border-color: transparent; box-shadow: 0 2px 8px rgba(124,111,255,.35); }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 15px; -webkit-font-smoothing: antialiased; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Segoe UI', system-ui, sans-serif;
@@ -672,6 +710,14 @@
           <span class="section-title">내 계정 정보</span>
         </div>
         <div style="max-width:400px;display:grid;gap:14px;">
+          <!-- 테마 토글 -->
+          <div class="theme-switch">
+            <label>화면 테마</label>
+            <div class="theme-switch-inner">
+              <button class="theme-btn" id="themeBtnDark"  onclick="setTheme('dark')">🌙 다크</button>
+              <button class="theme-btn" id="themeBtnLight" onclick="setTheme('light')">☀️ 화이트</button>
+            </div>
+          </div>
           <div class="form-group" style="margin:0;">
             <label>현재 비밀번호</label>
             <input type="password" id="meCurPw" placeholder="현재 비밀번호">
@@ -679,10 +725,6 @@
           <div class="form-group" style="margin:0;">
             <label>새 비밀번호</label>
             <input type="password" id="meNewPw" placeholder="새 비밀번호 (변경 시만 입력)">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>이름 (선택)</label>
-            <input type="text" id="meName" placeholder="홍길동">
           </div>
           <div class="form-group" style="margin:0;">
             <label>메신저 ID (선택)</label>
@@ -902,6 +944,30 @@
 <div id="toast"></div>
 
 <script>
+  /* ===== THEME ===== */
+  (function() {
+    const t = localStorage.getItem('owner_theme');
+    if (t === 'light') document.body.classList.add('light');
+  })();
+
+  function setTheme(mode) {
+    if (mode === 'light') {
+      document.body.classList.add('light');
+      localStorage.setItem('owner_theme', 'light');
+    } else {
+      document.body.classList.remove('light');
+      localStorage.setItem('owner_theme', 'dark');
+    }
+    _updateThemeBtns();
+  }
+  function _updateThemeBtns() {
+    const isLight = document.body.classList.contains('light');
+    const d = document.getElementById('themeBtnDark');
+    const l = document.getElementById('themeBtnLight');
+    if (d) d.classList.toggle('active', !isLight);
+    if (l) l.classList.toggle('active', isLight);
+  }
+
   const API = '';
   let _token    = localStorage.getItem('owner_token') || '';
   let _ownerId  = localStorage.getItem('owner_id')    || '';
@@ -1091,6 +1157,7 @@
     const titleEl = document.getElementById('topbarPageTitle');
     if (titleEl) titleEl.textContent = _tabTitles[id] || '';
     if (window.innerWidth <= 768) closeSidebar();
+    if (id === 'tabMyAccount') _updateThemeBtns();
   }
 
   /* ===================== DEVICES ===================== */
@@ -1926,12 +1993,11 @@
   async function saveMyAccount() {
     const curPw  = document.getElementById('meCurPw').value;
     const newPw  = document.getElementById('meNewPw').value;
-    const name   = document.getElementById('meName').value.trim();
     const tg     = document.getElementById('meTelegram').value.trim();
     const msgEl  = document.getElementById('meMsg');
     msgEl.textContent = '';
     if (newPw && !curPw) { msgEl.style.color='var(--err)'; msgEl.textContent='비밀번호 변경 시 현재 비밀번호를 입력하세요.'; return; }
-    const body = { name: name || null, telegram: tg || null };
+    const body = { telegram: tg || null };
     if (newPw) { body.password = curPw; body.new_password = newPw; }
     try {
       const r = await ownerFetch('/api/owner/me', 'PATCH', body);

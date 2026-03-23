@@ -1343,12 +1343,14 @@
 
   /* ===== SIDEBAR (mobile drawer) ===== */
   function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
+    const isOpen = document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('sidebarOverlay').classList.toggle('open');
+    document.body.style.overflow = isOpen ? 'hidden' : '';
   }
   function closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebarOverlay').classList.remove('open');
+    document.body.style.overflow = '';
   }
 
   /* ===== NAV ===== */
@@ -1363,6 +1365,8 @@
     if (panel) panel.classList.add('active');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll(`.tab-btn[data-tab="${id}"]`).forEach(b => b.classList.add('active'));
+    // 모바일: 탭 클릭 시 사이드바 자동 닫기
+    if (window.innerWidth <= 768) closeSidebar();
   }
 
   // backward compat for any inline calls

@@ -1210,6 +1210,13 @@ const sessionStore = {
         'UPDATE sessions SET kicked = TRUE WHERE user_id = ?',
         [userId]
       );
+      // 세션 끊기 시 채굴 상태도 stopped로 즉시 반영
+      await db.pool.query(
+        `INSERT INTO miner_status (user_id, status, assigned_at)
+         VALUES (?, 'stopped', NULL)
+         ON DUPLICATE KEY UPDATE status = 'stopped', assigned_at = NULL`,
+        [userId]
+      );
     } catch (error) {
       console.error('세션 킥 오류:', error);
     }

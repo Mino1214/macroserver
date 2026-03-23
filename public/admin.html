@@ -1516,7 +1516,7 @@
     const isMaster = me && me.role === 'master';
 
     // master-only elements
-    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','sectionSettleMgmt','userCreateForm'].forEach(id => {
+    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','sectionSettleMgmt','sectionPopups','sectionDownloads','userCreateForm'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', !isMaster);
     });

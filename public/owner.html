@@ -187,10 +187,26 @@
     #toast.ok  { border-color:var(--ok);  color:var(--ok); }
     #toast.err { border-color:var(--err); color:var(--err); }
 
+    /* DEVICE CHECKBOX */
+    .dev-chk { width:16px; height:16px; accent-color:var(--ac); cursor:pointer; flex-shrink:0; }
+    .account-card.selected { border-color:var(--ac); background:rgba(124,111,255,.07); }
+
+    /* SELECTION BAR */
+    #selectionBar { display:none; position:fixed; bottom:0; left:0; right:0; background:rgba(18,18,32,.95); border-top:1px solid var(--border); padding:12px 20px; z-index:150; align-items:center; gap:10px; flex-wrap:wrap; backdrop-filter:blur(12px); }
+    #selectionBar.show { display:flex; }
+
+    /* BULK MODAL */
+    #bulkModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:220; align-items:flex-start; justify-content:center; overflow-y:auto; padding:16px; }
+    #bulkModal.open { display:flex; }
+    .bulk-box { background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:24px; max-width:660px; width:100%; margin:auto; }
+    .bulk-row-done td { opacity:.5; }
+    .bulk-price-cell { font-weight:700; color:var(--ac); }
+
     @media (max-width: 500px) {
       .account-grid { grid-template-columns: 1fr; }
       .glass-card { padding: 14px 12px; }
       .qr-box { padding: 20px 16px; }
+      #selectionBar { padding: 10px 14px; }
     }
   </style>
 </head>
@@ -424,6 +440,44 @@
   </div>
 </div>
 
+<!-- 하단 선택 바 -->
+<div id="selectionBar">
+  <span id="selCount" style="font-weight:700;color:var(--ac)">0개 선택됨</span>
+  <button class="btn-ghost btn-sm" onclick="selectAllVisible()">전체 선택</button>
+  <button class="btn-ac btn-sm" onclick="openBulkModal()">📅 날짜로 통합 충전</button>
+  <button class="btn-ghost btn-sm" onclick="clearBulkSelect()">선택 해제</button>
+</div>
+
+<!-- 통합 충전 모달 -->
+<div id="bulkModal">
+  <div class="bulk-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:17px;font-weight:700">📅 날짜 통합 충전</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">선택 기기를 목표 날짜까지 일괄 충전</div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="closeBulkModal()">✕</button>
+    </div>
+
+    <!-- 목표 날짜 -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">목표 만료일 (모든 기기를 이 날짜까지 충전)</div>
+      <input type="date" id="bulkTargetDate" oninput="renderBulkTable()" style="max-width:220px;">
+    </div>
+
+    <!-- 기기별 내역 테이블 -->
+    <div id="bulkTableWrap">
+      <div class="no-data">날짜를 선택하면 내역이 표시됩니다.</div>
+    </div>
+
+    <!-- 총 금액 -->
+    <div id="bulkSummary" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="color:var(--muted);font-size:13px;">총 예상 금액</span>
+      <b id="bulkTotalPrice" style="font-size:18px;color:var(--ac)">-</b>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -442,7 +496,13 @@
   let _pricing = null;
   let _seedsLoaded = false;
   let _seedPage    = 1;
-  const _seedRevealed = {}; // seedId -> bool
+  const _seedRevealed = {};
+
+  // 통합 충전
+  let _bulkSelected   = new Set();
+  let _bulkFromModal  = false;
+  let _bulkDone       = new Set();
+  let _bulkTargetDate = '';
 
   /* ===================== INIT ===================== */
   window.addEventListener('DOMContentLoaded', () => {
@@ -611,9 +671,11 @@
       const dotCls = a.status === 'approved' && !a.isExpired ? 'dot-blue' : a.isExpired ? 'dot-red' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
       const statusTxt = a.isExpired ? '만료' : a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
       const uid = escJs(a.id);
-      return `<div class="account-card" id="card_${esc(a.id)}">
+      const isSel = _bulkSelected.has(a.id);
+      return `<div class="account-card${isSel ? ' selected' : ''}" id="card_${esc(a.id)}">
         <div class="ac-header">
           <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" class="dev-chk" id="chk_${esc(a.id)}" ${isSel ? 'checked' : ''} onchange="toggleBulkSelect('${uid}')">
             <span class="status-dot ${dotCls}"></span>
             <span class="ac-id">${esc(a.id)}</span>
           </div>
@@ -628,7 +690,7 @@
           <div class="ac-row"><span class="ac-label">남은 일수</span><span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span></div>
         </div>
         <div class="ac-actions">
-          <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
+          // <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
           <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
           <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
         </div>
@@ -822,6 +884,134 @@
   function seedPrevPage() { if (_seedPage > 1) { _seedPage--; loadSeeds(); } }
   function seedNextPage() { _seedPage++; loadSeeds(); }
 
+  /* ===================== BULK CHARGE ===================== */
+  function toggleBulkSelect(userId) {
+    if (_bulkSelected.has(userId)) {
+      _bulkSelected.delete(userId);
+      const card = document.getElementById('card_' + userId);
+      if (card) card.classList.remove('selected');
+    } else {
+      _bulkSelected.add(userId);
+      const card = document.getElementById('card_' + userId);
+      if (card) card.classList.add('selected');
+    }
+    updateSelectionBar();
+  }
+
+  function updateSelectionBar() {
+    const bar = document.getElementById('selectionBar');
+    const cnt = _bulkSelected.size;
+    if (cnt > 0) {
+      bar.classList.add('show');
+      document.getElementById('selCount').textContent = cnt + '개 선택됨';
+      document.body.style.paddingBottom = '64px';
+    } else {
+      bar.classList.remove('show');
+      document.body.style.paddingBottom = '';
+    }
+  }
+
+  function clearBulkSelect() {
+    _bulkSelected.forEach(uid => {
+      const card = document.getElementById('card_' + uid);
+      if (card) { card.classList.remove('selected'); const chk = card.querySelector('.dev-chk'); if (chk) chk.checked = false; }
+    });
+    _bulkSelected.clear();
+    updateSelectionBar();
+  }
+
+  function selectAllVisible() {
+    let list = _accounts;
+    if (_deviceFilter === 'active')  list = _accounts.filter(a => a.status === 'approved' && !a.isExpired);
+    if (_deviceFilter === 'expired') list = _accounts.filter(a => a.isExpired);
+    list.forEach(a => {
+      _bulkSelected.add(a.id);
+      const card = document.getElementById('card_' + a.id);
+      if (card) { card.classList.add('selected'); const chk = card.querySelector('.dev-chk'); if (chk) chk.checked = true; }
+    });
+    updateSelectionBar();
+  }
+
+  function openBulkModal() {
+    _bulkDone.clear();
+    _bulkFromModal = false;
+    // 최소 날짜: 오늘 + 1
+    const minDate = new Date(); minDate.setDate(minDate.getDate() + 1);
+    const dateEl = document.getElementById('bulkTargetDate');
+    dateEl.min = minDate.toISOString().slice(0, 10);
+    if (!dateEl.value || dateEl.value < dateEl.min) {
+      const def = new Date(); def.setDate(def.getDate() + 31);
+      dateEl.value = def.toISOString().slice(0, 10);
+    }
+    _bulkTargetDate = dateEl.value;
+    renderBulkTable();
+    document.getElementById('bulkModal').classList.add('open');
+  }
+
+  function closeBulkModal() {
+    document.getElementById('bulkModal').classList.remove('open');
+    _bulkFromModal = false;
+  }
+
+  function renderBulkTable() {
+    _bulkTargetDate = document.getElementById('bulkTargetDate').value;
+    const wrap = document.getElementById('bulkTableWrap');
+    const summaryEl = document.getElementById('bulkSummary');
+    if (!_bulkTargetDate) { wrap.innerHTML = '<div class="no-data">날짜를 선택하세요.</div>'; summaryEl.style.display='none'; return; }
+
+    const target = new Date(_bulkTargetDate + 'T00:00:00');
+    const now = new Date(); now.setHours(0,0,0,0);
+    const monthlyPrice = _pricing ? (_pricing.monthlyPrice || 39) : 39;
+
+    const devs = Array.from(_bulkSelected).map(uid => _accounts.find(a => a.id === uid)).filter(Boolean);
+    if (!devs.length) { wrap.innerHTML = '<div class="no-data">선택된 기기가 없습니다.</div>'; summaryEl.style.display='none'; return; }
+
+    let totalPrice = 0;
+    const rows = devs.map(a => {
+      const done = _bulkDone.has(a.id);
+      const baseExp = a.expireDate && !a.isExpired ? new Date(a.expireDate) : now;
+      baseExp.setHours(0,0,0,0);
+      const days = Math.ceil((target - baseExp) / 86400000);
+      const price = days > 0 ? Math.ceil(days / 30 * monthlyPrice * 10) / 10 : 0;
+      if (days > 0) totalPrice += price;
+      const uid = escJs(a.id);
+      const expStr = a.expireDate ? fmtDateShort(new Date(a.expireDate)) : '미설정';
+      const daysCell = days > 0 ? `+${days}일` : '<span style="color:var(--err)">이미 만료일 이후</span>';
+      const priceCell = days > 0 ? `${price} USDT` : '-';
+      const actionCell = done
+        ? '<span style="color:var(--ok);font-weight:700">✅ 완료</span>'
+        : days > 0
+          ? `<button class="btn-ghost btn-sm" onclick="bulkOpenQr('${uid}')">발급</button>`
+          : '<span style="color:var(--muted)">-</span>';
+      return `<tr class="${done ? 'bulk-row-done' : ''}">
+        <td style="font-weight:600">${esc(a.id)}</td>
+        <td style="color:var(--muted);font-size:12px">${expStr}</td>
+        <td style="color:var(--ac);font-size:12px">${fmtDateShort(target)}</td>
+        <td>${daysCell}</td>
+        <td class="bulk-price-cell">${priceCell}</td>
+        <td>${actionCell}</td>
+      </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>기기</th><th>현재 만료일</th><th>목표 만료일</th><th>연장 일수</th><th>예상 금액</th><th>처리</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    summaryEl.style.display = 'flex';
+    document.getElementById('bulkTotalPrice').textContent = totalPrice.toFixed(1) + ' USDT';
+  }
+
+  function bulkOpenQr(userId) {
+    _bulkFromModal = true;
+    closeBulkModal();
+    openQr(userId, { date: _bulkTargetDate });
+  }
+
   /* ===================== QR CHARGING ===================== */
   async function loadPricing() {
     try {
@@ -915,7 +1105,7 @@
     calcBox.style.display = '';
   }
 
-  function openQr(userId) {
+  function openQr(userId, opts) {
     _qrUserId = userId;
     _qrMode   = 'pkg';
     stopQrPoll();
@@ -923,7 +1113,7 @@
     const acc = _accounts.find(a => a.id === userId);
     _qrPrevExpiry = acc ? acc.expireDate : null;
 
-    document.getElementById('qrTargetLabel').textContent = '대상: ' + userId;
+    document.getElementById('qrTargetLabel').textContent = '대상: ' + userId + (_bulkFromModal ? ' (통합 충전)' : '');
     document.getElementById('qrCurExpiry').textContent   = acc && acc.expireDate
       ? fmtDateShort(new Date(acc.expireDate)) + (acc.isExpired ? ' (만료됨)' : '')
       : '미설정';
@@ -931,16 +1121,24 @@
     document.getElementById('qrErr').textContent    = '';
     document.getElementById('qrOk').textContent     = '';
 
-    // 모드 초기화
-    setQrMode('pkg');
-    renderPkgGrid();
-    const pkgs = getPkgs();
-    const p    = pkgs.find(x => x.days === _qrSelectedDays) || pkgs[0];
-    if (p) {
-      _qrSelectedDays = p.days;
-      _qrCalcDays     = p.days;
-      _qrCalcPrice    = p.price || 0;
-      document.getElementById('qrAmount').textContent = p.price ? p.price + ' USDT' : '-';
+    // 통합 충전 모드: 날짜 모드로 바로 진입
+    if (opts && opts.date) {
+      renderPkgGrid();
+      setQrMode('date');
+      const dateEl = document.getElementById('qrTargetDate');
+      dateEl.value = opts.date;
+      onDateChange();
+    } else {
+      setQrMode('pkg');
+      renderPkgGrid();
+      const pkgs = getPkgs();
+      const p    = pkgs.find(x => x.days === _qrSelectedDays) || pkgs[0];
+      if (p) {
+        _qrSelectedDays = p.days;
+        _qrCalcDays     = p.days;
+        _qrCalcPrice    = p.price || 0;
+        document.getElementById('qrAmount').textContent = p.price ? p.price + ' USDT' : '-';
+      }
     }
 
     document.getElementById('qrModal').classList.add('open');
@@ -949,7 +1147,13 @@
   function closeQr() {
     stopQrPoll();
     document.getElementById('qrModal').classList.remove('open');
+    const fromBulk = _bulkFromModal;
     _qrUserId = null;
+    _bulkFromModal = false;
+    if (fromBulk) {
+      renderBulkTable();
+      document.getElementById('bulkModal').classList.add('open');
+    }
   }
 
   async function requestQr() {
@@ -1005,6 +1209,10 @@
         document.getElementById('qrOk').textContent = '✅ 입금 확인! 새 만료일: ' + fmtDateShort(new Date(acc.expireDate));
         loadAccounts();
         showToast('입금 처리 완료', 'ok');
+        if (_bulkFromModal && _qrUserId) {
+          _bulkDone.add(_qrUserId);
+          setTimeout(() => closeQr(), 1500);
+        }
       }
     } catch {}
   }

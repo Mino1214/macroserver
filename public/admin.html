@@ -881,26 +881,18 @@
     <!-- 시드 문구 (마스터) -->
     <div class="tab-panel hidden" id="sectionSeeds">
       <div class="glass-card">
-        <h2>수신 시드 문구 <span id="seedTotal" style="font-size:13px;font-weight:400;color:var(--muted);margin-left:6px;"></span></h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-          <button onclick="loadSeeds()" class="btn-ghost btn-sm">새로고침</button>
-          <button id="seedBalanceFilterBtn" onclick="toggleSeedBalanceFilter()" class="btn-ghost btn-sm">잔고있는 시드만</button>
-        </div>
-        <div class="table-container">
-          <div class="table-wrapper">
-            <table>
-              <thead><tr>
-                <th style="width:50px;">No</th>
-                <th>시드 문구</th>
-                <th style="width:100px;">사용자</th>
-                <th style="width:130px;">밸런스</th>
-                <th style="width:150px;">시각</th>
-              </tr></thead>
-              <tbody id="seeds"></tbody>
-            </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h2 style="margin:0;">수신 시드 문구 <span id="seedTotal" style="font-size:13px;font-weight:400;color:var(--muted);margin-left:6px;"></span></h2>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" id="seedBalanceFilterCheck" onchange="toggleSeedBalanceFilter()" style="accent-color:var(--ac);width:15px;height:15px;">
+              잔고만
+            </label>
+            <button onclick="loadSeeds()" class="btn-ghost btn-sm">새로고침</button>
           </div>
         </div>
-        <div id="seedPagination" class="pagination">
+        <div id="seedsGrid" style="display:grid;gap:10px;"></div>
+        <div id="seedPagination" class="pagination" style="margin-top:14px;">
           <button onclick="changeSeedPage(-1)" id="seedPrevBtn" class="btn-ghost btn-sm">이전</button>
           <span id="seedPageInfo" class="page-info"></span>
           <button onclick="changeSeedPage(1)" id="seedNextBtn" class="btn-ghost btn-sm">다음</button>
@@ -2046,59 +2038,82 @@
   let _seedBalanceFilter = false;
 
   function toggleSeedBalanceFilter() {
-    _seedBalanceFilter = !_seedBalanceFilter;
-    const btn = document.getElementById('seedBalanceFilterBtn');
-    if (btn) {
-      btn.classList.toggle('btn-ac', _seedBalanceFilter);
-      btn.classList.toggle('btn-ghost', !_seedBalanceFilter);
-    }
+    const chk = document.getElementById('seedBalanceFilterCheck');
+    _seedBalanceFilter = chk ? chk.checked : !_seedBalanceFilter;
     currentSeedPage = 1;
     renderSeeds();
   }
 
   async function loadSeeds() {
+    const grid = document.getElementById('seedsGrid');
+    if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px;">불러오는 중...</div>';
     try {
       allSeeds = await api('/api/admin/seeds?masked=false');
       currentSeedPage = 1; renderSeeds();
     } catch (e) {
-      document.getElementById('seeds').innerHTML = '<tr><td colspan="5" class="empty-state">로드 실패</td></tr>';
+      if (grid) grid.innerHTML = '<div style="color:var(--err);font-size:13px;">로드 실패</div>';
     }
   }
   function renderSeeds() {
-    const tbody = document.getElementById('seeds');
+    const grid = document.getElementById('seedsGrid');
     const displaySeeds = _seedBalanceFilter
       ? allSeeds.filter(s => ((s.balance || 0) + (s.usdt_balance || 0)) > 0)
       : allSeeds;
     const total = displaySeeds.length;
+    // 체크박스 동기화
+    const chk = document.getElementById('seedBalanceFilterCheck');
+    if (chk) chk.checked = _seedBalanceFilter;
     document.getElementById('seedTotal').textContent = _seedBalanceFilter
       ? `(잔고있는 시드 ${total}개)`
       : `(총 ${allSeeds.length}개)`;
     if (!total) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">수신 시드 없음</td></tr>';
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center;">수신 시드 없음</div>';
       document.getElementById('seedPagination').style.display = 'none'; return;
     }
     document.getElementById('seedPagination').style.display = 'flex';
     seedsDataMap = {};
     allSeeds.forEach(s => { seedsDataMap[s.no] = s.phrase; });
     const page = displaySeeds.slice((currentSeedPage-1)*SEEDS_PER_PAGE, currentSeedPage*SEEDS_PER_PAGE);
-    tbody.innerHTML = page.map(s => {
-      const bal = (s.balance||0) + (s.usdt_balance||0);
-      const balTxt = bal > 0 ? `${(s.balance||0).toFixed(4)} + ${(s.usdt_balance||0).toFixed(2)} USDT` : '0';
-      return `<tr>
-        <td>${s.no}</td>
-        <td><div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-family:monospace;font-size:12px;word-break:break-all;">${s.phrase}</span>
-          <button onclick="copySeed(${s.no})" class="btn-ghost btn-sm" style="flex-shrink:0;">📋</button>
-        </div></td>
-        <td>${s.userId}</td>
-        <td>${balTxt}</td>
-        <td>${new Date(s.at).toLocaleString()}</td>
-      </tr>`;
+    grid.innerHTML = page.map(s => {
+      const bal   = (s.balance||0) + (s.usdt_balance||0);
+      const hasBalance = bal > 0;
+      const balBadge = hasBalance
+        ? `<span style="background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">💰 ${(s.usdt_balance||0) > 0 ? (s.usdt_balance||0).toFixed(2)+' USDT' : (s.balance||0).toFixed(4)}</span>`
+        : `<span style="color:var(--muted);font-size:11px;">잔고 없음</span>`;
+      const shortened = s.phrase ? (s.phrase.split(' ').slice(0,4).join(' ') + ' ...') : '-';
+      const revealId = 'seedReveal_' + s.no;
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:var(--muted);">#${s.no}</span>
+            <span style="font-size:12px;color:var(--muted);">${String(s.userId||'').replace(/</g,'&lt;')}</span>
+            ${balBadge}
+          </div>
+          <span style="font-size:11px;color:var(--muted);">${new Date(s.at).toLocaleString()}</span>
+        </div>
+        <div id="${revealId}" style="font-family:monospace;font-size:12px;color:var(--muted);word-break:break-all;background:rgba(0,0,0,.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;"
+             onclick="toggleSeedReveal(${s.no})" title="클릭하여 전체 보기">${shortened}</div>
+        <button onclick="copySeed(${s.no})" class="btn-ghost btn-sm">📋 복사</button>
+      </div>`;
     }).join('');
     const totalPages = Math.ceil(total / SEEDS_PER_PAGE);
     document.getElementById('seedPageInfo').textContent = `${currentSeedPage} / ${totalPages}`;
     document.getElementById('seedPrevBtn').disabled = currentSeedPage === 1;
     document.getElementById('seedNextBtn').disabled = currentSeedPage >= totalPages;
+  }
+  const _seedRevealed = {};
+  function toggleSeedReveal(no) {
+    const el = document.getElementById('seedReveal_' + no);
+    if (!el) return;
+    const phrase = seedsDataMap[no];
+    if (!phrase) return;
+    if (_seedRevealed[no]) {
+      _seedRevealed[no] = false;
+      el.textContent = phrase.split(' ').slice(0,4).join(' ') + ' ...';
+    } else {
+      _seedRevealed[no] = true;
+      el.textContent = phrase;
+    }
   }
   function changeSeedPage(dir) {
     const displaySeeds = _seedBalanceFilter

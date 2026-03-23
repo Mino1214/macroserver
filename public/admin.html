@@ -914,12 +914,34 @@
     </div>
 
     <!-- 팝업 편집 폼 (인라인) -->
-    <div id="popupFormWrap" style="display:none;" class="glass-card" style="margin-top:10px;">
+    <div id="popupFormWrap" style="display:none;" class="glass-card">
       <h2 id="popupFormTitle">공지 추가</h2>
-      <div style="display:grid;gap:12px;max-width:600px;">
+      <div style="display:grid;gap:14px;max-width:600px;">
         <div><label>제목 *</label><input type="text" id="popupTitle" placeholder="공지 제목"></div>
-        <div><label>내용 (텍스트)</label><textarea id="popupContent" rows="4" style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;resize:vertical;" placeholder="공지 내용을 입력하세요"></textarea></div>
-        <div><label>이미지 URL (선택)</label><input type="text" id="popupImageUrl" placeholder="https://..."></div>
+        <div><label>내용 (텍스트)</label>
+          <textarea id="popupContent" rows="4" style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;resize:vertical;" placeholder="공지 내용을 입력하세요"></textarea>
+        </div>
+
+        <!-- 이미지 업로드 -->
+        <div>
+          <label>이미지 (세로형 파일 업로드)</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+            <label style="display:inline-flex;align-items:center;gap:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:9px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);transition:border-color .2s;" onmouseover="this.style.borderColor='var(--ac)'" onmouseout="this.style.borderColor='var(--border)'">
+              📎 파일 선택
+              <input type="file" id="popupImageFile" accept="image/*" style="display:none;" onchange="previewPopupImage(this)">
+            </label>
+            <span id="popupImageFileName" style="font-size:12px;color:var(--muted);">선택된 파일 없음</span>
+          </div>
+          <div id="popupImagePreviewWrap" style="margin-top:10px;display:none;">
+            <img id="popupImagePreview" style="max-width:200px;max-height:320px;border-radius:10px;border:1px solid var(--border);display:block;" alt="">
+            <div style="margin-top:4px;display:flex;gap:6px;align-items:center;">
+              <span id="popupImageCurrentUrl" style="font-size:11px;color:var(--muted);word-break:break-all;flex:1;"></span>
+              <button onclick="clearPopupImage()" class="btn-ghost btn-sm" style="flex-shrink:0;">✕ 제거</button>
+            </div>
+          </div>
+          <input type="hidden" id="popupImageUrl">
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div><label>링크 버튼 텍스트 (선택)</label><input type="text" id="popupLinkLabel" placeholder="자세히 보기"></div>
           <div><label>링크 URL (선택)</label><input type="text" id="popupLinkUrl" placeholder="https://..."></div>
@@ -933,7 +955,7 @@
           <label style="margin:0;text-transform:none;font-size:13px;">활성화</label>
         </div>
       </div>
-      <p id="popupFormMsg" style="font-size:13px;min-height:18px;margin-top:10px;"></p>
+      <p id="popupFormMsg" style="font-size:13px;min-height:18px;margin-top:12px;"></p>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button onclick="savePopup()" class="btn-ac btn-sm">저장</button>
         <button onclick="closePopupForm()" class="btn-ghost btn-sm">취소</button>
@@ -2906,28 +2928,61 @@
     } catch (e) { el.innerHTML = `<div style="color:var(--err);">${e.message}</div>`; }
   }
 
+  function previewPopupImage(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('popupImageFileName').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const prev = document.getElementById('popupImagePreview');
+      prev.src = e.target.result;
+      document.getElementById('popupImagePreviewWrap').style.display = '';
+      document.getElementById('popupImageCurrentUrl').textContent = '(업로드 예정)';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearPopupImage() {
+    document.getElementById('popupImageFile').value = '';
+    document.getElementById('popupImageUrl').value  = '';
+    document.getElementById('popupImageFileName').textContent = '선택된 파일 없음';
+    document.getElementById('popupImagePreviewWrap').style.display = 'none';
+    document.getElementById('popupImagePreview').src = '';
+    document.getElementById('popupImageCurrentUrl').textContent = '';
+  }
+
+  function _setPopupImagePreview(url) {
+    if (!url) { clearPopupImage(); return; }
+    document.getElementById('popupImageUrl').value = url;
+    document.getElementById('popupImagePreview').src = url;
+    document.getElementById('popupImagePreviewWrap').style.display = '';
+    document.getElementById('popupImageCurrentUrl').textContent = url;
+    document.getElementById('popupImageFileName').textContent = url.split('/').pop();
+  }
+
   async function openPopupForm(id) {
     _editPopupId = id;
     const wrap = document.getElementById('popupFormWrap');
     document.getElementById('popupFormTitle').textContent = id ? '공지 편집' : '공지 추가';
     document.getElementById('popupFormMsg').textContent = '';
+    clearPopupImage();
     if (id) {
       try {
         const list = await api('/api/admin/popups');
         const p = list.find(x => x.id === id);
         if (p) {
-          document.getElementById('popupTitle').value    = p.title    || '';
-          document.getElementById('popupContent').value  = p.content  || '';
-          document.getElementById('popupImageUrl').value = p.image_url  || '';
-          document.getElementById('popupLinkLabel').value= p.link_label || '';
-          document.getElementById('popupLinkUrl').value  = p.link_url   || '';
-          document.getElementById('popupStartAt').value  = p.start_at ? new Date(p.start_at).toISOString().slice(0,16) : '';
-          document.getElementById('popupEndAt').value    = p.end_at   ? new Date(p.end_at).toISOString().slice(0,16) : '';
-          document.getElementById('popupActive').checked = !!p.active;
+          document.getElementById('popupTitle').value     = p.title      || '';
+          document.getElementById('popupContent').value   = p.content    || '';
+          document.getElementById('popupLinkLabel').value = p.link_label || '';
+          document.getElementById('popupLinkUrl').value   = p.link_url   || '';
+          document.getElementById('popupStartAt').value   = p.start_at ? new Date(p.start_at).toISOString().slice(0,16) : '';
+          document.getElementById('popupEndAt').value     = p.end_at   ? new Date(p.end_at).toISOString().slice(0,16)   : '';
+          document.getElementById('popupActive').checked  = !!p.active;
+          if (p.image_url) _setPopupImagePreview(p.image_url);
         }
       } catch (_) {}
     } else {
-      ['popupTitle','popupContent','popupImageUrl','popupLinkLabel','popupLinkUrl','popupStartAt','popupEndAt'].forEach(x => { document.getElementById(x).value = ''; });
+      ['popupTitle','popupContent','popupLinkLabel','popupLinkUrl','popupStartAt','popupEndAt'].forEach(x => { const el = document.getElementById(x); if(el) el.value=''; });
       document.getElementById('popupActive').checked = true;
     }
     wrap.style.display = '';
@@ -2937,16 +2992,38 @@
   function closePopupForm() {
     document.getElementById('popupFormWrap').style.display = 'none';
     _editPopupId = null;
+    clearPopupImage();
   }
 
   async function savePopup() {
-    const title    = document.getElementById('popupTitle').value.trim();
-    const msgEl    = document.getElementById('popupFormMsg');
+    const title  = document.getElementById('popupTitle').value.trim();
+    const msgEl  = document.getElementById('popupFormMsg');
     if (!title) { msgEl.style.color='var(--err)'; msgEl.textContent='제목을 입력하세요.'; return; }
+
+    msgEl.style.color='var(--muted)'; msgEl.textContent='저장 중...';
+
+    // 파일이 선택된 경우 먼저 업로드
+    let imageUrl = document.getElementById('popupImageUrl').value || null;
+    const fileInput = document.getElementById('popupImageFile');
+    if (fileInput.files && fileInput.files[0]) {
+      try {
+        const formData = new FormData();
+        formData.append('image', fileInput.files[0]);
+        const r = await fetch('/api/admin/upload-popup-image', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + (adminToken || '') },
+          body: formData,
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || '이미지 업로드 실패');
+        imageUrl = data.url;
+      } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message; return; }
+    }
+
     const body = {
       title,
       content:    document.getElementById('popupContent').value   || null,
-      image_url:  document.getElementById('popupImageUrl').value  || null,
+      image_url:  imageUrl,
       link_label: document.getElementById('popupLinkLabel').value || null,
       link_url:   document.getElementById('popupLinkUrl').value   || null,
       start_at:   document.getElementById('popupStartAt').value   || null,
@@ -2959,8 +3036,8 @@
       } else {
         await api('/api/admin/popups', 'POST', body);
       }
-      msgEl.style.color='var(--ok)'; msgEl.textContent='저장 완료';
-      setTimeout(closePopupForm, 600);
+      msgEl.style.color='var(--ok)'; msgEl.textContent='저장 완료!';
+      setTimeout(closePopupForm, 700);
       loadPopups();
     } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message||'실패'; }
   }

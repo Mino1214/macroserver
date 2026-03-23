@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const multer = require('multer');
 // child_process는 더 이상 사용 안 함 (seed-checker.js require 방식으로 전환)
 
 // seed-checker.js 에서 멀티체인 잔고 확인 함수 로드
@@ -1258,6 +1259,25 @@ const sessionStore = {
 };
 
 // ---------- 관리자 세션: token -> { role: 'master'|'manager', id } ----------
+// ─── 팝업 이미지 업로드 (multer) ───
+const _uploadDir = path.join(__dirname, 'public', 'uploads', 'popups');
+if (!fs.existsSync(_uploadDir)) fs.mkdirSync(_uploadDir, { recursive: true });
+const _popupStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, _uploadDir),
+  filename:    (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, Date.now() + '_' + crypto.randomBytes(6).toString('hex') + ext);
+  },
+});
+const _uploadPopup = multer({
+  storage: _popupStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\//.test(file.mimetype)) cb(null, true);
+    else cb(new Error('이미지 파일만 업로드 가능합니다.'));
+  },
+});
+
 const adminSessions = new Map();
 function createAdminToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -4525,6 +4545,14 @@ app.get('/api/downloads', async (req, res) => {
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/upload-popup-image — 팝업 이미지 업로드
+app.post('/api/admin/upload-popup-image', requireAdmin, _uploadPopup.single('image'), (req, res) => {
+  if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+  if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' });
+  const url = '/uploads/popups/' + req.file.filename;
+  res.json({ ok: true, url });
 });
 
 // ========== 어드민: 팝업 CRUD ==========

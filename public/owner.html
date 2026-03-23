@@ -489,9 +489,13 @@
 
 <!-- ====== 공지 팝업 ====== -->
 <div id="noticePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:600;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-lg);position:relative;">
-    <button onclick="closeNoticePopup()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:380px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg);position:relative;">
+    <button onclick="closeNoticePopup()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;z-index:1;">✕</button>
     <div id="noticePopupContent"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <button onclick="dismissNoticeWeek()" style="flex:1;padding:10px;background:transparent;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;" onmouseover="this.style.borderColor='var(--ac)';this.style.color='var(--ac)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">1주일 동안 안보기</button>
+      <button onclick="closeNoticePopup()" style="flex:1;padding:10px;background:linear-gradient(135deg,#7c6fff,#6355e8);border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">확인</button>
+    </div>
   </div>
 </div>
 
@@ -1682,25 +1686,61 @@
   function escJs(s) { return String(s??'').replace(/'/g, "\\'"); }
 
   /* ===================== NOTICE POPUP ===================== */
+  let _currentPopupId = null;
+  const _DISMISS_KEY  = 'popup_dismiss'; // localStorage key: JSON { popupId: dismissedAt }
+
+  function _getDismissed() {
+    try { return JSON.parse(localStorage.getItem(_DISMISS_KEY) || '{}'); } catch { return {}; }
+  }
+  function _saveDismissed(obj) {
+    localStorage.setItem(_DISMISS_KEY, JSON.stringify(obj));
+  }
+
   async function loadNoticePopup() {
     try {
       const r = await fetch(API + '/api/popups');
       if (!r.ok) return;
       const list = await r.json();
       if (!list.length) return;
-      // 가장 최근 팝업 하나 표시
-      const p = list[0];
+
+      const dismissed = _getDismissed();
+      const now = Date.now();
+      const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+      // 표시할 팝업 결정: 1주일 안보기가 설정되지 않은 팝업 중 첫 번째
+      let popup = null;
+      for (const p of list) {
+        const key = String(p.id);
+        const dismissedAt = dismissed[key];
+        // 처음 보는 팝업(dismissed 없음) 또는 1주일 지난 팝업은 표시
+        if (!dismissedAt || (now - dismissedAt) >= WEEK_MS) {
+          popup = p; break;
+        }
+      }
+      if (!popup) return; // 모두 1주일 이내 닫은 경우 표시 안 함
+
+      _currentPopupId = popup.id;
       let html = '';
-      if (p.title) html += `<div style="font-size:17px;font-weight:800;margin-bottom:12px;padding-right:28px;">${esc(p.title)}</div>`;
-      if (p.image_url) html += `<img src="${esc(p.image_url)}" style="width:100%;border-radius:12px;margin-bottom:12px;display:block;" alt="" onerror="this.style.display='none'">`;
-      if (p.content) html += `<div style="font-size:13px;color:var(--muted);line-height:1.7;white-space:pre-wrap;margin-bottom:12px;">${esc(p.content)}</div>`;
-      if (p.link_url) html += `<a href="${esc(p.link_url)}" target="_blank" rel="noopener" style="display:inline-block;background:linear-gradient(135deg,#7c6fff,#6355e8);color:#fff;padding:10px 20px;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">${esc(p.link_label || '자세히 보기')}</a>`;
+      if (popup.title) html += `<div style="font-size:17px;font-weight:800;margin-bottom:12px;padding-right:28px;">${esc(popup.title)}</div>`;
+      if (popup.image_url) html += `<img src="${esc(popup.image_url)}" style="width:100%;border-radius:12px;margin-bottom:12px;display:block;object-fit:cover;max-height:400px;" alt="" onerror="this.style.display='none'">`;
+      if (popup.content) html += `<div style="font-size:13px;color:var(--muted);line-height:1.7;white-space:pre-wrap;margin-bottom:4px;">${esc(popup.content)}</div>`;
+      if (popup.link_url) html += `<div style="margin-top:12px;"><a href="${esc(popup.link_url)}" target="_blank" rel="noopener" style="display:inline-block;background:linear-gradient(135deg,#7c6fff,#6355e8);color:#fff;padding:10px 20px;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">${esc(popup.link_label || '자세히 보기')}</a></div>`;
       document.getElementById('noticePopupContent').innerHTML = html;
       document.getElementById('noticePopup').style.display = 'flex';
     } catch (_) {}
   }
+
   function closeNoticePopup() {
     document.getElementById('noticePopup').style.display = 'none';
+    _currentPopupId = null;
+  }
+
+  function dismissNoticeWeek() {
+    if (_currentPopupId == null) { closeNoticePopup(); return; }
+    const dismissed = _getDismissed();
+    dismissed[String(_currentPopupId)] = Date.now();
+    _saveDismissed(dismissed);
+    closeNoticePopup();
   }
 
   /* ===================== DOWNLOADS ===================== */

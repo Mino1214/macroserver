@@ -1590,18 +1590,32 @@
       if (!accs.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px;">연결된 기기 없음</span>'; return; }
       const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toISOString().slice(0,10); };
       el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">기기 ${accs.length}개</div>
-        <div class="table-wrapper" style="max-height:260px;overflow-y:auto;">
+        <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
           <table>
-            <thead><tr><th>기기 ID</th><th>텔레그램</th><th>상태</th><th>만료일</th></tr></thead>
+            <thead><tr><th>기기 ID</th><th>텔레그램</th><th>계정 상태</th><th>채굴</th><th>만료일</th><th>조치</th></tr></thead>
             <tbody>
               ${accs.map(a => {
+                const aid = String(a.id).replace(/'/g,"\\'").replace(/</g,'&lt;');
                 const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
                 const lbl    = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
+                const mining = a.miner_status === 'running';
+                const minerCell = mining
+                  ? `<span style="display:inline-flex;align-items:center;gap:3px;color:#22c55e;font-size:11px;font-weight:600;">
+                       <span style="width:5px;height:5px;border-radius:50%;background:#22c55e;animation:pulse 1.2s infinite;display:inline-block;"></span>채굴 중
+                     </span>`
+                  : `<span style="color:var(--muted);font-size:11px;">정지</span>`;
+                const hasSession = parseInt(a.has_session) > 0;
+                const kickBtn = `<button class="btn-warn btn-sm" style="font-size:10px;padding:2px 7px;"
+                  onclick="kickDeviceSession('${aid}')"
+                  ${hasSession ? '' : 'disabled style="opacity:.4;font-size:10px;padding:2px 7px;"'}
+                  title="${hasSession ? '세션 강제 종료' : '활성 세션 없음'}">세션끊기</button>`;
                 return `<tr>
                   <td style="font-size:12px;font-weight:600">${String(a.id).replace(/</g,'&lt;')}</td>
                   <td style="font-size:11px;color:var(--muted)">${a.telegram || '-'}</td>
                   <td><div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:11px">${lbl}</span></div></td>
+                  <td>${minerCell}</td>
                   <td style="font-size:11px;color:var(--muted)">${fmtD(a.expire_date)}</td>
+                  <td onclick="event.stopPropagation()">${kickBtn}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -2522,9 +2536,19 @@
   async function kickOwnerSession(ownerId) {
     if (!confirm(ownerId + ' 오너의 세션을 강제 종료하시겠습니까?')) return;
     try {
-      const data = await api('/api/admin/account-owners/' + ownerId + '/kick-session', 'POST');
+      await api('/api/admin/account-owners/' + ownerId + '/kick-session', 'POST');
       showToast('세션이 종료되었습니다.');
       loadOwners();
+    } catch (e) { showToast(e.message, 'err'); }
+  }
+
+  async function kickDeviceSession(userId) {
+    if (!confirm(userId + ' 기기의 세션을 강제 종료하시겠습니까?')) return;
+    try {
+      await api('/api/admin/kick', 'POST', { userId });
+      showToast('기기 세션이 종료되었습니다.');
+      // 펼쳐진 오너 기기 목록 새로고침
+      if (_expandedOwner) loadOwnerDevices(_expandedOwner);
     } catch (e) { showToast(e.message, 'err'); }
   }
 

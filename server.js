@@ -463,6 +463,27 @@ async function runMigrations() {
     console.error('DB 마이그레이션(account_owners.status) 오류:', e.message);
   }
   try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS bulk_payment_sessions (
+        id               VARCHAR(64)    NOT NULL PRIMARY KEY,
+        owner_id         VARCHAR(50)    NOT NULL,
+        entries          TEXT           NOT NULL COMMENT 'JSON [{userId,days}]',
+        target_date      DATE           NOT NULL,
+        total_usdt       DECIMAL(12,4)  NOT NULL,
+        deposit_address  VARCHAR(60)    DEFAULT NULL,
+        wallet_version   INT            DEFAULT NULL,
+        derivation_index INT            DEFAULT NULL,
+        status           ENUM('pending','paid','complete','expired') NOT NULL DEFAULT 'pending',
+        created_at       DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bulk_status (status),
+        INDEX idx_bulk_owner  (owner_id)
+      )
+    `);
+    console.log('✅ DB 마이그레이션: bulk_payment_sessions 확인 완료');
+  } catch (e) {
+    console.error('DB 마이그레이션(bulk_payment_sessions) 오류:', e.message);
+  }
+  try {
     // users 테이블에 owner_id 컬럼 추가
     const [cols] = await db.pool.query("SHOW COLUMNS FROM users LIKE 'owner_id'");
     if (cols.length === 0) {
@@ -794,6 +815,104 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
   }
 }
 
+// ---------- 벌크 결제 스윕 + 일괄 만료일 설정 ----------
+async function autoSweepAndBulkGrant(session) {
+  console.log(`[BULK-SWEEP] 시작: id=${session.id} total=${session.total_usdt} USDT`);
+  try {
+    const activeWallet = await db.collectionWalletDB.getActive();
+    if (!activeWallet?.xpub_key) { console.warn('[BULK-SWEEP] 활성 지갑/니모닉 없음'); return; }
+    const rootAddress = activeWallet.root_wallet_address;
+
+    let rootPrivKey, depositPrivKey;
+    try { rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key); }
+    catch (e) { console.error('[BULK-SWEEP] 루트키 파생 실패:', e.message); return; }
+    try { depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, session.derivation_index); }
+    catch (e) { console.error('[BULK-SWEEP] 입금주소키 파생 실패:', e.message); return; }
+
+    const { TronWeb } = require('tronweb');
+    const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+    const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
+    if (tronRoot.defaultAddress.base58 !== rootAddress) {
+      console.error('[BULK-SWEEP] 루트 주소 불일치'); return;
+    }
+
+    // 실잔액 확인
+    let depositUsdt = 0;
+    try {
+      const r = await axios.get(`https://api.trongrid.io/v1/accounts/${session.deposit_address}`,
+        { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 10000 });
+      const trc20 = r.data?.data?.[0]?.trc20 || [];
+      const e = trc20.find(b => Object.keys(b)[0]?.toLowerCase() === USDT_CONTRACT.toLowerCase());
+      depositUsdt = e ? Number(Object.values(e)[0]) / 1e6 : 0;
+    } catch (_) {}
+    if (depositUsdt < 0.1) {
+      await db.pool.query(`UPDATE bulk_payment_sessions SET status='complete' WHERE id=?`, [session.id]);
+      return;
+    }
+
+    // TRX 가스비 송금 (기존과 동일)
+    let rootTrxBal = 0;
+    try {
+      const r = await axios.get(`https://api.trongrid.io/v1/accounts/${rootAddress}`,
+        { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 10000 });
+      rootTrxBal = (r.data?.data?.[0]?.balance || 0) / 1e6;
+    } catch (_) {}
+    if (rootTrxBal >= 2) {
+      await tronRoot.trx.sendTransaction(session.deposit_address, Math.floor(2 * 1e6));
+      console.log(`[BULK-SWEEP] TRX 2개 → ${session.deposit_address}`);
+    }
+    // TRX 도착 대기 (최대 90초)
+    const TRX_CHECK_MAX = 9; const TRX_CHECK_INTERVAL = 10000;
+    for (let i = 0; i < TRX_CHECK_MAX; i++) {
+      await new Promise(r => setTimeout(r, TRX_CHECK_INTERVAL));
+      try {
+        const r = await axios.get(`https://api.trongrid.io/v1/accounts/${session.deposit_address}`,
+          { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 });
+        if ((r.data?.data?.[0]?.balance || 0) / 1e6 >= 1) break;
+      } catch (_) {}
+    }
+
+    // USDT sweep
+    const tronDep = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: depositPrivKey });
+    const contract = await tronDep.contract().at(USDT_CONTRACT);
+    const balRaw = await contract.balanceOf(session.deposit_address).call();
+    const sweepAmt = Number(balRaw) / 1e6;
+    if (sweepAmt < 0.1) { await db.pool.query(`UPDATE bulk_payment_sessions SET status='complete' WHERE id=?`, [session.id]); return; }
+    await contract.transfer(rootAddress, Number(balRaw)).send({ feeLimit: 40_000_000 });
+    console.log(`[BULK-SWEEP] ✅ ${sweepAmt} USDT → ${rootAddress}`);
+
+    // 일괄 만료일 설정
+    const entries = JSON.parse(session.entries || '[]');
+    const targetDate = session.target_date instanceof Date
+      ? session.target_date
+      : new Date(session.target_date + 'T00:00:00');
+    const tgtStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,'0')}-${String(targetDate.getDate()).padStart(2,'0')}`;
+    for (const e of entries) {
+      if (!e.userId || !(e.days > 0)) continue;
+      await db.pool.query(
+        `UPDATE users SET expire_date = ?, status = 'approved' WHERE id = ?`,
+        [tgtStr, e.userId.toLowerCase()]
+      );
+      console.log(`[BULK-SWEEP] ✅ ${e.userId} 만료일 → ${tgtStr}`);
+    }
+
+    await db.pool.query(`UPDATE bulk_payment_sessions SET status='complete' WHERE id=?`, [session.id]);
+    console.log(`[BULK-SWEEP] ✅ 완료 id=${session.id}`);
+
+    // 텔레그램 알림 (마스터)
+    try {
+      const masterTg = await getMasterTelegram();
+      if (masterTg.botToken && masterTg.chatId) {
+        const userList = entries.filter(e => e.days > 0).map(e => `<code>${escapeHtml(String(e.userId))}</code>`).join(', ');
+        await sendTelegram(masterTg.botToken, masterTg.chatId,
+          `✅ <b>벌크 입금 처리 완료!</b>\n💵 ${sweepAmt.toFixed(2)} USDT\n📅 만료일 → ${tgtStr}\n👥 ${userList}`);
+      }
+    } catch (_) {}
+  } catch (e) {
+    console.error('[BULK-SWEEP] 오류:', e.message);
+  }
+}
+
 // ---------- 입금 감지 크론잡 ----------
 // TronGrid 무료 쿼터: 100,000건/일 → 안전 예산 90,000건
 // 1,440분/일 → 분당 최대 62건 처리 (90,000 / 1,440 = 62.5)
@@ -938,6 +1057,40 @@ cron.schedule('* * * * *', async () => {
       }
       await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
     }
+    // ── 벌크 결제 세션 체크 ──
+    try {
+      // 1시간 초과 pending 세션 만료
+      await db.pool.query(
+        `UPDATE bulk_payment_sessions SET status='expired'
+         WHERE status='pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)`
+      );
+      // pending 세션 목록 (최대 10개)
+      const [bulkList] = await db.pool.query(
+        `SELECT * FROM bulk_payment_sessions WHERE status='pending' AND deposit_address IS NOT NULL LIMIT 10`
+      );
+      for (const sess of bulkList) {
+        try {
+          // TronGrid로 입금 주소 USDT 잔액 확인
+          const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
+          const resp = await axios.get(
+            `https://api.trongrid.io/v1/accounts/${sess.deposit_address}`,
+            { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 }
+          );
+          const trc20 = resp.data?.data?.[0]?.trc20 || [];
+          const entry = trc20.find(b => {
+            const k = Object.keys(b)[0];
+            return k && k.toLowerCase() === USDT_CONTRACT.toLowerCase();
+          });
+          const bal = entry ? Number(Object.values(entry)[0]) / 1e6 : 0;
+          if (bal >= Number(sess.total_usdt) * 0.98) { // 2% 오차 허용
+            console.log(`[BULK-SWEEP] 입금 감지 token=${sess.id} bal=${bal} required=${sess.total_usdt}`);
+            await db.pool.query(`UPDATE bulk_payment_sessions SET status='paid' WHERE id=?`, [sess.id]);
+            autoSweepAndBulkGrant(sess).catch(e => console.error('[BULK-SWEEP] 오류:', e.message));
+          }
+        } catch (e) { console.warn(`[BULK-CHECK] ${sess.id} 오류:`, e.message); }
+        await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
+      }
+    } catch (e) { console.error('[BULK-CHECK] 크론 오류:', e.message); }
   } catch (e) {
     console.error('[DEPOSIT-CHECK] 크론잡 오류:', e.message);
   } finally {
@@ -3947,6 +4100,96 @@ app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, 
     }
     if (!insertSuccess) return res.status(500).json({ error: '주소 발급 실패. 잠시 후 다시 시도해주세요.' });
     res.json({ address: newAddress, walletVersion: activeWallet.wallet_version, status: 'issued', isNew: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/payment/bulk-request-address — 통합 결제 주소 발급
+app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (req, res) => {
+  try {
+    const { entries, targetDate, totalUsdt } = req.body || {};
+    if (!Array.isArray(entries) || !entries.length || !targetDate || !(totalUsdt > 0))
+      return res.status(400).json({ error: '필수 파라미터 누락' });
+
+    // 소유권 검증
+    const userIds = entries.map(e => e.userId?.toLowerCase()).filter(Boolean);
+    const [owned] = await db.pool.query(
+      `SELECT id FROM users WHERE id IN (${userIds.map(() => '?').join(',')}) AND owner_id = ?`,
+      [...userIds, req.owner.id]
+    );
+    if (owned.length !== userIds.length)
+      return res.status(403).json({ error: '소유하지 않은 계정이 포함되어 있습니다.' });
+
+    // 이미 진행 중인 세션 재사용
+    const [[existing]] = await db.pool.query(
+      `SELECT id, deposit_address, total_usdt FROM bulk_payment_sessions
+       WHERE owner_id = ? AND status = 'pending' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+       ORDER BY created_at DESC LIMIT 1`,
+      [req.owner.id]
+    );
+    if (existing) {
+      return res.json({ token: existing.id, address: existing.deposit_address, totalUsdt: Number(existing.total_usdt) });
+    }
+
+    const activeWallet = await db.collectionWalletDB.getActive();
+    if (!activeWallet) return res.status(503).json({ error: '활성화된 수금 지갑이 없습니다.' });
+
+    // 새 파생 주소 발급
+    const secret = activeWallet.xpub_key;
+    let newAddress = null, newIndex = null;
+    const MAX_RETRY = 5;
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      const [maxRows] = await db.pool.query(
+        'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+        [activeWallet.wallet_version]
+      );
+      // bulk 세션에서도 최대 index 확인
+      const [maxRowsB] = await db.pool.query(
+        'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM bulk_payment_sessions WHERE wallet_version = ?',
+        [activeWallet.wallet_version]
+      );
+      const combined = Math.max(maxRows[0].maxIdx, maxRowsB[0].maxIdx);
+      newIndex = combined + 1 + attempt;
+      if (secret) {
+        try { newAddress = deriveTronAddress(secret, newIndex); } catch (e) {
+          return res.status(500).json({ error: '주소 파생 오류.' });
+        }
+      } else {
+        newAddress = activeWallet.root_wallet_address;
+      }
+      // 중복 주소 확인
+      const [[dup]] = await db.pool.query(
+        'SELECT id FROM bulk_payment_sessions WHERE deposit_address = ?', [newAddress]
+      );
+      if (!dup) break;
+    }
+    if (!newAddress) return res.status(500).json({ error: '주소 발급 실패.' });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    await db.pool.query(
+      `INSERT INTO bulk_payment_sessions (id, owner_id, entries, target_date, total_usdt, deposit_address, wallet_version, derivation_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [token, req.owner.id, JSON.stringify(entries), targetDate, totalUsdt, newAddress, activeWallet.wallet_version, newIndex]
+    );
+    console.log(`[BULK-ADDR] 발급 owner=${req.owner.id} addr=${newAddress} total=${totalUsdt}`);
+    res.json({ token, address: newAddress, totalUsdt: Number(totalUsdt) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/owner/payment/bulk-status — 통합 결제 상태 조회
+app.get('/api/owner/payment/bulk-status', requireOwnerSession, async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'token 필요' });
+    const [[sess]] = await db.pool.query(
+      'SELECT id, status, deposit_address, total_usdt, target_date FROM bulk_payment_sessions WHERE id = ? AND owner_id = ?',
+      [token, req.owner.id]
+    );
+    if (!sess) return res.status(404).json({ error: '세션 없음' });
+    res.json({ status: sess.status, address: sess.deposit_address, totalUsdt: Number(sess.total_usdt), targetDate: sess.target_date });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

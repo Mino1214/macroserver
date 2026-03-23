@@ -4444,6 +4444,210 @@ app.patch('/api/admin/users/:id/owner', requireAdmin, async (req, res) => {
   }
 });
 
+// ========== 팝업 / 다운로드 테이블 초기화 ==========
+(async () => {
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS popups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        content TEXT,
+        image_url VARCHAR(500),
+        link_url VARCHAR(500),
+        link_label VARCHAR(100),
+        start_at DATETIME,
+        end_at DATETIME,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT NOW()
+      )
+    `);
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS downloads (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        url VARCHAR(500) NOT NULL,
+        description TEXT,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT NOW()
+      )
+    `);
+    console.log('✅ popups / downloads 테이블 확인 완료');
+  } catch (e) { console.error('테이블 초기화 오류:', e.message); }
+})();
+
+// ========== 공개 API: 팝업/다운로드 ==========
+
+// GET /api/popups — 현재 활성 팝업 (owner.html에서 사용)
+app.get('/api/popups', async (req, res) => {
+  try {
+    const now = new Date();
+    const [rows] = await db.pool.query(
+      `SELECT id, title, content, image_url, link_url, link_label
+       FROM popups
+       WHERE active=1
+         AND (start_at IS NULL OR start_at <= ?)
+         AND (end_at IS NULL OR end_at >= ?)
+       ORDER BY created_at DESC`,
+      [now, now]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/downloads — 활성 다운로드 목록 (owner.html에서 사용)
+app.get('/api/downloads', async (req, res) => {
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT id, title, url, description FROM downloads WHERE active=1 ORDER BY sort_order, created_at DESC`
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========== 어드민: 팝업 CRUD ==========
+
+app.get('/api/admin/popups', requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await db.pool.query('SELECT * FROM popups ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/popups', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    const { title, content, image_url, link_url, link_label, start_at, end_at, active } = req.body || {};
+    if (!title?.trim()) return res.status(400).json({ error: '제목을 입력하세요.' });
+    const [r] = await db.pool.query(
+      `INSERT INTO popups (title, content, image_url, link_url, link_label, start_at, end_at, active) VALUES (?,?,?,?,?,?,?,?)`,
+      [title.trim(), content||null, image_url||null, link_url||null, link_label||null,
+       start_at||null, end_at||null, active === false ? 0 : 1]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/admin/popups/:id', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    const { title, content, image_url, link_url, link_label, start_at, end_at, active } = req.body || {};
+    const fields = []; const vals = [];
+    if (title      !== undefined) { fields.push('title=?');       vals.push(title||'공지'); }
+    if (content    !== undefined) { fields.push('content=?');     vals.push(content||null); }
+    if (image_url  !== undefined) { fields.push('image_url=?');   vals.push(image_url||null); }
+    if (link_url   !== undefined) { fields.push('link_url=?');    vals.push(link_url||null); }
+    if (link_label !== undefined) { fields.push('link_label=?');  vals.push(link_label||null); }
+    if (start_at   !== undefined) { fields.push('start_at=?');    vals.push(start_at||null); }
+    if (end_at     !== undefined) { fields.push('end_at=?');      vals.push(end_at||null); }
+    if (active     !== undefined) { fields.push('active=?');      vals.push(active ? 1 : 0); }
+    if (!fields.length) return res.status(400).json({ error: '변경 항목 없음' });
+    vals.push(req.params.id);
+    await db.pool.query(`UPDATE popups SET ${fields.join(',')} WHERE id=?`, vals);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/popups/:id', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    await db.pool.query('DELETE FROM popups WHERE id=?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========== 어드민: 다운로드 CRUD ==========
+
+app.get('/api/admin/downloads', requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await db.pool.query('SELECT * FROM downloads ORDER BY sort_order, created_at DESC');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/downloads', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    const { title, url, description, sort_order, active } = req.body || {};
+    if (!title?.trim() || !url?.trim()) return res.status(400).json({ error: '제목과 URL을 입력하세요.' });
+    const [r] = await db.pool.query(
+      `INSERT INTO downloads (title, url, description, sort_order, active) VALUES (?,?,?,?,?)`,
+      [title.trim(), url.trim(), description||null, sort_order||0, active === false ? 0 : 1]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    const { title, url, description, sort_order, active } = req.body || {};
+    const fields = []; const vals = [];
+    if (title       !== undefined) { fields.push('title=?');       vals.push(title||''); }
+    if (url         !== undefined) { fields.push('url=?');         vals.push(url||''); }
+    if (description !== undefined) { fields.push('description=?'); vals.push(description||null); }
+    if (sort_order  !== undefined) { fields.push('sort_order=?');  vals.push(sort_order||0); }
+    if (active      !== undefined) { fields.push('active=?');      vals.push(active ? 1 : 0); }
+    if (!fields.length) return res.status(400).json({ error: '변경 항목 없음' });
+    vals.push(req.params.id);
+    await db.pool.query(`UPDATE downloads SET ${fields.join(',')} WHERE id=?`, vals);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    await db.pool.query('DELETE FROM downloads WHERE id=?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========== 오너 자신 계정 수정 ==========
+
+// PATCH /api/owner/me — 오너/매니저 자신의 계정 정보 수정
+app.patch('/api/owner/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) return res.status(401).json({ error: '인증 필요' });
+    const [[sess]] = await db.pool.query(
+      'SELECT owner_id FROM owner_sessions WHERE token=?', [token]
+    );
+    if (!sess) return res.status(401).json({ error: '세션 만료' });
+
+    const ownerId = sess.owner_id;
+    const { name, telegram, password, new_password } = req.body || {};
+
+    // 비밀번호 변경 시 현재 비밀번호 검증
+    if (new_password?.trim()) {
+      if (!password?.trim()) return res.status(400).json({ error: '현재 비밀번호를 입력하세요.' });
+      // account_owners 확인
+      const [[ownerRow]] = await db.pool.query('SELECT id FROM account_owners WHERE id=? AND pw=?', [ownerId, password.trim()]);
+      const [[mgrRow]]   = await db.pool.query("SELECT id FROM admins WHERE id=? AND pw=? AND role='manager'", [ownerId, password.trim()]);
+      if (!ownerRow && !mgrRow) return res.status(400).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+
+      if (ownerRow) {
+        await db.pool.query('UPDATE account_owners SET pw=? WHERE id=?', [new_password.trim(), ownerId]);
+      }
+      if (mgrRow) {
+        await db.pool.query("UPDATE admins SET pw=? WHERE id=? AND role='manager'", [new_password.trim(), ownerId]);
+      }
+    }
+
+    // 이름/텔레그램 업데이트 (owner_accounts에만 해당)
+    const [[existsOwner]] = await db.pool.query('SELECT id FROM account_owners WHERE id=?', [ownerId]);
+    if (existsOwner) {
+      const fields = []; const vals = [];
+      if (name     !== undefined) { fields.push('name=?');     vals.push(name||null); }
+      if (telegram !== undefined) { fields.push('telegram=?'); vals.push(telegram||null); }
+      if (fields.length) { vals.push(ownerId); await db.pool.query(`UPDATE account_owners SET ${fields.join(',')} WHERE id=?`, vals); }
+    }
+
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // 서버 시작
 app.listen(PORT, () => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

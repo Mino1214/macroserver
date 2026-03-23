@@ -587,6 +587,14 @@
         <span class="nav-icon">📋</span>
         <span class="nav-text">정산관리</span>
       </button>
+      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionPopups" onclick="showTab('sectionPopups');loadPopups()">
+        <span class="nav-icon">📢</span>
+        <span class="nav-text">공지팝업</span>
+      </button>
+      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionDownloads" onclick="showTab('sectionDownloads');loadDownloads()">
+        <span class="nav-icon">⬇️</span>
+        <span class="nav-text">다운로드</span>
+      </button>
 
     </nav>
   </aside><!-- /sidebar -->
@@ -900,6 +908,79 @@
       </div>
     </div>
 
+    <!-- 공지팝업 관리 (마스터) -->
+    <div class="tab-panel hidden" id="sectionPopups">
+      <div class="glass-card">
+        <h2>공지사항 팝업 관리</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">오너 페이지 로그인 시 표시되는 팝업을 설정합니다.</p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <button onclick="openPopupForm(null)" class="btn-ac btn-sm">+ 새 공지 추가</button>
+          <button onclick="loadPopups()" class="btn-ghost btn-sm">새로고침</button>
+        </div>
+        <div id="popupsList"></div>
+      </div>
+    </div>
+
+    <!-- 팝업 편집 폼 (인라인) -->
+    <div id="popupFormWrap" style="display:none;" class="glass-card" style="margin-top:10px;">
+      <h2 id="popupFormTitle">공지 추가</h2>
+      <div style="display:grid;gap:12px;max-width:600px;">
+        <div><label>제목 *</label><input type="text" id="popupTitle" placeholder="공지 제목"></div>
+        <div><label>내용 (텍스트)</label><textarea id="popupContent" rows="4" style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;resize:vertical;" placeholder="공지 내용을 입력하세요"></textarea></div>
+        <div><label>이미지 URL (선택)</label><input type="text" id="popupImageUrl" placeholder="https://..."></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><label>링크 버튼 텍스트 (선택)</label><input type="text" id="popupLinkLabel" placeholder="자세히 보기"></div>
+          <div><label>링크 URL (선택)</label><input type="text" id="popupLinkUrl" placeholder="https://..."></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><label>시작일 (선택)</label><input type="datetime-local" id="popupStartAt" style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;"></div>
+          <div><label>종료일 (선택)</label><input type="datetime-local" id="popupEndAt" style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="popupActive" checked style="accent-color:var(--ac);width:16px;height:16px;">
+          <label style="margin:0;text-transform:none;font-size:13px;">활성화</label>
+        </div>
+      </div>
+      <p id="popupFormMsg" style="font-size:13px;min-height:18px;margin-top:10px;"></p>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="savePopup()" class="btn-ac btn-sm">저장</button>
+        <button onclick="closePopupForm()" class="btn-ghost btn-sm">취소</button>
+      </div>
+    </div>
+
+    <!-- 다운로드 관리 (마스터) -->
+    <div class="tab-panel hidden" id="sectionDownloads">
+      <div class="glass-card">
+        <h2>다운로드 링크 관리</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">오너 페이지 다운로드 탭에 표시될 링크를 관리합니다.</p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <button onclick="openDownloadForm(null)" class="btn-ac btn-sm">+ 새 다운로드 추가</button>
+          <button onclick="loadDownloads()" class="btn-ghost btn-sm">새로고침</button>
+        </div>
+        <div id="downloadsList"></div>
+      </div>
+    </div>
+
+    <!-- 다운로드 편집 폼 (인라인) -->
+    <div id="downloadFormWrap" style="display:none;" class="glass-card" style="margin-top:10px;">
+      <h2 id="downloadFormTitle">다운로드 추가</h2>
+      <div style="display:grid;gap:12px;max-width:600px;">
+        <div><label>제목 *</label><input type="text" id="dlTitle" placeholder="앱 이름"></div>
+        <div><label>URL * (다운로드 링크)</label><input type="text" id="dlUrl" placeholder="https://..."></div>
+        <div><label>설명 (선택)</label><input type="text" id="dlDesc" placeholder="버전 정보 등"></div>
+        <div><label>정렬 순서 (숫자, 낮을수록 위)</label><input type="number" id="dlOrder" value="0" style="width:120px;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--fg);font-family:inherit;"></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="dlActive" checked style="accent-color:var(--ac);width:16px;height:16px;">
+          <label style="margin:0;text-transform:none;font-size:13px;">활성화</label>
+        </div>
+      </div>
+      <p id="downloadFormMsg" style="font-size:13px;min-height:18px;margin-top:10px;"></p>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="saveDownload()" class="btn-ac btn-sm">저장</button>
+        <button onclick="closeDownloadForm()" class="btn-ghost btn-sm">취소</button>
+      </div>
+    </div>
+
     <!-- 텔레그램 설정 (마스터) -->
     <div class="tab-panel hidden" id="sectionTelegram">
       <div class="glass-card">
@@ -1185,24 +1266,32 @@
           여러 유저 계정을 한 명이 한 번에 관리할 수 있는 오너 계정을 만듭니다.<br>
           오너는 <b>/owner.html</b> 에서 로그인해 연결된 모든 기기를 확인합니다.
         </p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-          <div style="flex:1;min-width:120px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;align-items:end;">
+          <div>
             <label>오너 ID</label>
             <input type="text" id="ownerNewId" placeholder="로그인 ID">
           </div>
-          <div style="flex:1;min-width:120px;">
+          <div>
             <label>비밀번호</label>
             <input type="password" id="ownerNewPw" placeholder="비밀번호">
           </div>
-          <div style="flex:1;min-width:120px;">
+          <div>
             <label>표시 이름 (선택)</label>
             <input type="text" id="ownerNewName" placeholder="홍길동">
           </div>
-          <div style="flex:1;min-width:120px;">
+          <div>
             <label>메신저 ID (선택)</label>
             <input type="text" id="ownerNewTelegram" placeholder="@telegram_id">
           </div>
-          <button class="btn-ac btn-sm" onclick="createOwner()">생성</button>
+          <div>
+            <label>담당 총판 (필수) <span style="color:var(--err)">*</span></label>
+            <select id="ownerNewManager" style="width:100%;padding:10px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;">
+              <option value="">총판 선택...</option>
+            </select>
+          </div>
+          <div style="align-self:end;">
+            <button class="btn-ac btn-sm" style="width:100%;padding:11px;" onclick="createOwner()">생성</button>
+          </div>
         </div>
         <div id="ownerCreateMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
       </div>
@@ -2754,6 +2843,203 @@
     } catch (e) { showToast(e.message, 'err'); }
   }
 
+  /* ===== 팝업 관리 ===== */
+  let _editPopupId = null;
+
+  async function loadPopups() {
+    const el = document.getElementById('popupsList');
+    try {
+      const list = await api('/api/admin/popups');
+      if (!list.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0;">등록된 공지가 없습니다.</div>'; return; }
+      el.innerHTML = list.map(p => {
+        const fmtDt = d => d ? new Date(d).toLocaleString() : '-';
+        const activeBadge = p.active
+          ? '<span style="color:var(--ok);font-size:11px;font-weight:700;">● 활성</span>'
+          : '<span style="color:var(--muted);font-size:11px;font-weight:700;">● 비활성</span>';
+        return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:14px;font-weight:700;margin-bottom:4px;">${String(p.title).replace(/</g,'&lt;')} ${activeBadge}</div>
+              <div style="font-size:12px;color:var(--muted);">기간: ${fmtDt(p.start_at)} ~ ${fmtDt(p.end_at)}</div>
+              ${p.image_url ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">이미지: ${String(p.image_url).replace(/</g,'&lt;')}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn-ghost btn-sm" onclick="openPopupForm(${p.id})">편집</button>
+              <button class="btn-ghost btn-sm" onclick="togglePopupActive(${p.id},${p.active?0:1})">${p.active?'비활성화':'활성화'}</button>
+              <button class="btn-err btn-sm" onclick="deletePopup(${p.id})">삭제</button>
+            </div>
+          </div>
+          ${p.content ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);white-space:pre-wrap;">${String(p.content).replace(/</g,'&lt;')}</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) { el.innerHTML = `<div style="color:var(--err);">${e.message}</div>`; }
+  }
+
+  async function openPopupForm(id) {
+    _editPopupId = id;
+    const wrap = document.getElementById('popupFormWrap');
+    document.getElementById('popupFormTitle').textContent = id ? '공지 편집' : '공지 추가';
+    document.getElementById('popupFormMsg').textContent = '';
+    if (id) {
+      try {
+        const list = await api('/api/admin/popups');
+        const p = list.find(x => x.id === id);
+        if (p) {
+          document.getElementById('popupTitle').value    = p.title    || '';
+          document.getElementById('popupContent').value  = p.content  || '';
+          document.getElementById('popupImageUrl').value = p.image_url  || '';
+          document.getElementById('popupLinkLabel').value= p.link_label || '';
+          document.getElementById('popupLinkUrl').value  = p.link_url   || '';
+          document.getElementById('popupStartAt').value  = p.start_at ? new Date(p.start_at).toISOString().slice(0,16) : '';
+          document.getElementById('popupEndAt').value    = p.end_at   ? new Date(p.end_at).toISOString().slice(0,16) : '';
+          document.getElementById('popupActive').checked = !!p.active;
+        }
+      } catch (_) {}
+    } else {
+      ['popupTitle','popupContent','popupImageUrl','popupLinkLabel','popupLinkUrl','popupStartAt','popupEndAt'].forEach(x => { document.getElementById(x).value = ''; });
+      document.getElementById('popupActive').checked = true;
+    }
+    wrap.style.display = '';
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closePopupForm() {
+    document.getElementById('popupFormWrap').style.display = 'none';
+    _editPopupId = null;
+  }
+
+  async function savePopup() {
+    const title    = document.getElementById('popupTitle').value.trim();
+    const msgEl    = document.getElementById('popupFormMsg');
+    if (!title) { msgEl.style.color='var(--err)'; msgEl.textContent='제목을 입력하세요.'; return; }
+    const body = {
+      title,
+      content:    document.getElementById('popupContent').value   || null,
+      image_url:  document.getElementById('popupImageUrl').value  || null,
+      link_label: document.getElementById('popupLinkLabel').value || null,
+      link_url:   document.getElementById('popupLinkUrl').value   || null,
+      start_at:   document.getElementById('popupStartAt').value   || null,
+      end_at:     document.getElementById('popupEndAt').value     || null,
+      active:     document.getElementById('popupActive').checked,
+    };
+    try {
+      if (_editPopupId) {
+        await api('/api/admin/popups/' + _editPopupId, 'PATCH', body);
+      } else {
+        await api('/api/admin/popups', 'POST', body);
+      }
+      msgEl.style.color='var(--ok)'; msgEl.textContent='저장 완료';
+      setTimeout(closePopupForm, 600);
+      loadPopups();
+    } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message||'실패'; }
+  }
+
+  async function togglePopupActive(id, active) {
+    try { await api('/api/admin/popups/' + id, 'PATCH', { active: !!active }); loadPopups(); }
+    catch (e) { showToast(e.message||'실패','err'); }
+  }
+
+  async function deletePopup(id) {
+    if (!confirm('이 공지를 삭제하시겠습니까?')) return;
+    try { await api('/api/admin/popups/' + id, 'DELETE'); loadPopups(); }
+    catch (e) { showToast(e.message||'실패','err'); }
+  }
+
+  /* ===== 다운로드 관리 ===== */
+  let _editDownloadId = null;
+
+  async function loadDownloads() {
+    const el = document.getElementById('downloadsList');
+    try {
+      const list = await api('/api/admin/downloads');
+      if (!list.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0;">등록된 다운로드가 없습니다.</div>'; return; }
+      el.innerHTML = list.map(d => {
+        const activeBadge = d.active
+          ? '<span style="color:var(--ok);font-size:11px;font-weight:700;">● 활성</span>'
+          : '<span style="color:var(--muted);font-size:11px;font-weight:700;">● 비활성</span>';
+        return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:14px;font-weight:700;margin-bottom:2px;">${String(d.title).replace(/</g,'&lt;')} ${activeBadge}</div>
+              ${d.description ? `<div style="font-size:12px;color:var(--muted);">${String(d.description).replace(/</g,'&lt;')}</div>` : ''}
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">URL: ${String(d.url).replace(/</g,'&lt;')}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn-ghost btn-sm" onclick="openDownloadForm(${d.id})">편집</button>
+              <button class="btn-ghost btn-sm" onclick="toggleDownloadActive(${d.id},${d.active?0:1})">${d.active?'비활성화':'활성화'}</button>
+              <button class="btn-err btn-sm" onclick="deleteDownload(${d.id})">삭제</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (e) { el.innerHTML = `<div style="color:var(--err);">${e.message}</div>`; }
+  }
+
+  async function openDownloadForm(id) {
+    _editDownloadId = id;
+    const wrap = document.getElementById('downloadFormWrap');
+    document.getElementById('downloadFormTitle').textContent = id ? '다운로드 편집' : '다운로드 추가';
+    document.getElementById('downloadFormMsg').textContent = '';
+    if (id) {
+      try {
+        const list = await api('/api/admin/downloads');
+        const d = list.find(x => x.id === id);
+        if (d) {
+          document.getElementById('dlTitle').value = d.title || '';
+          document.getElementById('dlUrl').value   = d.url   || '';
+          document.getElementById('dlDesc').value  = d.description || '';
+          document.getElementById('dlOrder').value = d.sort_order ?? 0;
+          document.getElementById('dlActive').checked = !!d.active;
+        }
+      } catch (_) {}
+    } else {
+      ['dlTitle','dlUrl','dlDesc'].forEach(x => { document.getElementById(x).value = ''; });
+      document.getElementById('dlOrder').value = '0';
+      document.getElementById('dlActive').checked = true;
+    }
+    wrap.style.display = '';
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeDownloadForm() {
+    document.getElementById('downloadFormWrap').style.display = 'none';
+    _editDownloadId = null;
+  }
+
+  async function saveDownload() {
+    const title = document.getElementById('dlTitle').value.trim();
+    const url   = document.getElementById('dlUrl').value.trim();
+    const msgEl = document.getElementById('downloadFormMsg');
+    if (!title || !url) { msgEl.style.color='var(--err)'; msgEl.textContent='제목과 URL을 입력하세요.'; return; }
+    const body = {
+      title, url,
+      description: document.getElementById('dlDesc').value  || null,
+      sort_order:  parseInt(document.getElementById('dlOrder').value) || 0,
+      active:      document.getElementById('dlActive').checked,
+    };
+    try {
+      if (_editDownloadId) {
+        await api('/api/admin/downloads/' + _editDownloadId, 'PATCH', body);
+      } else {
+        await api('/api/admin/downloads', 'POST', body);
+      }
+      msgEl.style.color='var(--ok)'; msgEl.textContent='저장 완료';
+      setTimeout(closeDownloadForm, 600);
+      loadDownloads();
+    } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message||'실패'; }
+  }
+
+  async function toggleDownloadActive(id, active) {
+    try { await api('/api/admin/downloads/' + id, 'PATCH', { active: !!active }); loadDownloads(); }
+    catch (e) { showToast(e.message||'실패','err'); }
+  }
+
+  async function deleteDownload(id) {
+    if (!confirm('이 다운로드 링크를 삭제하시겠습니까?')) return;
+    try { await api('/api/admin/downloads/' + id, 'DELETE'); loadDownloads(); }
+    catch (e) { showToast(e.message||'실패','err'); }
+  }
+
   /* ===== 오너 편집 모달 ===== */
   let _ownerEditId = null;
 
@@ -2868,6 +3154,15 @@
   async function loadOwnerMgmt() {
     const tbody = document.getElementById('ownerListBody');
     tbody.innerHTML = '<tr><td colspan="6" class="no-data">불러오는 중...</td></tr>';
+    // 담당 총판 드롭다운 채우기 (마스터 권한인 경우)
+    const mgrSel = document.getElementById('ownerNewManager');
+    if (mgrSel) {
+      try {
+        const managers = await api('/api/admin/managers');
+        mgrSel.innerHTML = '<option value="">총판 선택...</option>' +
+          managers.map(m => `<option value="${m.id}">${m.id}${m.telegram ? ' ('+m.telegram+')' : ''}</option>`).join('');
+      } catch (_) {}
+    }
     try {
       const data = await api('/api/admin/account-owners');
       const owners = data.owners || [];
@@ -2896,20 +3191,19 @@
   }
 
   async function createOwner() {
-    const id = document.getElementById('ownerNewId').value.trim();
-    const pw = document.getElementById('ownerNewPw').value.trim();
-    const name = document.getElementById('ownerNewName').value.trim();
+    const id       = document.getElementById('ownerNewId').value.trim();
+    const pw       = document.getElementById('ownerNewPw').value.trim();
+    const name     = document.getElementById('ownerNewName').value.trim();
     const telegram = document.getElementById('ownerNewTelegram').value.trim();
-    const msg = document.getElementById('ownerCreateMsg');
-    if (!id || !pw) { msg.style.color='var(--err)'; msg.textContent='ID와 비밀번호는 필수입니다.'; return; }
+    const manager_id = document.getElementById('ownerNewManager')?.value || '';
+    const msg      = document.getElementById('ownerCreateMsg');
+    if (!id || !pw)        { msg.style.color='var(--err)'; msg.textContent='ID와 비밀번호는 필수입니다.'; return; }
+    if (!manager_id)       { msg.style.color='var(--err)'; msg.textContent='담당 총판을 선택해주세요.'; return; }
     msg.style.color='var(--muted)'; msg.textContent='생성 중...';
     try {
-      await api('/api/admin/account-owners', 'POST', { id, password: pw, name: name||undefined, telegram: telegram||undefined });
+      await api('/api/admin/account-owners', 'POST', { id, password: pw, name: name||undefined, telegram: telegram||undefined, manager_id });
       msg.style.color='var(--ok)'; msg.textContent='오너 계정 생성 완료. 로그인 주소: /owner.html';
-      document.getElementById('ownerNewId').value = '';
-      document.getElementById('ownerNewPw').value = '';
-      document.getElementById('ownerNewName').value = '';
-      document.getElementById('ownerNewTelegram').value = '';
+      ['ownerNewId','ownerNewPw','ownerNewName','ownerNewTelegram'].forEach(x => { document.getElementById(x).value = ''; });
       loadOwnerMgmt();
     } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message; }
   }

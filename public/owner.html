@@ -215,8 +215,6 @@
 <!-- ====== 로그인 ====== -->
 <div id="loginBox">
   <div class="login-wrap">
-
-    <!-- 로그인 카드 -->
     <div class="login-card">
       <div class="login-title">그룹 대시보드</div>
       <div class="login-sub">연결된 모든 기기를 한눈에 관리하세요</div>
@@ -230,36 +228,42 @@
       </div>
       <button class="btn-ac btn-full" id="loginBtn" onclick="doLogin()">로그인</button>
       <div class="errmsg" id="loginErr"></div>
+      <div style="text-align:center;margin-top:14px;">
+        <a onclick="openRegisterModal()" style="font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline;">계정이 없으신가요? 회원가입 신청</a>
+      </div>
     </div>
+  </div>
+</div>
 
-    <!-- 회원가입 카드 -->
-    <div class="reg-toggle">
-      <a onclick="toggleRegister()">계정이 없으신가요? 회원가입 ▾</a>
+<!-- ====== 회원가입 모달 ====== -->
+<div id="registerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;overflow-y:auto;padding:16px;">
+  <div class="login-card" style="max-width:400px;width:100%;margin:auto;position:relative;">
+    <button onclick="closeRegisterModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    <div class="login-title" style="font-size:18px;margin-bottom:4px">회원가입 신청</div>
+    <div class="login-sub" style="margin-bottom:18px">추천인 코드(총판 ID)를 입력하세요<br>승인 후 로그인 가능합니다.</div>
+    <div class="field">
+      <label>아이디</label>
+      <input type="text" id="regId" placeholder="사용할 아이디" autocomplete="off">
     </div>
-    <div id="registerBox" class="login-card" style="margin-top:10px;">
-      <div class="login-title" style="font-size:18px;margin-bottom:4px">회원가입</div>
-      <div class="login-sub" style="margin-bottom:18px">추천인 코드(총판 ID)를 입력하세요</div>
-      <div class="field">
-        <label>아이디</label>
-        <input type="text" id="regId" placeholder="사용할 아이디" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>비밀번호</label>
-        <input type="password" id="regPw" placeholder="비밀번호" autocomplete="new-password">
-      </div>
-      <div class="field">
-        <label>추천인 코드 (총판 ID)</label>
-        <input type="text" id="regReferral" placeholder="예: manager01" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>텔레그램 (선택)</label>
-        <input type="text" id="regTelegram" placeholder="@username">
-      </div>
-      <button class="btn-ac btn-full" id="regBtn" onclick="doRegister()">회원가입 신청</button>
-      <div class="errmsg" id="regErr"></div>
-      <div class="okmsg" id="regOk"></div>
+    <div class="field">
+      <label>비밀번호</label>
+      <input type="password" id="regPw" placeholder="비밀번호" autocomplete="new-password">
     </div>
-
+    <div class="field">
+      <label>이름 (선택)</label>
+      <input type="text" id="regName" placeholder="홍길동" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>추천인 코드 (총판 ID)</label>
+      <input type="text" id="regReferral" placeholder="예: manager01" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>텔레그램 (선택)</label>
+      <input type="text" id="regTelegram" placeholder="@username">
+    </div>
+    <button class="btn-ac btn-full" id="regBtn" onclick="doRegister()">회원가입 신청</button>
+    <div class="errmsg" id="regErr"></div>
+    <div class="okmsg"  id="regOk"></div>
   </div>
 </div>
 
@@ -566,14 +570,24 @@
   }
 
   /* ===================== REGISTER ===================== */
-  function toggleRegister() {
-    const box = document.getElementById('registerBox');
-    box.classList.toggle('open');
+  function openRegisterModal() {
+    const m = document.getElementById('registerModal');
+    m.style.display = 'flex';
+    document.getElementById('regErr').textContent = '';
+    document.getElementById('regOk').textContent  = '';
   }
+
+  function closeRegisterModal() {
+    document.getElementById('registerModal').style.display = 'none';
+  }
+
+  // 기존 toggleRegister 호환
+  function toggleRegister() { openRegisterModal(); }
 
   async function doRegister() {
     const id       = document.getElementById('regId').value.trim();
     const pw       = document.getElementById('regPw').value.trim();
+    const name     = document.getElementById('regName')?.value.trim() || '';
     const referral = document.getElementById('regReferral').value.trim();
     const telegram = document.getElementById('regTelegram').value.trim();
     const errEl    = document.getElementById('regErr');
@@ -583,16 +597,14 @@
     if (!id || !pw || !referral) { errEl.textContent = '아이디, 비밀번호, 추천인 코드를 입력하세요.'; return; }
     btn.disabled = true; btn.textContent = '처리 중...';
     try {
-      const r = await fetch(API + '/api/register', {
+      const r = await fetch(API + '/api/owner/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, password: pw, referralCode: referral, telegram: telegram || undefined }),
+        body: JSON.stringify({ id, password: pw, name: name || undefined, referralCode: referral, telegram: telegram || undefined }),
       });
       const data = await r.json();
       if (!r.ok) { errEl.textContent = data.error || '가입 실패'; return; }
-      okEl.textContent = data.message || '가입 신청이 완료되었습니다. 관리자 승인을 기다려주세요.';
-      document.getElementById('regId').value = '';
-      document.getElementById('regPw').value = '';
-      document.getElementById('regTelegram').value = '';
+      okEl.textContent = '가입 신청 완료! 관리자 승인 후 로그인 가능합니다.';
+      ['regId','regPw','regName','regReferral','regTelegram'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     } catch { errEl.textContent = '서버 연결 오류'; }
     finally { btn.disabled = false; btn.textContent = '회원가입 신청'; }
   }
@@ -690,7 +702,6 @@
           <div class="ac-row"><span class="ac-label">남은 일수</span><span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span></div>
         </div>
         <div class="ac-actions">
-          // <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
           <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
           <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
         </div>

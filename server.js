@@ -451,6 +451,18 @@ async function runMigrations() {
     console.error('DB 마이그레이션(owner_sessions) 오류:', e.message);
   }
   try {
+    // account_owners 테이블에 status 컬럼 추가
+    const [oCols] = await db.pool.query("SHOW COLUMNS FROM account_owners LIKE 'status'");
+    if (oCols.length === 0) {
+      await db.pool.query("ALTER TABLE account_owners ADD COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER manager_id");
+      console.log('✅ DB 마이그레이션: account_owners.status 컬럼 추가');
+    } else {
+      console.log('✅ DB 마이그레이션: account_owners.status 확인 완료');
+    }
+  } catch (e) {
+    console.error('DB 마이그레이션(account_owners.status) 오류:', e.message);
+  }
+  try {
     // users 테이블에 owner_id 컬럼 추가
     const [cols] = await db.pool.query("SHOW COLUMNS FROM users LIKE 'owner_id'");
     if (cols.length === 0) {
@@ -3683,13 +3695,55 @@ app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, a
 
 // ========== 그룹 오너 API ==========
 
+// POST /api/owner/register — 공개 오너 가입 (pending 상태로 등록, 담당 매니저에게 텔레그램 알림)
+app.post('/api/owner/register', async (req, res) => {
+  try {
+    const { id, password, name, telegram, referralCode } = req.body || {};
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    const ownerId = id.trim().toLowerCase();
+    const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
+    if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+
+    let managerId = null;
+    if (referralCode?.trim()) {
+      const [[mgr]] = await db.pool.query("SELECT id FROM admins WHERE id = ? AND role IN ('manager','master')", [referralCode.trim()]);
+      if (!mgr) return res.status(400).json({ error: '유효하지 않은 추천인 코드입니다.' });
+      managerId = mgr.id;
+    }
+
+    await db.pool.query(
+      'INSERT INTO account_owners (id, pw, name, telegram, manager_id, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, managerId, 'pending']
+    );
+
+    // 담당 매니저에게 텔레그램 알림
+    if (managerId) {
+      try {
+        const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM admins WHERE id = ?', [managerId]);
+        if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
+          await sendTelegram(
+            mgr.tg_bot_token, mgr.tg_chat_id,
+            `📩 <b>오너 가입 요청</b>\n아이디: <code>${ownerId}</code>\n이름: ${name?.trim() || '-'}\n텔레그램: ${telegram?.trim() || '-'}`
+          );
+        }
+      } catch (tgErr) { console.warn('오너 가입 텔레그램 알림 실패:', tgErr.message); }
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/owner/login
 app.post('/api/owner/login', async (req, res) => {
   try {
     const { id, password } = req.body || {};
     if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
-    const [[owner]] = await db.pool.query('SELECT id, name, telegram, manager_id FROM account_owners WHERE id = ? AND pw = ?', [id.trim().toLowerCase(), password.trim()]);
+    const [[owner]] = await db.pool.query('SELECT id, name, telegram, manager_id, status FROM account_owners WHERE id = ? AND pw = ?', [id.trim().toLowerCase(), password.trim()]);
     if (!owner) return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    if (owner.status === 'pending')  return res.status(403).json({ error: '관리자 승인 대기 중입니다.' });
+    if (owner.status === 'rejected') return res.status(403).json({ error: '가입이 거절되었습니다. 관리자에게 문의하세요.' });
     const token = crypto.randomBytes(24).toString('hex');
     await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, owner.id]);
     res.json({ token, id: owner.id, name: owner.name || owner.id, telegram: owner.telegram || '' });
@@ -3900,27 +3954,32 @@ app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, 
 
 // ========== 관리자 — 그룹 오너 관리 API ==========
 
-// GET /api/admin/account-owners — 오너 목록
+// GET /api/admin/account-owners — 오너 목록 (status 포함)
 app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
   try {
-    let query = `SELECT o.id, o.name, o.telegram, o.manager_id, o.created_at,
-                        COUNT(u.id) as account_count
-                 FROM account_owners o
-                 LEFT JOIN users u ON u.owner_id = o.id`;
+    let where = '';
     const params = [];
     if (req.admin.role !== 'master') {
-      query += ' WHERE o.manager_id = ?';
+      where = ' WHERE o.manager_id = ?';
       params.push(req.admin.id);
     }
-    query += ' GROUP BY o.id ORDER BY o.created_at DESC';
-    const [rows] = await db.pool.query(query, params);
+    const [rows] = await db.pool.query(
+      `SELECT o.id, o.name, o.telegram, o.manager_id, o.status, o.created_at,
+              COUNT(u.id) as account_count
+       FROM account_owners o
+       LEFT JOIN users u ON u.owner_id = o.id
+       ${where}
+       GROUP BY o.id
+       ORDER BY FIELD(o.status,'pending','approved','rejected'), o.created_at DESC`,
+      params
+    );
     res.json({ owners: rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/admin/account-owners — 오너 생성
+// POST /api/admin/account-owners — 오너 직접 생성 (status='approved')
 app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
   try {
     const { id, password, name, telegram } = req.body || {};
@@ -3930,13 +3989,39 @@ app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
     if (exists) return res.status(400).json({ error: '이미 존재하는 ID입니다.' });
     const managerId = req.admin.role === 'master' ? (req.body.manager_id || null) : req.admin.id;
     await db.pool.query(
-      'INSERT INTO account_owners (id, pw, name, telegram, manager_id) VALUES (?, ?, ?, ?, ?)',
-      [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, managerId]
+      'INSERT INTO account_owners (id, pw, name, telegram, manager_id, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, managerId, 'approved']
     );
     res.json({ ok: true, id: ownerId });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// POST /api/admin/account-owners/:id/approve — 오너 승인
+app.post('/api/admin/account-owners/:id/approve', requireAdmin, async (req, res) => {
+  try {
+    const ownerId = req.params.id;
+    if (req.admin.role !== 'master') {
+      const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+    }
+    await db.pool.query("UPDATE account_owners SET status = 'approved' WHERE id = ?", [ownerId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/account-owners/:id/reject — 오너 거절
+app.post('/api/admin/account-owners/:id/reject', requireAdmin, async (req, res) => {
+  try {
+    const ownerId = req.params.id;
+    if (req.admin.role !== 'master') {
+      const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+    }
+    await db.pool.query("UPDATE account_owners SET status = 'rejected' WHERE id = ?", [ownerId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/admin/account-owners/:id — 오너 삭제

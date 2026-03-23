@@ -393,8 +393,8 @@
 
   <!-- Tab bar -->
   <div class="tabbar" id="tabBar">
-    <button class="tab-btn active" data-tab="sectionUsers" onclick="showTab('sectionUsers');loadUsers()">
-      <span class="icon">👤</span><span>사용자</span><span id="pendingBadge" class="pending-badge" style="display:none"></span>
+    <button class="tab-btn active" data-tab="sectionUsers" onclick="showTab('sectionUsers');loadOwners()">
+      <span class="icon">🗂️</span><span>그룹 오너</span><span id="pendingBadge" class="pending-badge" style="display:none"></span>
     </button>
     <button class="tab-btn" data-tab="sectionMyTgBot" onclick="showTab('sectionMyTgBot')">
       <span class="icon">📣</span><span>알림봇</span>
@@ -431,70 +431,69 @@
     <button class="tab-btn master-tab nav-master hidden" data-tab="sectionSettleMgmt" onclick="showTab('sectionSettleMgmt');loadSettleMgmt()">
       <span class="icon">📋</span><span>정산관리</span>
     </button>
-    <!-- 그룹(오너) 관리 탭 — 매니저/마스터 공통 -->
-    <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionOwnerMgmt" onclick="showTab('sectionOwnerMgmt');loadOwnerMgmt()">
-      <span class="icon">🗂️</span><span>그룹관리</span>
-    </button>
+    <!-- 그룹(오너) 관리 탭 — 사용자 탭으로 통합됨 -->
+    <!-- <button class="tab-btn manager-tab nav-manager hidden" data-tab="sectionOwnerMgmt" ...> -->
   </div>
 
   <!-- Tab Content -->
   <div class="tab-content">
 
-    <!-- 사용자 관리 (대기/활성/세션 통합) -->
+    <!-- 그룹 오너 관리 (사용자 탭) -->
     <div class="tab-panel active" id="sectionUsers">
-      <!-- 마스터 전용 계정 생성 -->
-      <div id="userCreateForm" class="glass-card hidden" style="margin-bottom:12px;">
-        <h2 id="usersTitle" style="margin-bottom:12px">사용자 직접 생성</h2>
-        <div class="form-grid">
-          <input type="text" id="newUserId" placeholder="아이디">
-          <input type="password" id="newUserPw" placeholder="비밀번호">
-          <select id="newUserManager"><option value="">(매니저 선택)</option></select>
-          <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
-          <button onclick="addUser()" class="btn-ok btn-sm">직접 생성</button>
+
+      <!-- 오너 계정 직접 생성 (토글) -->
+      <div class="glass-card" style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOwnerCreateForm()">
+          <h2 style="margin:0;font-size:15px;">➕ 오너 계정 직접 생성</h2>
+          <span id="ownerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
+        </div>
+        <div id="ownerCreateFormInline" style="display:none;margin-top:14px;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:110px;"><label>오너 ID</label><input type="text" id="ownerNewId" placeholder="로그인 ID"></div>
+            <div style="flex:1;min-width:110px;"><label>비밀번호</label><input type="password" id="ownerNewPw" placeholder="비밀번호"></div>
+            <div style="flex:1;min-width:110px;"><label>표시 이름 (선택)</label><input type="text" id="ownerNewName" placeholder="홍길동"></div>
+            <div style="flex:1;min-width:110px;"><label>메신저 (선택)</label><input type="text" id="ownerNewTelegram" placeholder="@id"></div>
+            <button class="btn-ac btn-sm" onclick="createOwner()">생성 (즉시 활성)</button>
+          </div>
+          <div id="ownerCreateMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
         </div>
       </div>
+
+      <!-- 오너 목록 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-          <h2 style="margin:0">사용자 관리</h2>
+          <h2 style="margin:0">그룹 오너 목록</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn-ghost btn-sm user-filter-btn active" data-filter="all" onclick="setUserFilter('all')">전체</button>
-            <button class="btn-ghost btn-sm user-filter-btn" data-filter="pending" onclick="setUserFilter('pending')">대기</button>
-            <button class="btn-ghost btn-sm user-filter-btn" data-filter="approved" onclick="setUserFilter('approved')">활성</button>
-            <button class="btn-ghost btn-sm user-filter-btn" data-filter="suspended" onclick="setUserFilter('suspended')">정지</button>
-            <button class="btn-ghost btn-sm" onclick="loadUsers()">새로고침</button>
+            <button class="btn-ghost btn-sm user-filter-btn active" data-filter="all"      onclick="setOwnerFilter('all')">전체</button>
+            <button class="btn-ghost btn-sm user-filter-btn"        data-filter="pending"  onclick="setOwnerFilter('pending')">대기</button>
+            <button class="btn-ghost btn-sm user-filter-btn"        data-filter="approved" onclick="setOwnerFilter('approved')">활성</button>
+            <button class="btn-ghost btn-sm" onclick="loadOwners()">새로고침</button>
           </div>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
             <table>
               <thead><tr>
-                <th>아이디</th>
-                <th id="thManager" class="hidden">매니저</th>
-                <th>텔레그램</th>
+                <th></th>
+                <th>오너 ID</th>
+                <th id="thOwnerManager" class="hidden">매니저</th>
+                <th>이름</th>
+                <th>메신저</th>
+                <th>기기수</th>
                 <th>상태</th>
-                <th>사용기간</th>
                 <th>조치</th>
               </tr></thead>
-              <tbody id="userList"></tbody>
+              <tbody id="ownerListBody"></tbody>
             </table>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 승인 대기 (숨김 — 내부 로직용) -->
-    <div style="display:none" id="sectionPending">
-      <table id="tablePending"><thead><tr>
-        <th>아이디</th><th id="thPendingManager">매니저</th><th>텔레그램</th><th>신청일</th><th>작업</th>
-      </tr></thead><tbody></tbody></table>
-      <p id="msgPending"></p>
-    </div>
-
-    <!-- 세션 (숨김 — 내부 로직용) -->
-    <div style="display:none" id="sectionSessions">
-      <table><thead><tr><th>사용자</th><th>토큰</th><th>작업</th></tr></thead>
-      <tbody id="sessions"></tbody></table>
-    </div>
+    <!-- 기존 구조 유지용 숨김 요소 -->
+    <div style="display:none" id="sectionPending"></div>
+    <div style="display:none" id="sectionSessions"><tbody id="sessions"></tbody></div>
+    <div style="display:none"><tbody id="userList"></tbody></div>
 
     <!-- 알림봇 탭 (마스터 = 중앙 알림봇 / 매니저 = 본인 봇) -->
     <div class="tab-panel" id="sectionMyTgBot">
@@ -1462,150 +1461,178 @@
     } catch (e) { alert('실패: ' + e.message); }
   }
 
-  /* ===== USERS ===== */
-  let _userFilter = 'all';
-  function setUserFilter(f) {
-    _userFilter = f;
+  /* ===== GROUP OWNERS (사용자 탭 → 그룹 오너 관리) ===== */
+  let _ownerFilter = 'all';
+  let _allOwners   = [];
+  let _expandedOwner = null;
+
+  function setOwnerFilter(f) {
+    _ownerFilter = f;
     document.querySelectorAll('.user-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
-    renderUserList();
+    renderOwnerList();
   }
 
-  async function loadUsers() {
-    try {
-      const [list, sessions] = await Promise.all([
-        api('/api/admin/users'),
-        api('/api/admin/sessions').catch(() => [])
-      ]);
-      allUsers = list;
-      _activeSessions = new Set((sessions || []).map(s => s.userId));
+  function toggleOwnerCreateForm() {
+    const box  = document.getElementById('ownerCreateFormInline');
+    const lbl  = document.getElementById('ownerCreateToggle');
+    const open = box.style.display === 'none';
+    box.style.display = open ? '' : 'none';
+    lbl.textContent   = open ? '▲ 닫기' : '▼ 열기';
+  }
 
-      // 대기 배지 업데이트
-      const pendingCount = list.filter(u => u.status === 'pending').length;
+  async function loadOwners() {
+    // 기존 loadUsers() 역할 대체
+    const tbody = document.getElementById('ownerListBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/account-owners');
+      _allOwners = data.owners || [];
+      const pendingCount = _allOwners.filter(o => o.status === 'pending').length;
       const badge = document.getElementById('pendingBadge');
       if (badge) { badge.textContent = pendingCount || ''; badge.style.display = pendingCount ? '' : 'none'; }
-
-      renderUserList();
-    } catch (e) { console.error('사용자 실패:', e); }
+      renderOwnerList();
+    } catch (e) {
+      const tbody = document.getElementById('ownerListBody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${String(e.message).replace(/</g,'&lt;')}</td></tr>`;
+    }
   }
 
-  function renderUserList() {
-    const list = allUsers || [];
-    const tbody = document.getElementById('userList');
+  // alias so old code paths still work
+  function loadUsers() { loadOwners(); }
+
+  function renderOwnerList() {
+    const tbody = document.getElementById('ownerListBody');
     if (!tbody) return;
     const isMaster = me && me.role === 'master';
-    const cols = isMaster ? 6 : 5;
 
-    const filtered = _userFilter === 'all' ? list : list.filter(u => {
-      if (_userFilter === 'approved') return u.status === 'approved';
-      if (_userFilter === 'pending')  return u.status === 'pending';
-      if (_userFilter === 'suspended') return u.status === 'suspended';
-      return true;
-    });
+    let list = _allOwners;
+    if (_ownerFilter === 'pending')  list = _allOwners.filter(o => o.status === 'pending');
+    if (_ownerFilter === 'approved') list = _allOwners.filter(o => o.status === 'approved');
 
-    if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state">해당하는 사용자가 없습니다.</td></tr>`;
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">해당하는 오너가 없습니다.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = filtered.map(u => {
-      const esc = u.id.replace(/'/g, "\\'");
-      const isOnline = _activeSessions && _activeSessions.has(u.id);
+    const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toISOString().slice(0,10); };
 
-      // 상태 dot
-      const dotClass = u.status === 'approved' ? 'dot-blue' : u.status === 'suspended' ? 'dot-red' : 'dot-orange';
-      const statusLabel = u.status === 'approved' ? '활성' : u.status === 'suspended' ? '정지' : '대기';
-      const dotHtml = `<div class="dot-wrap"><span class="status-dot ${dotClass}"></span><span style="font-size:12px">${statusLabel}</span></div>`;
+    tbody.innerHTML = list.map(o => {
+      const eid = String(o.id).replace(/'/g,"\\'").replace(/</g,'&lt;');
+      const dotCls = o.status === 'approved' ? 'dot-blue' : o.status === 'rejected' ? 'dot-red' : 'dot-orange';
+      const statusLbl = o.status === 'approved' ? '활성' : o.status === 'rejected' ? '거절' : '대기';
+      const dotHtml = `<div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:12px">${statusLbl}</span></div>`;
+      const isExpanded = _expandedOwner === o.id;
 
-      // 사용기간 — remainingDays 우선, 없으면 expireDate로 직접 계산
-      let _days = u.remainingDays;
-      if ((_days === null || _days === undefined) && u.expireDate) {
-        _days = Math.ceil((new Date(u.expireDate) - new Date()) / 86400000);
-      }
-      let periodHtml = '<span style="color:var(--muted)">-</span>';
-      if (u.status === 'pending') {
-        periodHtml = '<span style="color:var(--muted);font-size:11px">승인 대기</span>';
-      } else if (typeof _days === 'number' && !isNaN(_days)) {
-        if (_days <= 0) {
-          periodHtml = '<span class="period-err">만료</span>';
-        } else if (_days <= 7) {
-          periodHtml = `<span class="period-warn">${_days}일 남음</span>`;
-        } else {
-          periodHtml = `<span class="period-ok">${_days}일 남음</span>`;
-        }
-      }
-
-      // 조치 버튼
       let actions = '';
-      if (u.status === 'pending') {
-        actions = `<button class="btn-ok btn-sm" onclick="approveUser('${esc}')">승인</button>
-                   <button class="btn-err btn-sm" onclick="rejectUser('${esc}')">거부</button>`;
+      if (o.status === 'pending') {
+        actions = `<button class="btn-ok btn-sm" onclick="approveOwner('${eid}')">승인</button>
+                   <button class="btn-err btn-sm" onclick="rejectOwner('${eid}')">거절</button>`;
       } else {
-        actions = `<button class="btn-ghost btn-sm" onclick="setSubscription('${esc}')">기간</button>`;
-        if (u.status === 'approved') {
-          actions += `<button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','approved')">정지</button>`;
-        } else {
-          actions += `<button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','suspended')">활성화</button>`;
-        }
-        actions += `<button class="btn-ghost btn-sm${isOnline ? '' : ' hidden-kick'}" onclick="kickUser('${esc}')" title="세션 끊기" style="${isOnline ? 'color:var(--warn)' : 'color:var(--muted);opacity:.5'}">세션끊기</button>`;
+        actions = `<button class="btn-err btn-sm" onclick="deleteOwner('${eid}')">삭제</button>`;
       }
-      if (isMaster) actions += `<button class="btn-err btn-sm" onclick="removeUser('${esc}')">삭제</button>`;
 
-      return `<tr>
-        <td><b>${u.id}</b>${isOnline ? ' <span style="font-size:10px;color:var(--ok)">●</span>' : ''}</td>
-        ${isMaster ? `<td style="font-size:12px;color:var(--muted)">${u.managerId||'-'}</td>` : ''}
-        <td style="font-size:12px">${u.telegram||'-'}</td>
+      const expandRow = isExpanded ? `<tr id="ownerExpandRow_${eid}"><td colspan="8" style="padding:0;">
+        <div style="background:var(--bg3);border-top:1px solid var(--border);padding:14px 20px;" id="ownerExpandContent_${eid}">
+          <div style="font-size:12px;color:var(--muted)">불러오는 중...</div>
+        </div>
+      </td></tr>` : '';
+
+      return `<tr style="cursor:pointer;" onclick="toggleOwnerExpand('${eid}')">
+        <td style="color:var(--muted);font-size:18px;">${isExpanded ? '▾' : '▸'}</td>
+        <td><b>${String(o.id).replace(/</g,'&lt;')}</b></td>
+        ${isMaster ? `<td style="font-size:12px;color:var(--muted)">${o.manager_id||'-'}</td>` : ''}
+        <td style="font-size:12px">${o.name ? String(o.name).replace(/</g,'&lt;') : '<span style="color:var(--muted)">-</span>'}</td>
+        <td style="font-size:12px;color:var(--muted)">${o.telegram ? String(o.telegram).replace(/</g,'&lt;') : '-'}</td>
+        <td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600">${o.account_count}개</span></td>
         <td>${dotHtml}</td>
-        <td>${periodHtml}</td>
-        <td style="white-space:nowrap;">${actions}</td>
-      </tr>`;
+        <td style="white-space:nowrap;" onclick="event.stopPropagation()">${actions}</td>
+      </tr>${expandRow}`;
     }).join('');
+
+    // 펼쳐진 오너 기기 목록 로드
+    if (_expandedOwner) loadOwnerDevices(_expandedOwner);
+
+    // 마스터 컬럼 show/hide
+    const thMgr = document.getElementById('thOwnerManager');
+    if (thMgr) thMgr.classList.toggle('hidden', !isMaster);
   }
 
+  async function toggleOwnerExpand(ownerId) {
+    if (_expandedOwner === ownerId) {
+      _expandedOwner = null;
+    } else {
+      _expandedOwner = ownerId;
+    }
+    renderOwnerList();
+  }
+
+  async function loadOwnerDevices(ownerId) {
+    const el = document.getElementById('ownerExpandContent_' + ownerId);
+    if (!el) return;
+    try {
+      const data = await api('/api/admin/account-owners/' + encodeURIComponent(ownerId) + '/accounts');
+      const accs = data.accounts || [];
+      if (!accs.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px;">연결된 기기 없음</span>'; return; }
+      const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toISOString().slice(0,10); };
+      el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">기기 ${accs.length}개</div>
+        <div class="table-wrapper" style="max-height:260px;overflow-y:auto;">
+          <table>
+            <thead><tr><th>기기 ID</th><th>텔레그램</th><th>상태</th><th>만료일</th></tr></thead>
+            <tbody>
+              ${accs.map(a => {
+                const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
+                const lbl    = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
+                return `<tr>
+                  <td style="font-size:12px;font-weight:600">${String(a.id).replace(/</g,'&lt;')}</td>
+                  <td style="font-size:11px;color:var(--muted)">${a.telegram || '-'}</td>
+                  <td><div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:11px">${lbl}</span></div></td>
+                  <td style="font-size:11px;color:var(--muted)">${fmtD(a.expire_date)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (e) { el.innerHTML = `<span style="color:var(--err);font-size:12px">${String(e.message).replace(/</g,'&lt;')}</span>`; }
+  }
+
+  async function approveOwner(ownerId) {
+    if (!confirm(ownerId + ' 오너 계정을 승인하시겠습니까?')) return;
+    try {
+      await api('/api/admin/account-owners/' + encodeURIComponent(ownerId) + '/approve', 'POST');
+      showToast('승인 완료', 'ok');
+      loadOwners();
+    } catch (e) { showToast(e.message || '실패', 'err'); }
+  }
+
+  async function rejectOwner(ownerId) {
+    if (!confirm(ownerId + ' 오너 가입을 거절하시겠습니까?')) return;
+    try {
+      await api('/api/admin/account-owners/' + encodeURIComponent(ownerId) + '/reject', 'POST');
+      showToast('거절 완료');
+      loadOwners();
+    } catch (e) { showToast(e.message || '실패', 'err'); }
+  }
+
+  // 기존 함수 stubs (다른 곳에서 참조할 수 있으므로)
+  function setUserFilter(f) { setOwnerFilter(f); }
   async function kickUser(userId) {
     if (!confirm(userId + ' 세션을 끊겠습니까?')) return;
-    try {
-      await api('/api/admin/kick', 'POST', { userId });
-      await loadUsers();
-    } catch (e) { alert(e.message || '실패'); }
+    try { await api('/api/admin/kick', 'POST', { userId }); } catch (e) { alert(e.message || '실패'); }
+  }
+  async function removeUser(userId) {
+    if (!confirm(userId + ' 탈퇴 처리?')) return;
+    try { await api('/api/admin/users/' + encodeURIComponent(userId), 'DELETE'); loadStats(); } catch (e) { alert(e.message || '실패'); }
   }
   async function setSubscription(userId) {
     const days = prompt('사용기간 일수를 입력하세요 (30, 90, 180, 365)', '30');
     if (!days) return;
     const n = parseInt(days);
     if (![30, 90, 180, 365].includes(n)) { alert('30, 90, 180, 365 중 입력'); return; }
-    try {
-      await api('/api/admin/set-subscription', 'POST', { userId, days: n });
-      alert(n + '일 설정 완료'); await loadUsers();
-    } catch (e) { alert('실패: ' + e.message); }
+    try { await api('/api/admin/set-subscription', 'POST', { userId, days: n }); } catch (e) { alert('실패: ' + e.message); }
   }
-  async function toggleSuspend(userId, currentStatus) {
-    const suspend = currentStatus === 'approved';
-    if (!confirm(userId + (suspend ? ' 정지?' : ' 활성화?'))) return;
-    try {
-      await api('/api/admin/suspend-user', 'POST', { userId, suspend });
-      await loadUsers();
-    } catch (e) { alert('실패: ' + e.message); }
-  }
-  async function addUser() {
-    const id = document.getElementById('newUserId').value.trim();
-    const pw = document.getElementById('newUserPw').value.trim();
-    const managerId = document.getElementById('newUserManager').value;
-    const telegram = document.getElementById('newUserTelegram').value.trim();
-    if (!id) { alert('아이디 입력'); return; }
-    try {
-      await api('/api/admin/users', 'POST', { id, password: pw, managerId, telegram });
-      document.getElementById('newUserPw').value = '';
-      document.getElementById('newUserTelegram').value = '';
-      loadUsers();
-    } catch (e) { alert(e.message || '실패'); }
-  }
-  async function removeUser(userId) {
-    if (!confirm(userId + ' 탈퇴 처리?')) return;
-    try {
-      await api('/api/admin/users/' + encodeURIComponent(userId), 'DELETE');
-      loadUsers(); loadStats();
-    } catch (e) { alert(e.message || '실패'); }
-  }
+  async function addUser() {}
+  async function toggleSuspend() {}
 
   /* ===== SESSIONS ===== */
   async function loadSessions() {

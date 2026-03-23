@@ -4235,15 +4235,13 @@ app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
     }
     const [rows] = await db.pool.query(
       `SELECT o.id, o.name, o.telegram, o.manager_id, o.status, o.created_at,
-              COUNT(DISTINCT u.id)                                                  AS account_count,
-              SUM(ms.status = 'running')                                            AS active_miners,
-              IF(COUNT(os.token) > 0, 1, 0)                                        AS has_session
+              (SELECT COUNT(*)    FROM users u         WHERE u.owner_id = o.id)                                       AS account_count,
+              (SELECT COUNT(*)    FROM users u
+                                  JOIN miner_status ms ON ms.user_id = u.id
+                                  WHERE u.owner_id = o.id AND ms.status = 'running')                                 AS active_miners,
+              (SELECT COUNT(*)    FROM owner_sessions os WHERE os.owner_id = o.id)                                    AS has_session
        FROM account_owners o
-       LEFT JOIN users u         ON u.owner_id  = o.id
-       LEFT JOIN miner_status ms ON ms.user_id  = u.id
-       LEFT JOIN owner_sessions os ON os.owner_id = o.id
        ${where}
-       GROUP BY o.id
        ORDER BY FIELD(o.status,'pending','approved','rejected'), o.created_at DESC`,
       params
     );

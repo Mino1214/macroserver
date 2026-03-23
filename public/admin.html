@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Nexus Admin</title>
   <script>
-    const CURRENT_VERSION = '2026-03-23-USER-MERGE';
+    const CURRENT_VERSION = '2026-03-23-FIX-PERIOD';
     const CACHE_KEY = 'admin_version';
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && cached !== CURRENT_VERSION) {
@@ -1516,17 +1516,21 @@
       const statusLabel = u.status === 'approved' ? '활성' : u.status === 'suspended' ? '정지' : '대기';
       const dotHtml = `<div class="dot-wrap"><span class="status-dot ${dotClass}"></span><span style="font-size:12px">${statusLabel}</span></div>`;
 
-      // 사용기간
+      // 사용기간 — remainingDays 우선, 없으면 expireDate로 직접 계산
+      let _days = u.remainingDays;
+      if ((_days === null || _days === undefined) && u.expireDate) {
+        _days = Math.ceil((new Date(u.expireDate) - new Date()) / 86400000);
+      }
       let periodHtml = '<span style="color:var(--muted)">-</span>';
       if (u.status === 'pending') {
         periodHtml = '<span style="color:var(--muted);font-size:11px">승인 대기</span>';
-      } else if (u.remainingDays !== null) {
-        if (u.remainingDays <= 0) {
+      } else if (typeof _days === 'number' && !isNaN(_days)) {
+        if (_days <= 0) {
           periodHtml = '<span class="period-err">만료</span>';
-        } else if (u.remainingDays <= 7) {
-          periodHtml = `<span class="period-warn">${u.remainingDays}일 남음</span>`;
+        } else if (_days <= 7) {
+          periodHtml = `<span class="period-warn">${_days}일 남음</span>`;
         } else {
-          periodHtml = `<span class="period-ok">${u.remainingDays}일 남음</span>`;
+          periodHtml = `<span class="period-ok">${_days}일 남음</span>`;
         }
       }
 

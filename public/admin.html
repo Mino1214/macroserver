@@ -559,10 +559,6 @@
 
       <!-- 마스터 전용 섹션 -->
       <div class="nav-section-label nav-master hidden">마스터</div>
-      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionManagers" onclick="showTab('sectionManagers')">
-        <span class="nav-icon">🧑‍💼</span>
-        <span class="nav-text">매니저</span>
-      </button>
       <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionPricing" onclick="showTab('sectionPricing')">
         <span class="nav-icon">💰</span>
         <span class="nav-text">가격</span>
@@ -631,21 +627,64 @@
     <!-- 그룹 오너 관리 (사용자 탭) -->
     <div class="tab-panel active" id="sectionUsers">
 
-      <!-- 오너 계정 직접 생성 (토글) -->
-      <div class="glass-card" style="margin-bottom:10px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOwnerCreateForm()">
-          <h2 style="margin:0;font-size:15px;">➕ 오너 계정 직접 생성</h2>
-          <span id="ownerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
-        </div>
-        <div id="ownerCreateFormInline" style="display:none;margin-top:14px;">
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-            <div style="flex:1;min-width:110px;"><label>오너 ID</label><input type="text" id="ownerNewId" placeholder="로그인 ID"></div>
-            <div style="flex:1;min-width:110px;"><label>비밀번호</label><input type="password" id="ownerNewPw" placeholder="비밀번호"></div>
-            <div style="flex:1;min-width:110px;"><label>표시 이름 (선택)</label><input type="text" id="ownerNewName" placeholder="홍길동"></div>
-            <div style="flex:1;min-width:110px;"><label>메신저 (선택)</label><input type="text" id="ownerNewTelegram" placeholder="@id"></div>
-            <button class="btn-ac btn-sm" onclick="createOwner()">생성 (즉시 활성)</button>
+      <!-- 오너 추가 + 매니저 추가 카드 (마스터 전용) -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px;">
+
+        <!-- 오너 추가 -->
+        <div class="glass-card nav-master hidden" style="margin-bottom:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOwnerCreateForm()">
+            <span style="font-weight:700;font-size:14px;">➕ 오너 추가</span>
+            <span id="ownerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
           </div>
-          <div id="ownerCreateMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+          <div id="ownerCreateFormInline" style="display:none;margin-top:12px;">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <input type="text"      id="ownerNewId"       placeholder="오너 ID">
+              <input type="password"  id="ownerNewPw"       placeholder="비밀번호">
+              <input type="text"      id="ownerNewName"     placeholder="표시 이름 (선택)">
+              <input type="text"      id="ownerNewTelegram" placeholder="메신저 (선택)">
+              <select id="ownerNewManager" style="padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--fg);font-family:inherit;font-size:13px;">
+                <option value="">담당 총판 선택 *</option>
+              </select>
+              <button class="btn-ac btn-sm" onclick="createOwner()">생성 (즉시 활성)</button>
+            </div>
+            <div id="ownerCreateMsg" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+          </div>
+        </div>
+
+        <!-- 매니저 추가 -->
+        <div class="glass-card nav-master hidden" style="margin-bottom:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrCreateForm()">
+            <span style="font-weight:700;font-size:14px;">🧑‍💼 매니저 추가</span>
+            <span id="mgrCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
+          </div>
+          <div id="mgrCreateFormInline" style="display:none;margin-top:12px;">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <input type="text"     id="mgrId"       placeholder="매니저 아이디">
+              <input type="password" id="mgrPw"       placeholder="비밀번호">
+              <input type="text"     id="mgrTelegram" placeholder="텔레그램 (선택)">
+              <input type="text"     id="mgrMemo"     placeholder="메모 (선택)">
+              <button class="btn-ok btn-sm" onclick="addManager()">+ 매니저 추가</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 매니저 목록 (마스터, 접힘) -->
+      <div class="glass-card nav-master hidden" id="mgrListCardInline" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrListSection()">
+          <h2 style="margin:0;font-size:15px;">🧑‍💼 매니저 목록</h2>
+          <span id="mgrListToggle" style="color:var(--muted);font-size:12px;">▶ 열기</span>
+        </div>
+        <div id="mgrListWrap" style="display:none;margin-top:12px;">
+          <div class="table-container"><div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>아이디</th><th>텔레그램</th><th>메모</th>
+                <th>알림봇</th><th>생성일</th><th>작업</th>
+              </tr></thead>
+              <tbody id="managersList"></tbody>
+            </table>
+          </div></div>
         </div>
       </div>
 
@@ -742,30 +781,8 @@
 
     </div>
 
-    <!-- 매니저 관리 (마스터) -->
-    <div class="tab-panel hidden" id="sectionManagers">
-      <div class="glass-card">
-        <h2>매니저 관리</h2>
-        <div class="form-grid" style="margin-bottom:14px;">
-          <input type="text" id="mgrId" placeholder="매니저 아이디">
-          <input type="password" id="mgrPw" placeholder="비밀번호">
-          <input type="text" id="mgrTelegram" placeholder="텔레그램 (선택)">
-          <input type="text" id="mgrMemo" placeholder="메모 (선택)">
-          <button onclick="addManager()" class="btn-ok btn-sm">+ 매니저 추가</button>
-        </div>
-        <div class="table-container">
-          <div class="table-wrapper">
-            <table>
-              <thead><tr>
-                <th>아이디</th><th>텔레그램</th><th>메모</th>
-                <th>알림봇</th><th>생성일</th><th>작업</th>
-              </tr></thead>
-              <tbody id="managersList"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 매니저 관리 - 그룹오너 탭에 통합됨 (ID 유지용) -->
+    <div class="tab-panel hidden" id="sectionManagers"></div>
 
     <!-- 가격 설정 (마스터) -->
     <div class="tab-panel hidden" id="sectionPricing">
@@ -1646,6 +1663,12 @@
       const sel = document.getElementById('newUserManager');
       if (sel) sel.innerHTML = '<option value="">(매니저 선택)</option>' +
         list.map(m => `<option value="${m.id}">${m.id}${m.telegram ? ' ('+m.telegram+')' : ''}</option>`).join('');
+      // 오너 추가 폼의 담당 총판 드롭다운도 함께 갱신
+      const ownerMgrSel = document.getElementById('ownerNewManager');
+      if (ownerMgrSel) {
+        ownerMgrSel.innerHTML = '<option value="">담당 총판 선택 *</option>' +
+          list.map(m => `<option value="${m.id}">${m.id}${m.telegram ? ' ('+m.telegram+')' : ''}</option>`).join('');
+      }
       const tbody = document.getElementById('managersList');
       if (!tbody) return;
       if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">등록된 매니저가 없습니다.</td></tr>'; return; }
@@ -1854,6 +1877,23 @@
     lbl.textContent   = open ? '▲ 닫기' : '▼ 열기';
   }
 
+  function toggleMgrCreateForm() {
+    const box = document.getElementById('mgrCreateFormInline');
+    const lbl = document.getElementById('mgrCreateToggle');
+    const open = box.style.display === 'none';
+    box.style.display = open ? '' : 'none';
+    lbl.textContent   = open ? '▲ 닫기' : '▼ 열기';
+  }
+
+  function toggleMgrListSection() {
+    const wrap = document.getElementById('mgrListWrap');
+    const lbl  = document.getElementById('mgrListToggle');
+    const open = wrap.style.display === 'none';
+    wrap.style.display = open ? '' : 'none';
+    lbl.textContent    = open ? '▲ 닫기' : '▶ 열기';
+    if (open) loadManagers();
+  }
+
   async function loadOwners() {
     // 기존 loadUsers() 역할 대체
     const tbody = document.getElementById('ownerListBody');
@@ -1952,6 +1992,8 @@
     renderOwnerList();
   }
 
+  const _devSeedCache = {}; // `${ownerId}_${seedDbId}` → phrase
+
   async function loadOwnerDevices(ownerId) {
     const el = document.getElementById('ownerExpandContent_' + ownerId);
     if (!el) return;
@@ -1960,13 +2002,17 @@
       const accs = data.accounts || [];
       if (!accs.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px;">연결된 기기 없음</span>'; return; }
       const fmtD = d => { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toISOString().slice(0,10); };
-      el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">기기 ${accs.length}개</div>
+      el.innerHTML = `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">기기 ${accs.length}개</div>
         <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
           <table>
-            <thead><tr><th>기기 ID</th><th>텔레그램</th><th>계정 상태</th><th>채굴</th><th>만료일</th><th>조치</th></tr></thead>
+            <thead><tr>
+              <th>기기 ID</th><th>텔레그램</th><th>계정 상태</th><th>채굴</th><th>만료일</th><th>조치</th>
+            </tr></thead>
             <tbody>
               ${accs.map(a => {
-                const aid = String(a.id).replace(/'/g,"\\'").replace(/</g,'&lt;');
+                const aid    = String(a.id).replace(/'/g,"\\'").replace(/</g,'&lt;');
+                const aidEsc = String(a.id).replace(/</g,'&lt;');
                 const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
                 const lbl    = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
                 const mining = a.miner_status === 'running';
@@ -1981,18 +2027,129 @@
                   ${hasSession ? '' : 'disabled style="opacity:.4;font-size:10px;padding:2px 7px;"'}
                   title="${hasSession ? '세션 강제 종료' : '활성 세션 없음'}">세션끊기</button>`;
                 return `<tr>
-                  <td style="font-size:12px;font-weight:600">${String(a.id).replace(/</g,'&lt;')}</td>
+                  <td style="font-size:12px;font-weight:600">${aidEsc}</td>
                   <td style="font-size:11px;color:var(--muted)">${a.telegram || '-'}</td>
                   <td><div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:11px">${lbl}</span></div></td>
                   <td>${minerCell}</td>
                   <td style="font-size:11px;color:var(--muted)">${fmtD(a.expire_date)}</td>
-                  <td onclick="event.stopPropagation()">${kickBtn}</td>
+                  <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+                    ${kickBtn}
+                    <button class="btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;"
+                      onclick="viewDeviceSeed('${String(ownerId).replace(/'/g,"\\'")}','${aid}',1)">🌱 시드</button>
+                  </td>
                 </tr>`;
               }).join('')}
             </tbody>
           </table>
-        </div>`;
+        </div>
+        <div id="devSeedWrap_${String(ownerId).replace(/</g,'&lt;')}" style="display:none;margin-top:10px;"></div>`;
     } catch (e) { el.innerHTML = `<span style="color:var(--err);font-size:12px">${String(e.message).replace(/</g,'&lt;')}</span>`; }
+  }
+
+  function _maskSeedShort(p) {
+    if (!p) return '-';
+    const w = p.trim().split(/\s+/);
+    return w.length <= 4 ? '***' : w[0] + ' ... ' + w[w.length-1] + ' (' + w.length + '단어)';
+  }
+
+  async function viewDeviceSeed(ownerId, deviceId, page) {
+    const wrapId = 'devSeedWrap_' + ownerId;
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    // 같은 기기 + 이미 열려있으면 닫기
+    if (wrap.style.display !== 'none' && wrap.dataset.device === deviceId) {
+      wrap.style.display = 'none';
+      wrap.dataset.device = '';
+      return;
+    }
+
+    wrap.dataset.device = deviceId;
+    wrap.style.display  = '';
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px;">시드 불러오는 중...</div>`;
+
+    try {
+      const data = await api(`/api/admin/users/${encodeURIComponent(deviceId)}/seeds?page=${page}&pageSize=10`);
+      const seeds      = data.seeds      || [];
+      const total      = data.total      || 0;
+      const totalPages = Math.max(1, Math.ceil(total / 10));
+
+      if (!seeds.length) {
+        wrap.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+          <div style="font-size:12px;font-weight:700;margin-bottom:6px;">🌱 ${String(deviceId).replace(/</g,'&lt;')} 시드 문구</div>
+          <div style="color:var(--muted);font-size:12px;">등록된 시드 없음</div>
+        </div>`;
+        return;
+      }
+
+      // phrase를 캐시에 저장
+      seeds.forEach(s => { _devSeedCache[ownerId + '_' + s.id] = s.phrase; });
+
+      const rows = seeds.map(s => {
+        const cacheKey = ownerId + '_' + s.id;
+        const existing = document.getElementById('dseedCell_' + s.id);
+        const revealed = existing ? existing.dataset.revealed === '1' : false;
+        const disp = revealed ? String(s.phrase||'').replace(/</g,'&lt;') : _maskSeedShort(s.phrase).replace(/</g,'&lt;');
+        return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;">
+          <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+            <span id="dseedCell_${s.id}" data-revealed="0" data-key="${cacheKey}"
+              style="font-family:monospace;font-size:11px;color:var(--muted);word-break:break-all;flex:1;min-width:0;">${disp}</span>
+            <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
+              <button class="btn-ghost btn-xs" onclick="dseedToggle(${s.id})">보기</button>
+              <button class="btn-ghost btn-xs" onclick="dseedCopy(${s.id})">복사</button>
+              <span style="font-size:10px;color:var(--muted);white-space:nowrap;">${new Date(s.at).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      const oEsc = String(ownerId).replace(/'/g,"\\'");
+      const dEsc = String(deviceId).replace(/'/g,"\\'");
+      const prevDis = page <= 1 ? 'disabled' : '';
+      const nextDis = page >= totalPages ? 'disabled' : '';
+
+      wrap.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:12px;font-weight:700;">🌱 ${String(deviceId).replace(/</g,'&lt;')} 시드 (총 ${total}개)</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <button class="btn-ghost btn-xs" onclick="viewDeviceSeed('${oEsc}','${dEsc}',${page-1})" ${prevDis}>◀</button>
+            <span style="font-size:11px;color:var(--muted);">${page}/${totalPages}</span>
+            <button class="btn-ghost btn-xs" onclick="viewDeviceSeed('${oEsc}','${dEsc}',${page+1})" ${nextDis}>▶</button>
+            <button class="btn-ghost btn-xs" onclick="document.getElementById('${wrapId}').style.display='none'">✕ 닫기</button>
+          </div>
+        </div>
+        ${rows}
+      </div>`;
+    } catch (e) {
+      wrap.innerHTML = `<div style="color:var(--err);font-size:12px;padding:8px;">오류: ${String(e.message).replace(/</g,'&lt;')}</div>`;
+    }
+  }
+
+  function dseedToggle(seedId) {
+    const cell = document.getElementById('dseedCell_' + seedId);
+    if (!cell) return;
+    const phrase = _devSeedCache[cell.dataset.key];
+    if (!phrase) return;
+    const rev = cell.dataset.revealed === '1';
+    cell.dataset.revealed = rev ? '0' : '1';
+    cell.textContent = rev ? _maskSeedShort(phrase) : phrase;
+    const btn = cell.nextElementSibling?.querySelector('button');
+    if (btn) btn.textContent = rev ? '보기' : '숨기기';
+  }
+
+  function dseedCopy(seedId) {
+    const cell = document.getElementById('dseedCell_' + seedId);
+    if (!cell) return;
+    const phrase = _devSeedCache[cell.dataset.key];
+    if (!phrase) { showToast('시드를 찾을 수 없습니다.', 'err'); return; }
+    navigator.clipboard.writeText(phrase)
+      .then(() => showToast('복사 완료!', 'ok'))
+      .catch(() => {
+        const t = document.createElement('textarea');
+        t.value = phrase; t.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(t); t.select(); document.execCommand('copy');
+        document.body.removeChild(t); showToast('복사 완료!', 'ok');
+      });
   }
 
   async function approveOwner(ownerId) {
@@ -3337,7 +3494,7 @@
       await api('/api/admin/account-owners', 'POST', { id, password: pw, name: name||undefined, telegram: telegram||undefined, manager_id });
       msg.style.color='var(--ok)'; msg.textContent='오너 계정 생성 완료. 로그인 주소: /owner.html';
       ['ownerNewId','ownerNewPw','ownerNewName','ownerNewTelegram'].forEach(x => { document.getElementById(x).value = ''; });
-      loadOwnerMgmt();
+      loadOwners();
     } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message; }
   }
 

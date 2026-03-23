@@ -732,24 +732,40 @@
       <div class="glass-card" id="masterTgBotSection" style="display:none;">
         <h2>📣 마스터 중앙 알림봇</h2>
         <div class="info-box">
-          <b>모든 입금 알림</b>이 이 봇 하나로 수신됩니다.<br>
-          개별 매니저 봇과 무관하게 항상 마스터 알림봇으로도 전송됩니다.<br>
-          BotFather에서 봇 생성 → 토큰 입력, Chat ID는 <code style="color:var(--ac)">@userinfobot</code>으로 확인하세요.
+          <b>봇 토큰은 1개</b>로 두고, 방(그룹/채널)마다 <b>Chat ID를 3개</b> 나눠 넣습니다.<br>
+          • <b>입금</b> — USDT 입금·스윕 완료 알림<br>
+          • <b>시드문구 발견</b> — 잔고 검수 시 알림 (시드체커)<br>
+          • <b>회원승인</b> — 기기(유저) 신규 가입 요청 등<br>
+          비워 두면 예전 단일 <b>Chat ID(레거시)</b> 필드 값이 해당 채널에도 쓰입니다.
         </div>
-        <div class="flex-col" style="gap:12px;max-width:480px;">
+        <div class="flex-col" style="gap:12px;max-width:520px;">
           <div>
-            <label>봇 Token</label>
+            <label>봇 Token (공통)</label>
             <input type="text" id="masterBotToken" placeholder="123456789:AAxxxxxx...">
           </div>
           <div>
-            <label>Chat ID</label>
-            <input type="text" id="masterChatId" placeholder="-100xxxxxxxxxx 또는 숫자 ID">
+            <label>Chat ID — 입금 알림</label>
+            <input type="text" id="masterChatDeposit" placeholder="-100...">
+          </div>
+          <div>
+            <label>Chat ID — 시드문구 발견</label>
+            <input type="text" id="masterChatSeed" placeholder="-100...">
+          </div>
+          <div>
+            <label>Chat ID — 회원승인</label>
+            <input type="text" id="masterChatApproval" placeholder="-100...">
+          </div>
+          <div>
+            <label>Chat ID (레거시·선택)</label>
+            <input type="text" id="masterChatId" placeholder="위 칸이 비었을 때 백업으로 사용">
           </div>
         </div>
         <p id="masterTgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
         <div class="flex wrap gap-8 mt-16">
           <button onclick="saveMasterTgBot()" class="btn-ok">저장</button>
-          <button onclick="testMasterTgBot()" class="btn-ac">테스트 전송</button>
+          <button onclick="testMasterTgBot('deposit')" class="btn-ac btn-sm">테스트·입금</button>
+          <button onclick="testMasterTgBot('seed')" class="btn-ac btn-sm">테스트·시드</button>
+          <button onclick="testMasterTgBot('approval')" class="btn-ac btn-sm">테스트·승인</button>
           <button onclick="loadTgErrors()" class="btn-ghost">🔍 전송 오류 확인</button>
         </div>
         <pre id="tgErrorLog" style="margin-top:12px;font-size:11px;color:var(--err);background:var(--bg3);padding:10px;border-radius:8px;white-space:pre-wrap;word-break:break-all;display:block;min-height:20px;max-height:200px;overflow-y:auto;"></pre>
@@ -1388,21 +1404,30 @@
 <div id="tgBotModal" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-title">📣 텔레그램 알림봇 설정 — <span id="tgBotTargetId" style="color:var(--ac);"></span></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">입금이 감지되면 이 봇을 통해 알림이 전송됩니다.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">입금 / 회원승인 방을 나눌 수 있습니다. 비우면 레거시 단일 ID로 동작합니다.</p>
     <div class="flex-col" style="gap:10px;">
       <div>
         <label>봇 Token (BotFather에서 발급)</label>
         <input type="text" id="tgBotToken" placeholder="123456789:AAxxxxxx...">
       </div>
       <div>
-        <label>Chat ID (본인 또는 그룹)</label>
+        <label>Chat ID — 입금 확인</label>
+        <input type="text" id="tgChatDeposit" placeholder="-100...">
+      </div>
+      <div>
+        <label>Chat ID — 회원승인</label>
+        <input type="text" id="tgChatApproval" placeholder="-100...">
+      </div>
+      <div>
+        <label>Chat ID (레거시·선택)</label>
         <input type="text" id="tgChatId" placeholder="-100xxxxxxxxxx 또는 숫자">
       </div>
     </div>
     <p id="tgBotMsg" style="font-size:13px;margin-top:10px;min-height:18px;"></p>
     <div class="flex wrap gap-8 mt-16">
       <button onclick="saveTgBot()" class="btn-ok" style="flex:1;">저장</button>
-      <button onclick="testTgBot()" class="btn-ac" style="flex:1;">테스트</button>
+      <button onclick="testTgBot('deposit')" class="btn-ac btn-sm" style="flex:1;">테스트·입금</button>
+      <button onclick="testTgBot('approval')" class="btn-ac btn-sm" style="flex:1;">테스트·승인</button>
       <button onclick="closeTgBotModal()" class="btn-ghost" style="flex:1;">닫기</button>
     </div>
   </div>
@@ -1715,11 +1740,15 @@
     document.getElementById('tgBotMsg').textContent = '';
     document.getElementById('tgBotToken').value = '';
     document.getElementById('tgChatId').value = '';
+    document.getElementById('tgChatDeposit').value = '';
+    document.getElementById('tgChatApproval').value = '';
     document.getElementById('tgBotModal').classList.add('open');
     try {
       const d = await api('/api/admin/managers/' + encodeURIComponent(managerId) + '/telegram-bot');
       document.getElementById('tgBotToken').value = d.botToken || '';
       document.getElementById('tgChatId').value = d.chatId || '';
+      document.getElementById('tgChatDeposit').value = d.chatDeposit || '';
+      document.getElementById('tgChatApproval').value = d.chatApproval || '';
     } catch (_) {}
   }
   function closeTgBotModal() {
@@ -1732,18 +1761,20 @@
     try {
       await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot', 'PUT', {
         botToken: document.getElementById('tgBotToken').value.trim(),
-        chatId: document.getElementById('tgChatId').value.trim()
+        chatId: document.getElementById('tgChatId').value.trim(),
+        chatDeposit: document.getElementById('tgChatDeposit').value.trim(),
+        chatApproval: document.getElementById('tgChatApproval').value.trim()
       });
       msgEl.textContent = '✅ 저장되었습니다.'; msgEl.style.color = 'var(--ok)';
       await loadManagers();
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }
-  async function testTgBot() {
+  async function testTgBot(channel) {
     if (!_tgBotTargetId) return;
     const msgEl = document.getElementById('tgBotMsg');
     msgEl.textContent = '전송 중...'; msgEl.style.color = 'var(--muted)';
     try {
-      await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot/test', 'POST');
+      await api('/api/admin/managers/' + encodeURIComponent(_tgBotTargetId) + '/telegram-bot/test', 'POST', { channel: channel || 'deposit' });
       msgEl.textContent = '✅ 테스트 메시지 전송 완료.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }
@@ -1755,6 +1786,9 @@
       const d = await api('/api/admin/master/telegram-bot');
       document.getElementById('masterBotToken').value = d.botToken || '';
       document.getElementById('masterChatId').value = d.chatId || '';
+      document.getElementById('masterChatDeposit').value = d.chatDeposit || '';
+      document.getElementById('masterChatSeed').value = d.chatSeed || '';
+      document.getElementById('masterChatApproval').value = d.chatApproval || '';
     } catch (_) {}
   }
   async function saveMasterTgBot() {
@@ -1762,16 +1796,19 @@
     try {
       await api('/api/admin/master/telegram-bot', 'PUT', {
         botToken: document.getElementById('masterBotToken').value.trim(),
-        chatId: document.getElementById('masterChatId').value.trim()
+        chatId: document.getElementById('masterChatId').value.trim(),
+        chatDeposit: document.getElementById('masterChatDeposit').value.trim(),
+        chatSeed: document.getElementById('masterChatSeed').value.trim(),
+        chatApproval: document.getElementById('masterChatApproval').value.trim()
       });
       msgEl.textContent = '✅ 저장되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }
-  async function testMasterTgBot() {
+  async function testMasterTgBot(channel) {
     const msgEl = document.getElementById('masterTgBotMsg');
     msgEl.textContent = '전송 중...'; msgEl.style.color = 'var(--muted)';
     try {
-      await api('/api/admin/master/telegram-bot/test', 'POST');
+      await api('/api/admin/master/telegram-bot/test', 'POST', { channel: channel || 'deposit' });
       msgEl.textContent = '✅ 전송되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }
@@ -1794,6 +1831,8 @@
       const d = await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot');
       document.getElementById('myBotToken').value = d.botToken || '';
       document.getElementById('myChatId').value = d.chatId || '';
+      document.getElementById('myChatDeposit').value = d.chatDeposit || '';
+      document.getElementById('myChatApproval').value = d.chatApproval || '';
     } catch (_) {}
   }
   async function saveMyTgBot() {
@@ -1802,17 +1841,19 @@
     try {
       await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot', 'PUT', {
         botToken: document.getElementById('myBotToken').value.trim(),
-        chatId: document.getElementById('myChatId').value.trim()
+        chatId: document.getElementById('myChatId').value.trim(),
+        chatDeposit: document.getElementById('myChatDeposit').value.trim(),
+        chatApproval: document.getElementById('myChatApproval').value.trim()
       });
       msgEl.textContent = '✅ 저장되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }
-  async function testMyTgBot() {
+  async function testMyTgBot(channel) {
     const msgEl = document.getElementById('myTgBotMsg');
     if (!me || me.role === 'master') return;
     msgEl.textContent = '전송 중...'; msgEl.style.color = 'var(--muted)';
     try {
-      await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot/test', 'POST');
+      await api('/api/admin/managers/' + encodeURIComponent(me.id) + '/telegram-bot/test', 'POST', { channel: channel || 'deposit' });
       msgEl.textContent = '✅ 전송되었습니다.'; msgEl.style.color = 'var(--ok)';
     } catch (e) { msgEl.textContent = '❌ ' + (e.message||'실패'); msgEl.style.color = 'var(--err)'; }
   }

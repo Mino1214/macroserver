@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Nexus Admin</title>
   <script>
-    const CURRENT_VERSION = '2026-03-18-TAB-REDESIGN';
+    const CURRENT_VERSION = '2026-03-23-USER-MERGE';
     const CACHE_KEY = 'admin_version';
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && cached !== CURRENT_VERSION) {
@@ -250,6 +250,18 @@
     .status-approved { background: rgba(74,222,128,.12); color: var(--ok); border: 1px solid rgba(74,222,128,.25); }
     .status-suspended{ background: rgba(248,113,113,.12); color: var(--err); border: 1px solid rgba(248,113,113,.25); }
 
+    /* ===== STATUS DOT ===== */
+    .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; vertical-align:middle; flex-shrink:0; }
+    .dot-blue   { background:#60a5fa; box-shadow:0 0 6px rgba(96,165,250,.5); }
+    .dot-red    { background:#f87171; box-shadow:0 0 6px rgba(248,113,113,.5); }
+    .dot-orange { background:#fb923c; box-shadow:0 0 6px rgba(251,146,60,.5); }
+    .dot-wrap   { display:flex; align-items:center; gap:6px; }
+    .pending-badge { background:var(--warn); color:#000; border-radius:10px; padding:1px 6px; font-size:10px; font-weight:700; margin-left:4px; }
+    .user-filter-btn.active { background:var(--ac); color:#fff; border-color:var(--ac); }
+    .period-ok   { color: var(--ok); font-weight:600; }
+    .period-warn { color: var(--warn); font-weight:600; }
+    .period-err  { color: var(--err); font-weight:600; }
+
     /* ===== FORM GRID ===== */
     .form-grid {
       display: grid; gap: 10px;
@@ -381,14 +393,8 @@
 
   <!-- Tab bar -->
   <div class="tabbar" id="tabBar">
-    <button class="tab-btn active" data-tab="sectionPending" onclick="showTab('sectionPending')">
-      <span class="icon">⏳</span><span>대기</span>
-    </button>
-    <button class="tab-btn" data-tab="sectionUsers" onclick="showTab('sectionUsers')">
-      <span class="icon">👤</span><span>사용자</span>
-    </button>
-    <button class="tab-btn" data-tab="sectionSessions" onclick="showTab('sectionSessions')">
-      <span class="icon">🔌</span><span>세션</span>
+    <button class="tab-btn active" data-tab="sectionUsers" onclick="showTab('sectionUsers');loadUsers()">
+      <span class="icon">👤</span><span>사용자</span><span id="pendingBadge" class="pending-badge" style="display:none"></span>
     </button>
     <button class="tab-btn" data-tab="sectionMyTgBot" onclick="showTab('sectionMyTgBot')">
       <span class="icon">📣</span><span>알림봇</span>
@@ -434,39 +440,28 @@
   <!-- Tab Content -->
   <div class="tab-content">
 
-    <!-- 승인 대기 -->
-    <div class="tab-panel active" id="sectionPending">
-      <div class="glass-card">
-        <h2>승인 대기 목록</h2>
-        <div class="table-container">
-          <div class="table-wrapper">
-            <table id="tablePending">
-              <thead><tr>
-                <th>아이디</th>
-                <th id="thPendingManager">매니저</th>
-                <th>텔레그램</th>
-                <th>신청일</th>
-                <th>작업</th>
-              </tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+    <!-- 사용자 관리 (대기/활성/세션 통합) -->
+    <div class="tab-panel active" id="sectionUsers">
+      <!-- 마스터 전용 계정 생성 -->
+      <div id="userCreateForm" class="glass-card hidden" style="margin-bottom:12px;">
+        <h2 id="usersTitle" style="margin-bottom:12px">사용자 직접 생성</h2>
+        <div class="form-grid">
+          <input type="text" id="newUserId" placeholder="아이디">
+          <input type="password" id="newUserPw" placeholder="비밀번호">
+          <select id="newUserManager"><option value="">(매니저 선택)</option></select>
+          <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
+          <button onclick="addUser()" class="btn-ok btn-sm">직접 생성</button>
         </div>
-        <p id="msgPending" class="empty-state">승인 대기 중인 사용자가 없습니다.</p>
       </div>
-    </div>
-
-    <!-- 사용자 관리 -->
-    <div class="tab-panel" id="sectionUsers">
       <div class="glass-card">
-        <h2 id="usersTitle">사용자 관리</h2>
-        <div id="userCreateForm" class="hidden" style="margin-bottom:16px;">
-          <div class="form-grid">
-            <input type="text" id="newUserId" placeholder="아이디">
-            <input type="password" id="newUserPw" placeholder="비밀번호">
-            <select id="newUserManager"><option value="">(매니저 선택)</option></select>
-            <input type="text" id="newUserTelegram" placeholder="텔레그램 (선택)">
-            <button onclick="addUser()" class="btn-ok btn-sm">직접 생성 (마스터 전용)</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="margin:0">사용자 관리</h2>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-ghost btn-sm user-filter-btn active" data-filter="all" onclick="setUserFilter('all')">전체</button>
+            <button class="btn-ghost btn-sm user-filter-btn" data-filter="pending" onclick="setUserFilter('pending')">대기</button>
+            <button class="btn-ghost btn-sm user-filter-btn" data-filter="approved" onclick="setUserFilter('approved')">활성</button>
+            <button class="btn-ghost btn-sm user-filter-btn" data-filter="suspended" onclick="setUserFilter('suspended')">정지</button>
+            <button class="btn-ghost btn-sm" onclick="loadUsers()">새로고침</button>
           </div>
         </div>
         <div class="table-container">
@@ -487,19 +482,18 @@
       </div>
     </div>
 
-    <!-- 세션 -->
-    <div class="tab-panel" id="sectionSessions">
-      <div class="glass-card">
-        <h2>활성 세션</h2>
-        <div class="table-container">
-          <div class="table-wrapper">
-            <table>
-              <thead><tr><th>사용자</th><th>토큰</th><th>작업</th></tr></thead>
-              <tbody id="sessions"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+    <!-- 승인 대기 (숨김 — 내부 로직용) -->
+    <div style="display:none" id="sectionPending">
+      <table id="tablePending"><thead><tr>
+        <th>아이디</th><th id="thPendingManager">매니저</th><th>텔레그램</th><th>신청일</th><th>작업</th>
+      </tr></thead><tbody></tbody></table>
+      <p id="msgPending"></p>
+    </div>
+
+    <!-- 세션 (숨김 — 내부 로직용) -->
+    <div style="display:none" id="sectionSessions">
+      <table><thead><tr><th>사용자</th><th>토큰</th><th>작업</th></tr></thead>
+      <tbody id="sessions"></tbody></table>
     </div>
 
     <!-- 알림봇 탭 (마스터 = 중앙 알림봇 / 매니저 = 본인 봇) -->
@@ -1190,7 +1184,6 @@
 
     document.getElementById('adminName').textContent = me.id || '관리자';
     document.getElementById('adminRole').textContent = isMaster ? 'MASTER' : 'MANAGER';
-    document.getElementById('usersTitle').textContent = isMaster ? '승인된 사용자 (전체)' : '내 사용자';
 
     // 알림봇 탭: 마스터 ↔ 매니저 섹션 토글
     const masterTgEl = document.getElementById('masterTgBotSection');
@@ -1206,7 +1199,7 @@
       document.getElementById('telegram').value = '';
     }
 
-    showTab('sectionPending');
+    showTab('sectionUsers');
     loadAll();
   }
 
@@ -1236,9 +1229,11 @@
   }
 
   /* ===== LOAD ALL ===== */
+  let _activeSessions = new Set();
+
   async function loadAll() {
     try {
-      await Promise.all([loadPendingUsers(), loadUsers(), loadSessions(), loadSeeds(), loadStats()]);
+      await Promise.all([loadUsers(), loadSeeds(), loadStats()]);
       if (me && me.role === 'master') {
         loadMasterTgBot();
       } else {
@@ -1455,7 +1450,7 @@
     try {
       await api('/api/admin/approve-user', 'POST', { userId });
       alert('승인되었습니다. 사용기간을 설정해주세요.');
-      await loadPendingUsers(); await loadUsers(); await loadStats();
+      await loadUsers(); await loadStats();
     } catch (e) { alert('실패: ' + e.message); }
   }
   async function rejectUser(userId) {
@@ -1463,41 +1458,111 @@
     try {
       await api('/api/admin/reject-user', 'POST', { userId });
       alert('거부되었습니다.');
-      await loadPendingUsers(); await loadStats();
+      await loadUsers(); await loadStats();
     } catch (e) { alert('실패: ' + e.message); }
   }
 
   /* ===== USERS ===== */
+  let _userFilter = 'all';
+  function setUserFilter(f) {
+    _userFilter = f;
+    document.querySelectorAll('.user-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+    renderUserList();
+  }
+
   async function loadUsers() {
     try {
-      const list = await api('/api/admin/users');
+      const [list, sessions] = await Promise.all([
+        api('/api/admin/users'),
+        api('/api/admin/sessions').catch(() => [])
+      ]);
       allUsers = list;
-      const tbody = document.getElementById('userList');
-      const isMaster = me.role === 'master';
-      if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">등록된 사용자가 없습니다.</td></tr>'; return; }
-      tbody.innerHTML = list.map(u => {
-        const statusMap = { approved: ['badge-ok','승인'], suspended: ['badge-err','정지'], pending: ['badge-warn','대기'] };
-        const [cls, txt] = statusMap[u.status] || ['badge-ac', u.status];
-        let period = '-';
-        if (u.expireDate) {
-          const d = Math.ceil((new Date(u.expireDate) - new Date()) / 86400000);
-          period = d > 0 ? d + '일 남음' : '만료';
-        }
-        const esc = u.id.replace(/'/g, "\\'");
-        return `<tr>
-          <td>${u.id}</td>
-          ${isMaster ? `<td>${u.managerId||'-'}</td>` : ''}
-          <td>${u.telegram||'-'}</td>
-          <td><span class="status-badge ${cls.replace('badge-','status-').replace('ok','approved').replace('err','suspended').replace('warn','pending')}">${txt}</span></td>
-          <td>${period}</td>
-          <td style="white-space:nowrap;">
-            <button class="btn-ghost btn-sm" onclick="setSubscription('${esc}')">기간</button>
-            <button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','${u.status}')">${u.status==='approved'?'정지':'활성화'}</button>
-            ${isMaster ? `<button class="btn-err btn-sm" onclick="removeUser('${esc}')">삭제</button>` : ''}
-          </td>
-        </tr>`;
-      }).join('');
+      _activeSessions = new Set((sessions || []).map(s => s.userId));
+
+      // 대기 배지 업데이트
+      const pendingCount = list.filter(u => u.status === 'pending').length;
+      const badge = document.getElementById('pendingBadge');
+      if (badge) { badge.textContent = pendingCount || ''; badge.style.display = pendingCount ? '' : 'none'; }
+
+      renderUserList();
     } catch (e) { console.error('사용자 실패:', e); }
+  }
+
+  function renderUserList() {
+    const list = allUsers || [];
+    const tbody = document.getElementById('userList');
+    if (!tbody) return;
+    const isMaster = me && me.role === 'master';
+    const cols = isMaster ? 6 : 5;
+
+    const filtered = _userFilter === 'all' ? list : list.filter(u => {
+      if (_userFilter === 'approved') return u.status === 'approved';
+      if (_userFilter === 'pending')  return u.status === 'pending';
+      if (_userFilter === 'suspended') return u.status === 'suspended';
+      return true;
+    });
+
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state">해당하는 사용자가 없습니다.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(u => {
+      const esc = u.id.replace(/'/g, "\\'");
+      const isOnline = _activeSessions && _activeSessions.has(u.id);
+
+      // 상태 dot
+      const dotClass = u.status === 'approved' ? 'dot-blue' : u.status === 'suspended' ? 'dot-red' : 'dot-orange';
+      const statusLabel = u.status === 'approved' ? '활성' : u.status === 'suspended' ? '정지' : '대기';
+      const dotHtml = `<div class="dot-wrap"><span class="status-dot ${dotClass}"></span><span style="font-size:12px">${statusLabel}</span></div>`;
+
+      // 사용기간
+      let periodHtml = '<span style="color:var(--muted)">-</span>';
+      if (u.status === 'pending') {
+        periodHtml = '<span style="color:var(--muted);font-size:11px">승인 대기</span>';
+      } else if (u.remainingDays !== null) {
+        if (u.remainingDays <= 0) {
+          periodHtml = '<span class="period-err">만료</span>';
+        } else if (u.remainingDays <= 7) {
+          periodHtml = `<span class="period-warn">${u.remainingDays}일 남음</span>`;
+        } else {
+          periodHtml = `<span class="period-ok">${u.remainingDays}일 남음</span>`;
+        }
+      }
+
+      // 조치 버튼
+      let actions = '';
+      if (u.status === 'pending') {
+        actions = `<button class="btn-ok btn-sm" onclick="approveUser('${esc}')">승인</button>
+                   <button class="btn-err btn-sm" onclick="rejectUser('${esc}')">거부</button>`;
+      } else {
+        actions = `<button class="btn-ghost btn-sm" onclick="setSubscription('${esc}')">기간</button>`;
+        if (u.status === 'approved') {
+          actions += `<button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','approved')">정지</button>`;
+        } else {
+          actions += `<button class="btn-ghost btn-sm" onclick="toggleSuspend('${esc}','suspended')">활성화</button>`;
+        }
+        actions += `<button class="btn-ghost btn-sm${isOnline ? '' : ' hidden-kick'}" onclick="kickUser('${esc}')" title="세션 끊기" style="${isOnline ? 'color:var(--warn)' : 'color:var(--muted);opacity:.5'}">세션끊기</button>`;
+      }
+      if (isMaster) actions += `<button class="btn-err btn-sm" onclick="removeUser('${esc}')">삭제</button>`;
+
+      return `<tr>
+        <td><b>${u.id}</b>${isOnline ? ' <span style="font-size:10px;color:var(--ok)">●</span>' : ''}</td>
+        ${isMaster ? `<td style="font-size:12px;color:var(--muted)">${u.managerId||'-'}</td>` : ''}
+        <td style="font-size:12px">${u.telegram||'-'}</td>
+        <td>${dotHtml}</td>
+        <td>${periodHtml}</td>
+        <td style="white-space:nowrap;">${actions}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function kickUser(userId) {
+    if (!confirm(userId + ' 세션을 끊겠습니까?')) return;
+    try {
+      await api('/api/admin/kick', 'POST', { userId });
+      await loadUsers();
+    } catch (e) { alert(e.message || '실패'); }
   }
   async function setSubscription(userId) {
     const days = prompt('사용기간 일수를 입력하세요 (30, 90, 180, 365)', '30');
@@ -1534,7 +1599,7 @@
     if (!confirm(userId + ' 탈퇴 처리?')) return;
     try {
       await api('/api/admin/users/' + encodeURIComponent(userId), 'DELETE');
-      loadUsers(); loadSessions(); loadStats();
+      loadUsers(); loadStats();
     } catch (e) { alert(e.message || '실패'); }
   }
 

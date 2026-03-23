@@ -145,17 +145,34 @@
     .form-group { margin-bottom: 14px; }
     .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 
+    /* DEVICE FILTER */
+    .dev-filter-bar { display:flex; gap:6px; flex-wrap:wrap; }
+    .dev-filter-btn { background:transparent; border:1px solid var(--border); color:var(--muted); padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .dev-filter-btn:hover { color:var(--fg); border-color:var(--fg); }
+    .dev-filter-btn.active { background:var(--ac-dim); color:var(--ac); border-color:var(--ac); }
+    .filter-count { font-size:10px; background:var(--bg3); border-radius:8px; padding:1px 5px; margin-left:3px; }
+
     /* QR MODAL */
-    #qrModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; align-items:center; justify-content:center; }
+    #qrModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:200; align-items:center; justify-content:center; overflow-y:auto; }
     #qrModal.open { display:flex; }
-    .qr-box { background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:28px; max-width:400px; width:100%; margin:16px; }
-    .qr-title { font-size:16px; font-weight:700; margin-bottom:4px; }
-    .qr-sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
-    .pkg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:8px; margin-bottom:16px; }
+    .qr-box { background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:24px; max-width:420px; width:100%; margin:16px; max-height:92vh; overflow-y:auto; }
+    .qr-title { font-size:16px; font-weight:700; margin-bottom:2px; }
+    .qr-sub { font-size:12px; color:var(--muted); }
+    .qr-expiry-info { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12px; margin:12px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+    .mode-toggle { display:flex; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px; }
+    .mode-btn { flex:1; background:transparent; border:none; color:var(--muted); padding:8px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .mode-btn.active { background:var(--ac); color:#fff; }
+    .pkg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:7px; margin-bottom:14px; }
     .pkg-btn { background:var(--bg3); border:1px solid var(--border); color:var(--fg); border-radius:10px; padding:10px 6px; font-size:12px; text-align:center; cursor:pointer; transition:all .15s; }
     .pkg-btn:hover, .pkg-btn.sel { border-color:var(--ac); color:var(--ac); background:var(--ac-dim); }
-    #qrCanvas { background:#fff; border-radius:12px; padding:10px; display:block; margin:0 auto 14px; }
-    .addr-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:monospace; font-size:11px; word-break:break-all; color:var(--fg); margin-bottom:14px; }
+    input[type=date] { width:100%; padding:10px 12px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; color:var(--fg); font-size:14px; outline:none; font-family:inherit; color-scheme:dark; }
+    input[type=date]:focus { border-color:var(--ac); box-shadow:0 0 0 3px var(--ac-dim); }
+    .calc-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0; font-size:13px; line-height:1.7; }
+    .calc-row { display:flex; justify-content:space-between; }
+    .calc-total { font-size:16px; font-weight:700; color:var(--ac); margin-top:6px; border-top:1px solid var(--border); padding-top:6px; }
+    .amount-display { font-size:14px; margin-bottom:14px; }
+    #qrCanvas { background:#fff; border-radius:12px; padding:10px; display:block; margin:0 auto 12px; }
+    .addr-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:monospace; font-size:11px; word-break:break-all; color:var(--fg); margin-bottom:12px; }
 
     /* SPINNER */
     .spinner { display:inline-block; width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--ac); border-radius:50%; animation:spin .6s linear infinite; }
@@ -260,9 +277,14 @@
 
       <!-- 기기 목록 -->
       <div class="glass-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
           <h2 style="margin:0">내 기기 목록</h2>
           <button class="btn-ghost btn-sm" onclick="loadAccounts()">새로고침</button>
+        </div>
+        <div class="dev-filter-bar" style="margin-bottom:14px;">
+          <button class="dev-filter-btn active" data-dfilter="all"      onclick="setDeviceFilter('all')">전체<span id="cntAll" class="filter-count">0</span></button>
+          <button class="dev-filter-btn"         data-dfilter="active"  onclick="setDeviceFilter('active')">활성<span id="cntActive" class="filter-count">0</span></button>
+          <button class="dev-filter-btn"         data-dfilter="expired" onclick="setDeviceFilter('expired')">만료<span id="cntExpired" class="filter-count">0</span></button>
         </div>
         <div id="accountGrid" class="account-grid">
           <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
@@ -338,32 +360,61 @@
 <!-- QR 충전 모달 -->
 <div id="qrModal">
   <div class="qr-box">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <!-- 헤더 -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
       <div>
-        <div class="qr-title">QR 충전</div>
+        <div class="qr-title">💳 QR 충전</div>
         <div class="qr-sub" id="qrTargetLabel">대상: -</div>
       </div>
-      <button class="btn-ghost btn-sm" onclick="closeQr()">✕ 닫기</button>
+      <button class="btn-ghost btn-sm" onclick="closeQr()">✕</button>
     </div>
 
-    <!-- 가격 패키지 -->
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">이용 기간 선택</div>
-    <div class="pkg-grid" id="pkgGrid">
-      <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+    <!-- 현재 만료일 정보 -->
+    <div class="qr-expiry-info">
+      <span style="color:var(--muted)">현재 만료일</span>
+      <span id="qrCurExpiry" style="font-weight:600">-</span>
     </div>
-    <div style="font-size:13px;margin-bottom:14px;">
+
+    <!-- 모드 토글 -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modePkgBtn" onclick="setQrMode('pkg')">패키지 선택</button>
+      <button class="mode-btn"        id="modeDateBtn" onclick="setQrMode('date')">날짜로 선택</button>
+    </div>
+
+    <!-- 패키지 모드 -->
+    <div id="modePkg">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">이용 기간 패키지</div>
+      <div class="pkg-grid" id="pkgGrid">
+        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- 날짜 모드 -->
+    <div id="modeDate" style="display:none;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">충전 후 만료일 선택</div>
+      <input type="date" id="qrTargetDate" oninput="onDateChange()" style="margin-bottom:10px;">
+      <div class="calc-box" id="calcBox" style="display:none;">
+        <div class="calc-row"><span style="color:var(--muted)">현재 만료일</span><span id="calcFrom">-</span></div>
+        <div class="calc-row"><span style="color:var(--muted)">목표 만료일</span><span id="calcTo" style="color:var(--ac)">-</span></div>
+        <div class="calc-row"><span style="color:var(--muted)">연장 일수</span><span id="calcDays" style="color:var(--ok)">-</span></div>
+        <div class="calc-total calc-row"><span>예상 금액</span><span id="calcPrice">-</span></div>
+      </div>
+    </div>
+
+    <!-- 금액 표시 (패키지 모드) -->
+    <div class="amount-display" id="pkgAmountRow">
       예상 금액: <b id="qrAmount" style="color:var(--ac)">-</b>
     </div>
 
-    <button class="btn-ac" id="qrRequestBtn" onclick="requestQr()" style="width:100%;margin-bottom:14px">입금 주소 발급 / QR 보기</button>
+    <button class="btn-ac" id="qrRequestBtn" onclick="requestQr()" style="width:100%;margin-bottom:12px">입금 주소 발급 / QR 보기</button>
 
     <!-- QR 영역 -->
     <div id="qrArea" style="display:none;text-align:center;">
       <canvas id="qrCanvas"></canvas>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">TRON (TRC-20 USDT) 입금 주소</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">TRON (TRC-20 USDT) 입금 주소</div>
       <div class="addr-box" id="qrAddress"></div>
-      <button class="btn-ghost btn-sm" onclick="checkDeposit()" id="qrCheckBtn" style="width:100%;margin-bottom:8px">지금 확인</button>
-      <div style="font-size:12px;color:var(--muted)">입금 후 자동으로 감지됩니다 (10초마다 확인 중)</div>
+      <button class="btn-ghost btn-sm" onclick="checkDeposit()" style="width:100%;margin-bottom:6px">지금 확인</button>
+      <div style="font-size:12px;color:var(--muted)">입금 후 자동 감지됩니다 (10초마다)</div>
     </div>
 
     <div class="errmsg" id="qrErr"></div>
@@ -378,10 +429,14 @@
   let _token    = localStorage.getItem('owner_token') || '';
   let _ownerId  = localStorage.getItem('owner_id')    || '';
   let _accounts = [];
+  let _deviceFilter = 'all';
   let _qrUserId = null;
   let _qrPollTimer = null;
   let _qrPrevExpiry = null;
   let _qrSelectedDays = 30;
+  let _qrMode = 'pkg';
+  let _qrCalcDays = 0;
+  let _qrCalcPrice = 0;
   let _pricing = null;
   let _seedsLoaded = false;
 
@@ -488,6 +543,12 @@
   }
 
   /* ===================== DEVICES ===================== */
+  function setDeviceFilter(f) {
+    _deviceFilter = f;
+    document.querySelectorAll('.dev-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.dfilter === f));
+    renderAccountGrid();
+  }
+
   async function loadAccounts() {
     const grid = document.getElementById('accountGrid');
     const summary = document.getElementById('summaryRow');
@@ -501,62 +562,74 @@
       const total      = _accounts.length;
       const running    = _accounts.filter(a => a.minerStatus === 'running').length;
       const active     = _accounts.filter(a => a.status === 'approved' && !a.isExpired).length;
+      const expired    = _accounts.filter(a => a.isExpired).length;
       const expireSoon = _accounts.filter(a => !a.isExpired && a.remainingDays >= 0 && a.remainingDays <= 7).length;
+
       summary.innerHTML =
         mkStat('총 기기', total + '대', 'var(--ac)') +
         mkStat('채굴 중', running + '대', 'var(--ok)') +
         mkStat('활성', active + '대', 'var(--ok)') +
         mkStat('7일 이내 만료', expireSoon + '대', expireSoon > 0 ? 'var(--warn)' : 'var(--muted)');
 
-      if (!_accounts.length) {
-        grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1">연결된 기기가 없습니다.</div>';
-        return;
-      }
+      // 필터 카운트 업데이트
+      const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+      setCount('cntAll', total);
+      setCount('cntActive', active);
+      setCount('cntExpired', expired);
 
-      grid.innerHTML = _accounts.map(a => {
-        const isRun  = a.minerStatus === 'running';
-        const exp    = a.expireDate ? new Date(a.expireDate) : null;
-        const expStr = exp ? fmtDate(exp) : '미설정';
-        const rDay   = a.remainingDays;
-        const rColor = a.isExpired ? 'var(--err)' : rDay <= 7 ? 'var(--warn)' : 'var(--ok)';
-        const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
-        const statusTxt = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
-        const uid = escJs(a.id);
-        return `<div class="account-card" id="card_${esc(a.id)}">
-          <div class="ac-header">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="status-dot ${dotCls}"></span>
-              <span class="ac-id">${esc(a.id)}</span>
-            </div>
-            <span class="badge ${isRun ? 'badge-run' : 'badge-stop'}">
-              <span class="dot ${isRun ? 'dot-run' : 'dot-stop'}"></span>
-              ${isRun ? '채굴 중' : '정지'}
-            </span>
-          </div>
-          <div class="ac-body">
-            <div class="ac-row">
-              <span class="ac-label">상태</span>
-              <span style="font-size:12px">${statusTxt}</span>
-            </div>
-            <div class="ac-row">
-              <span class="ac-label">만료일</span>
-              <span style="font-size:12px;color:var(--muted)">${expStr}</span>
-            </div>
-            <div class="ac-row">
-              <span class="ac-label">남은 일수</span>
-              <span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span>
-            </div>
-          </div>
-          <div class="ac-actions">
-            <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
-            <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
-            <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
-          </div>
-        </div>`;
-      }).join('');
+      renderAccountGrid();
     } catch (e) {
-      grid.innerHTML = `<div style="color:var(--err);font-size:13px;padding:20px;grid-column:1/-1">${esc(e.message)}</div>`;
+      document.getElementById('accountGrid').innerHTML =
+        `<div style="color:var(--err);font-size:13px;padding:20px;grid-column:1/-1">${esc(e.message)}</div>`;
     }
+  }
+
+  function renderAccountGrid() {
+    const grid = document.getElementById('accountGrid');
+    if (!grid) return;
+
+    let list = _accounts;
+    if (_deviceFilter === 'active')  list = _accounts.filter(a => a.status === 'approved' && !a.isExpired);
+    if (_deviceFilter === 'expired') list = _accounts.filter(a => a.isExpired);
+
+    if (!list.length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1">' +
+        (_deviceFilter === 'all' ? '연결된 기기가 없습니다.' : '해당하는 기기가 없습니다.') + '</div>';
+      return;
+    }
+
+    grid.innerHTML = list.map(a => {
+      const isRun  = a.minerStatus === 'running';
+      const exp    = a.expireDate ? new Date(a.expireDate) : null;
+      const expStr = exp ? fmtDateShort(exp) : '미설정';
+      const rDay   = a.remainingDays;
+      const rColor = a.isExpired ? 'var(--err)' : rDay <= 7 ? 'var(--warn)' : 'var(--ok)';
+      const dotCls = a.status === 'approved' && !a.isExpired ? 'dot-blue' : a.isExpired ? 'dot-red' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
+      const statusTxt = a.isExpired ? '만료' : a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
+      const uid = escJs(a.id);
+      return `<div class="account-card" id="card_${esc(a.id)}">
+        <div class="ac-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="status-dot ${dotCls}"></span>
+            <span class="ac-id">${esc(a.id)}</span>
+          </div>
+          <span class="badge ${isRun ? 'badge-run' : 'badge-stop'}">
+            <span class="dot ${isRun ? 'dot-run' : 'dot-stop'}"></span>
+            ${isRun ? '채굴 중' : '정지'}
+          </span>
+        </div>
+        <div class="ac-body">
+          <div class="ac-row"><span class="ac-label">상태</span><span style="font-size:12px;color:${rColor};font-weight:600">${statusTxt}</span></div>
+          <div class="ac-row"><span class="ac-label">만료일</span><span style="font-size:12px;color:var(--muted)">${expStr}</span></div>
+          <div class="ac-row"><span class="ac-label">남은 일수</span><span style="font-weight:700;color:${rColor}">${a.isExpired ? '만료됨' : (rDay + '일')}</span></div>
+        </div>
+        <div class="ac-actions">
+          <button class="btn-ghost btn-sm" onclick="loadDetail('${uid}')">채굴 내역</button>
+          <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:var(--ac)">QR 충전</button>
+          <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
+        </div>
+      </div>`;
+    }).join('');
   }
 
   let _selectedId = null;
@@ -685,52 +758,122 @@
       const r = await fetch(API + '/api/payment/pricing');
       if (!r.ok) return;
       _pricing = await r.json();
-      renderPkgGrid();
     } catch {}
+  }
+
+  function getPkgs() {
+    if (!_pricing) return [];
+    return _pricing.packages || [];
   }
 
   function renderPkgGrid() {
     const grid = document.getElementById('pkgGrid');
-    if (!grid || !_pricing) return;
-    const pkgs = _pricing.packages || [
-      { days: 30,  price: _pricing.price30  || 0 },
-      { days: 90,  price: _pricing.price90  || 0 },
-      { days: 180, price: _pricing.price180 || 0 },
-      { days: 365, price: _pricing.price365 || 0 },
-    ];
+    if (!grid) return;
+    const pkgs = getPkgs();
+    if (!pkgs.length) { grid.innerHTML = '<div style="color:var(--muted);font-size:12px">가격 정보 없음</div>'; return; }
     grid.innerHTML = pkgs.map(p =>
-      `<div class="pkg-btn ${p.days === _qrSelectedDays ? 'sel' : ''}" onclick="selectPkg(${p.days}, ${p.price})">
-        <div style="font-weight:700">${p.days}일</div>
-        <div style="color:var(--muted);font-size:11px">${p.price ? p.price + ' USDT' : '-'}</div>
+      `<div class="pkg-btn ${p.days === _qrSelectedDays ? 'sel' : ''}" onclick="selectPkg(${p.days},${p.price||0})">
+        <div style="font-weight:700">${p.label || p.days + '일'}</div>
+        <div style="color:var(--muted);font-size:11px;margin-top:2px">${p.price ? p.price + ' U' : '-'}</div>
       </div>`
     ).join('');
   }
 
   function selectPkg(days, price) {
     _qrSelectedDays = days;
+    _qrCalcDays = days;
+    _qrCalcPrice = price;
     document.getElementById('qrAmount').textContent = price ? price + ' USDT' : '문의';
     renderPkgGrid();
     document.getElementById('qrArea').style.display = 'none';
     document.getElementById('qrErr').textContent = '';
   }
 
-  function openQr(userId) {
-    _qrUserId = userId;
-    stopQrPoll();
-    document.getElementById('qrTargetLabel').textContent = '대상: ' + userId;
+  function setQrMode(mode) {
+    _qrMode = mode;
+    document.getElementById('modePkgBtn').classList.toggle('active', mode === 'pkg');
+    document.getElementById('modeDateBtn').classList.toggle('active', mode === 'date');
+    document.getElementById('modePkg').style.display    = mode === 'pkg'  ? '' : 'none';
+    document.getElementById('modeDate').style.display   = mode === 'date' ? '' : 'none';
+    document.getElementById('pkgAmountRow').style.display = mode === 'pkg' ? '' : 'none';
     document.getElementById('qrArea').style.display = 'none';
     document.getElementById('qrErr').textContent = '';
-    document.getElementById('qrOk').textContent = '';
-    renderPkgGrid();
-    if (_pricing) {
-      const pkgs = _pricing.packages || [];
-      const p = pkgs.find(x => x.days === _qrSelectedDays);
-      document.getElementById('qrAmount').textContent = p && p.price ? p.price + ' USDT' : '-';
+    if (mode === 'date') {
+      // 최소 날짜: 현재 만료일 또는 내일
+      const acc = _accounts.find(a => a.id === _qrUserId);
+      const base = acc && acc.expireDate && !acc.isExpired
+        ? new Date(acc.expireDate)
+        : new Date();
+      const minDate = new Date(base);
+      minDate.setDate(minDate.getDate() + 1);
+      const dateEl = document.getElementById('qrTargetDate');
+      dateEl.min = minDate.toISOString().slice(0, 10);
+      if (!dateEl.value || dateEl.value < dateEl.min) {
+        // 기본값: 만료일 + 30일
+        const def = new Date(base);
+        def.setDate(def.getDate() + 30);
+        dateEl.value = def.toISOString().slice(0, 10);
+      }
+      onDateChange();
     }
-    document.getElementById('qrModal').classList.add('open');
-    // 현재 만료일 스냅샷
+  }
+
+  function onDateChange() {
+    const dateEl  = document.getElementById('qrTargetDate');
+    const calcBox = document.getElementById('calcBox');
+    const target  = dateEl.value ? new Date(dateEl.value + 'T00:00:00') : null;
+    if (!target) { calcBox.style.display = 'none'; return; }
+
+    const acc     = _accounts.find(a => a.id === _qrUserId);
+    const now     = new Date(); now.setHours(0,0,0,0);
+    const baseExp = acc && acc.expireDate && !acc.isExpired ? new Date(acc.expireDate) : now;
+    baseExp.setHours(0,0,0,0);
+
+    const days = Math.ceil((target - baseExp) / 86400000);
+    if (days <= 0) { calcBox.style.display = 'none'; _qrCalcDays = 0; _qrCalcPrice = 0; return; }
+
+    const monthlyPrice = _pricing ? (_pricing.monthlyPrice || 39) : 39;
+    const price = Math.ceil(days / 30 * monthlyPrice * 10) / 10; // 일할 계산, 소수점 1자리
+
+    _qrCalcDays  = days;
+    _qrCalcPrice = price;
+
+    document.getElementById('calcFrom').textContent  = fmtDateShort(baseExp);
+    document.getElementById('calcTo').textContent    = fmtDateShort(target);
+    document.getElementById('calcDays').textContent  = days + '일 연장';
+    document.getElementById('calcPrice').textContent = price + ' USDT';
+    calcBox.style.display = '';
+  }
+
+  function openQr(userId) {
+    _qrUserId = userId;
+    _qrMode   = 'pkg';
+    stopQrPoll();
+
     const acc = _accounts.find(a => a.id === userId);
     _qrPrevExpiry = acc ? acc.expireDate : null;
+
+    document.getElementById('qrTargetLabel').textContent = '대상: ' + userId;
+    document.getElementById('qrCurExpiry').textContent   = acc && acc.expireDate
+      ? fmtDateShort(new Date(acc.expireDate)) + (acc.isExpired ? ' (만료됨)' : '')
+      : '미설정';
+    document.getElementById('qrArea').style.display = 'none';
+    document.getElementById('qrErr').textContent    = '';
+    document.getElementById('qrOk').textContent     = '';
+
+    // 모드 초기화
+    setQrMode('pkg');
+    renderPkgGrid();
+    const pkgs = getPkgs();
+    const p    = pkgs.find(x => x.days === _qrSelectedDays) || pkgs[0];
+    if (p) {
+      _qrSelectedDays = p.days;
+      _qrCalcDays     = p.days;
+      _qrCalcPrice    = p.price || 0;
+      document.getElementById('qrAmount').textContent = p.price ? p.price + ' USDT' : '-';
+    }
+
+    document.getElementById('qrModal').classList.add('open');
   }
 
   function closeQr() {
@@ -743,6 +886,12 @@
     const errEl = document.getElementById('qrErr');
     const btn   = document.getElementById('qrRequestBtn');
     errEl.textContent = '';
+
+    // 날짜 모드 유효성 검사
+    if (_qrMode === 'date' && _qrCalcDays <= 0) {
+      errEl.textContent = '날짜를 다시 선택해주세요.'; return;
+    }
+
     if (!_qrUserId) return;
     btn.disabled = true; btn.textContent = '주소 발급 중...';
     try {
@@ -751,15 +900,14 @@
       });
       const data = await r.json();
       if (!r.ok) { errEl.textContent = data.error || '주소 발급 실패'; return; }
+
       const address = data.address;
       document.getElementById('qrAddress').textContent = address;
       // QR 렌더링
-      const canvas = document.getElementById('qrCanvas');
-      QRCode.toCanvas(canvas, address, { width: 180, margin: 1 }, err => {
+      QRCode.toCanvas(document.getElementById('qrCanvas'), address, { width: 200, margin: 1 }, err => {
         if (err) errEl.textContent = 'QR 생성 오류: ' + err.message;
       });
       document.getElementById('qrArea').style.display = '';
-      // 폴링 시작
       startQrPoll();
     } catch (e) { errEl.textContent = e.message || '오류'; }
     finally { btn.disabled = false; btn.textContent = '입금 주소 발급 / QR 보기'; }
@@ -784,7 +932,7 @@
       if (acc.expireDate && acc.expireDate !== _qrPrevExpiry) {
         stopQrPoll();
         _accounts = data.accounts;
-        document.getElementById('qrOk').textContent = '✅ 입금이 확인되었습니다! 만료일: ' + fmtDate(acc.expireDate);
+        document.getElementById('qrOk').textContent = '✅ 입금 확인! 새 만료일: ' + fmtDateShort(new Date(acc.expireDate));
         loadAccounts();
         showToast('입금 처리 완료', 'ok');
       }
@@ -807,6 +955,13 @@
     if (isNaN(dt)) return String(d);
     const p = n => String(n).padStart(2, '0');
     return dt.getFullYear() + '-' + p(dt.getMonth()+1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
+  }
+  function fmtDateShort(d) {
+    if (!d) return '-';
+    const dt = d instanceof Date ? d : new Date(d);
+    if (isNaN(dt)) return String(d);
+    const p = n => String(n).padStart(2, '0');
+    return dt.getFullYear() + '.' + p(dt.getMonth()+1) + '.' + p(dt.getDate());
   }
   function esc(s)   { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function escJs(s) { return String(s??'').replace(/'/g, "\\'"); }

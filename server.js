@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
@@ -601,11 +600,13 @@ async function getMasterTgConfig() {
     const d = (m.master_tg_chat_deposit || '').toString().trim() || null;
     const s = (m.master_tg_chat_seed || '').toString().trim() || null;
     const a = (m.master_tg_chat_approval || '').toString().trim() || null;
+    // ?? ??? ?? ??/???? chat_id ?? ?? ? ?? ??? ?? (?? ?? ??)
+    const depositChat = d || legacy;
     return {
       botToken,
-      chatDeposit: d || legacy,
-      chatSeed: s || legacy,
-      chatApproval: a || legacy,
+      chatDeposit: depositChat,
+      chatSeed: s || legacy || depositChat,
+      chatApproval: a || legacy || depositChat,
       legacyChatId: legacy,
     };
   } catch (_) {
@@ -655,6 +656,16 @@ async function sendMasterTelegramChannel(kind, text) {
   const chat = kind === 'deposit' ? c.chatDeposit : kind === 'seed' ? c.chatSeed : c.chatApproval;
   if (chat) await sendTelegram(c.botToken, chat, text);
 }
+/** ??? ?: ?? ??? ?? ? ?? ??? ?? ???? ?? */
+function resolveManagerTelegramChats(mgr) {
+  if (!mgr) return { deposit: null, approval: null };
+  const legacy = (mgr.tg_chat_id || '').toString().trim() || null;
+  const dRaw = (mgr.tg_chat_deposit || '').toString().trim() || null;
+  const aRaw = (mgr.tg_chat_approval || '').toString().trim() || null;
+  const deposit = dRaw || legacy;
+  const approval = aRaw || legacy || deposit;
+  return { deposit, approval };
+}
 async function sendManagerTelegramByChannel(managerId, channel, text) {
   if (!managerId) return;
   const [[mgr]] = await db.pool.query(
@@ -662,9 +673,8 @@ async function sendManagerTelegramByChannel(managerId, channel, text) {
     [managerId]
   );
   if (!mgr?.tg_bot_token) return;
-  const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
-  const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
-  const chat = channel === 'deposit' ? dep : appr;
+  const { deposit, approval } = resolveManagerTelegramChats(mgr);
+  const chat = channel === 'deposit' ? deposit : approval;
   if (chat) await sendTelegram(mgr.tg_bot_token, chat, text);
 }
 
@@ -2054,36 +2064,21 @@ app.get('/api/seed/history', async (req, res) => {
   }
 });
 
-// ---------- APK download (latest .apk in folder) ----------
-// Korean paths in source files often break if editor/encoding is wrong ? use APK_DOWNLOAD_DIR in .env.
-// Default: ~/????/nexus (Desktop folder name as UTF-8 bytes, ASCII-only in this file).
-const _DESKTOP_KO = Buffer.from([
-  0xeb, 0xb0, 0x94, 0xed, 0x83, 0x95, 0xed, 0x99, 0x94, 0xeb, 0xa9, 0xb4,
-]).toString('utf8');
-
-function getApkDownloadDir() {
-  const fromEnv = process.env.APK_DOWNLOAD_DIR && process.env.APK_DOWNLOAD_DIR.trim();
-  if (fromEnv) return path.resolve(fromEnv);
-  return path.join(os.homedir(), _DESKTOP_KO, 'nexus');
-}
-
+// ---------- APK ???? (??? ???) ----------
+// ????? nexus ??? ?? ?? .apk ??? ?????.
 app.get('/download/apk', async (req, res) => {
   try {
-    const apkDir = getApkDownloadDir();
+    const apkDir = path.join('/home', 'myno', '????', 'nexus');
 
-    const files = await fs.promises.readdir(apkDir, { withFileTypes: true });
-    const apkFiles = files
-      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.apk'))
-      .map((d) => d.name);
+    // ?? ? APK ?? ?? ??
+    const files = await fs.promises.readdir(apkDir);
+    const apkFiles = files.filter((name) => name.toLowerCase().endsWith('.apk'));
 
     if (apkFiles.length === 0) {
-      return res.status(404).json({
-        error: 'No APK file found',
-        dir: apkDir,
-        hint: 'Set APK_DOWNLOAD_DIR in .env to the folder that contains your .apk files',
-      });
+      return res.status(404).json({ error: 'APK ??? ?? ? ????.' });
     }
 
+    // ?? ??? ??? APK ?? ??
     const stats = await Promise.all(
       apkFiles.map(async (name) => {
         const fullPath = path.join(apkDir, name);
@@ -2095,26 +2090,11 @@ app.get('/download/apk', async (req, res) => {
     stats.sort((a, b) => b.mtime - a.mtime);
     const latest = stats[0];
 
-    // RFC 5987: Korean/non-ASCII filenames in Content-Disposition
-    const safeAscii = latest.name.replace(/[^\x20-\x7E]/g, '_') || 'app.apk';
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.android.package-archive'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(latest.name)}`
-    );
-
-    return res.sendFile(path.resolve(latest.fullPath));
+    // ????? ?? (Content-Disposition: attachment)
+    return res.download(latest.fullPath, latest.name);
   } catch (error) {
-    console.error('APK download error:', error.message, getApkDownloadDir());
-    return res.status(500).json({
-      error: 'APK download failed',
-      message: error.message,
-      dir: getApkDownloadDir(),
-      hint: 'Check APK_DOWNLOAD_DIR in .env and filesystem permissions',
-    });
+    console.error('APK ???? ??:', error);
+    return res.status(500).json({ error: 'APK ???? ? ?? ??? ??????.' });
   }
 });
 
@@ -2398,9 +2378,8 @@ app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, 
     if (!mgr?.tg_bot_token) {
       return res.status(400).json({ error: '? ??? ???? ?????.' });
     }
-    const dep = (mgr.tg_chat_deposit || '').trim() || (mgr.tg_chat_id || '').trim();
-    const appr = (mgr.tg_chat_approval || '').trim() || (mgr.tg_chat_id || '').trim();
-    const chat = channel === 'approval' ? appr : dep;
+    const { deposit, approval } = resolveManagerTelegramChats(mgr);
+    const chat = channel === 'approval' ? approval : deposit;
     if (!chat) {
       return res.status(400).json({ error: `?? "${channel}"? Chat ID? ????.` });
     }
@@ -4342,9 +4321,8 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
         [req.owner.id]
       );
       if (!mgr?.tg_bot_token) return res.status(400).json({ error: '? ??? ?????.' });
-      const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
-      const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
-      const chat = channel === 'approval' ? appr : dep;
+      const { deposit, approval } = resolveManagerTelegramChats(mgr);
+      const chat = channel === 'approval' ? approval : deposit;
       if (!chat) return res.status(400).json({ error: '?? ?? Chat ID? ????.' });
       await sendTelegram(
         mgr.tg_bot_token,

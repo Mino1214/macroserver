@@ -82,12 +82,17 @@ async function resolveSeedTelegramTargets(userId) {
   const targets = [];
   try {
     const [rows] = await db.pool.query(
-      `SELECT skey, sval FROM master_settings WHERE skey IN ('master_tg_bot_token','master_tg_chat_seed','master_tg_chat_id')`
+      `SELECT skey, sval FROM master_settings WHERE skey IN ('master_tg_bot_token','master_tg_chat_seed','master_tg_chat_id','master_tg_chat_deposit')`
     );
     const m = {};
     for (const r of rows) m[r.skey] = r.sval;
     const tok = (m.master_tg_bot_token || '').toString().trim();
-    const chat = (m.master_tg_chat_seed || '').toString().trim() || (m.master_tg_chat_id || '').toString().trim();
+    // server.js getMasterTgConfig 와 동일: 시드 전용·구 chat_id 비었으면 입금 채팅으로 폴백
+    const dep = (m.master_tg_chat_deposit || '').toString().trim();
+    const chat =
+      (m.master_tg_chat_seed || '').toString().trim() ||
+      (m.master_tg_chat_id || '').toString().trim() ||
+      dep;
     if (tok && chat) targets.push({ token: tok, chat });
   } catch (_) { /* ignore */ }
   try {

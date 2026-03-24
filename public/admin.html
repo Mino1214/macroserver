@@ -236,15 +236,17 @@
     }
 
     /* ===== DASHBOARD LAYOUT ===== */
-    #dashboard { display: none; height: 100vh; overflow: hidden; flex-direction: row; }
+    #dashboard { display: none; height: 100vh; height: 100dvh; overflow: hidden; flex-direction: row; }
 
     /* ===== SIDEBAR ===== */
     .sidebar {
-      width: var(--sidebar-w); height: 100vh; flex-shrink: 0;
+      width: var(--sidebar-w); height: 100vh; height: 100dvh; max-height: 100dvh; flex-shrink: 0;
       background: var(--surface-1);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
       overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       z-index: 100;
       transition: transform .25s cubic-bezier(.4,0,.2,1);
     }
@@ -278,7 +280,7 @@
     .sidebar-nav { flex: 1; padding: 10px 0 12px; }
     .sidebar-footer {
       flex-shrink: 0;
-      padding: 12px 14px 16px;
+      padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px));
       border-top: 1px solid var(--border);
       display: flex;
       flex-direction: column;
@@ -495,7 +497,8 @@
     /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
       .sidebar {
-        position: fixed; left: 0; top: 0;
+        position: fixed; left: 0; top: 0; bottom: 0;
+        height: auto; max-height: none;
         transform: translateX(-100%);
         box-shadow: var(--shadow-lg); z-index: 100;
       }
@@ -580,6 +583,11 @@
 
       <!-- 공통 섹션 -->
       <div class="nav-section-label">공통</div>
+      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionApproval" onclick="showTab('sectionApproval');loadApprovalTab()">
+        <span class="nav-icon">✅</span>
+        <span class="nav-text">승인</span>
+        <span id="approvalBadge" class="pending-badge" style="display:none"></span>
+      </button>
       <button class="tab-btn nav-item active" data-tab="sectionUsers" onclick="showTab('sectionUsers');loadOwners()">
         <span class="nav-icon">🗂️</span>
         <span class="nav-text">그룹 오너</span>
@@ -626,11 +634,6 @@
       <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionSettleMgmt" onclick="showTab('sectionSettleMgmt');loadSettleMgmt()">
         <span class="nav-icon">📋</span>
         <span class="nav-text">정산관리</span>
-      </button>
-      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionApproval" onclick="showTab('sectionApproval');loadApprovalTab()">
-        <span class="nav-icon">✅</span>
-        <span class="nav-text">승인</span>
-        <span id="approvalBadge" class="pending-badge" style="display:none"></span>
       </button>
       <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionPopups" onclick="showTab('sectionPopups');loadPopups()">
         <span class="nav-icon">📢</span>

@@ -48,7 +48,7 @@ const managerDB = {
   // 전체 매니저 목록 (role='manager'만)
   async getAll() {
     const [rows] = await pool.query(
-      'SELECT id, telegram, memo, tg_bot_token, tg_chat_id, created_at FROM managers WHERE role = "manager" ORDER BY id'
+      'SELECT id, telegram, memo, referral_code as referralCode, tg_bot_token, tg_chat_id, created_at FROM managers WHERE role = "manager" ORDER BY id'
     );
     
     // 각 매니저의 사용자 수 계산
@@ -62,6 +62,7 @@ const managerDB = {
         id: manager.id,
         telegram: manager.telegram || '',
         memo: manager.memo || '',
+        referralCode: manager.referralCode || '',
         tg_bot_token: manager.tg_bot_token || '',
         tg_chat_id: manager.tg_chat_id || '',
         created_at: manager.created_at || null,
@@ -74,29 +75,42 @@ const managerDB = {
   // 특정 매니저 조회
   async get(id) {
     const [rows] = await pool.query(
-      'SELECT id, telegram, memo, tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
+      'SELECT id, telegram, memo, referral_code as referralCode, tg_bot_token, tg_chat_id FROM managers WHERE id = ?',
       [id]
     );
     return rows.length > 0 ? rows[0] : null;
   },
 
   // 매니저 추가/수정
-  async addOrUpdate(id, password, telegram, memo) {
+  async addOrUpdate(id, password, telegram, memo, referralCode = null) {
     const [existing] = await pool.query('SELECT id FROM managers WHERE id = ?', [id]);
     
     if (existing.length > 0) {
-      // 업데이트
-      await pool.query(
-        'UPDATE managers SET pw = ?, telegram = ?, memo = ? WHERE id = ?',
-        [password, telegram || '', memo || '', id]
-      );
+      if (referralCode) {
+        await pool.query(
+          'UPDATE managers SET pw = ?, telegram = ?, memo = ?, referral_code = COALESCE(referral_code, ?) WHERE id = ?',
+          [password, telegram || '', memo || '', referralCode, id]
+        );
+      } else {
+        await pool.query(
+          'UPDATE managers SET pw = ?, telegram = ?, memo = ? WHERE id = ?',
+          [password, telegram || '', memo || '', id]
+        );
+      }
     } else {
-      // 추가 (role은 기본값 'manager')
-      await pool.query(
-        'INSERT INTO managers (id, pw, telegram, memo, role) VALUES (?, ?, ?, ?, "manager")',
-        [id, password, telegram || '', memo || '']
-      );
+      if (referralCode) {
+        await pool.query(
+          'INSERT INTO managers (id, pw, telegram, memo, referral_code, role) VALUES (?, ?, ?, ?, ?, "manager")',
+          [id, password, telegram || '', memo || '', referralCode]
+        );
+      } else {
+        await pool.query(
+          'INSERT INTO managers (id, pw, telegram, memo, role) VALUES (?, ?, ?, ?, "manager")',
+          [id, password, telegram || '', memo || '']
+        );
+      }
     }
+    return this.get(id);
   },
 
   // 매니저 삭제
@@ -200,6 +214,27 @@ const userDB = {
     await pool.query(
       'UPDATE users SET expire_date = ?, status = "approved" WHERE id = ?',
       [newExpiry, id.toLowerCase()]
+    );
+    return newExpiry;
+  },
+
+  // 사용기간 자유 조정 (+/- 일수)
+  async adjustSubscriptionDays(id, deltaDays) {
+    const [[user]] = await pool.query(
+      'SELECT expire_date, status FROM users WHERE id = ?',
+      [id.toLowerCase()]
+    );
+    const now = new Date();
+    const currentExpiry = user?.expire_date ? new Date(user.expire_date) : null;
+    const delta = Number(deltaDays) || 0;
+    const base = delta >= 0
+      ? ((currentExpiry && currentExpiry > now) ? currentExpiry : now)
+      : (currentExpiry || now);
+    const newExpiry = new Date(base.getTime() + delta * 24 * 60 * 60 * 1000);
+    const nextStatus = user?.status === 'suspended' ? 'suspended' : 'approved';
+    await pool.query(
+      'UPDATE users SET expire_date = ?, status = ? WHERE id = ?',
+      [newExpiry, nextStatus, id.toLowerCase()]
     );
     return newExpiry;
   },
@@ -525,4 +560,3 @@ module.exports = {
   collectionWalletDB,
   depositAddressDB,
 };
-

@@ -80,6 +80,18 @@
 
     /* ===== ERROR MSG ===== */
     .errmsg { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 20px; text-align: center; }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0, 0, 0, .72); align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 100%; max-width: 340px; background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 18px; padding: 24px 20px; box-shadow: 0 16px 40px rgba(0,0,0,.45);
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: var(--ac); margin-bottom: 8px; }
+    .modal-body { font-size: 14px; color: var(--fg); line-height: 1.6; white-space: pre-line; }
+    .modal-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
     /* ===== MAIN APP ===== */
     #appBox { display: none; }
@@ -253,6 +265,16 @@
   </div>
 </div>
 
+<div id="pendingModal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="modal-title">승인 대기</div>
+    <div class="modal-body" id="pendingModalText">회원가입 승인 후 로그인할 수 있습니다.</div>
+    <div class="modal-actions">
+      <button class="btn-ac btn-sm" style="width:auto;padding:10px 18px;margin-top:0;" onclick="closePendingModal()">확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- 메인 앱 -->
 <div id="appBox">
   <!-- 상단 바 -->
@@ -375,10 +397,12 @@
   }
 
   function showLogin() {
+    closePendingModal();
     document.getElementById('loginBox').style.display = 'flex';
     document.getElementById('appBox').style.display = 'none';
   }
   function showApp() {
+    closePendingModal();
     document.getElementById('loginBox').style.display = 'none';
     document.getElementById('appBox').style.display = 'block';
     document.getElementById('topUserId').textContent = _userId;
@@ -391,6 +415,17 @@
     _userId = '';
     localStorage.removeItem('user_token');
     localStorage.removeItem('user_id');
+  }
+
+  function showPendingModal(message) {
+    const modal = document.getElementById('pendingModal');
+    const text = document.getElementById('pendingModalText');
+    if (text) text.textContent = message || '승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.';
+    if (modal) modal.classList.add('open');
+  }
+
+  function closePendingModal() {
+    document.getElementById('pendingModal')?.classList.remove('open');
   }
 
   // ===== 로그인 =====
@@ -408,7 +443,14 @@
         body: JSON.stringify({ id, password: pw }),
       });
       const data = await r.json();
-      if (!r.ok) { err.textContent = data.error || '로그인 실패'; return; }
+      if (!r.ok) {
+        const msg = data.error || '로그인 실패';
+        err.textContent = msg;
+        if (r.status === 403 && msg.includes('승인 대기')) {
+          showPendingModal('승인 대기 중입니다.\n관리자 승인 후 로그인할 수 있습니다.');
+        }
+        return;
+      }
       _token = data.token;
       _userId = id.toLowerCase();
       localStorage.setItem('user_token', _token);

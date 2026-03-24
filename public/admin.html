@@ -627,6 +627,11 @@
         <span class="nav-icon">📋</span>
         <span class="nav-text">정산관리</span>
       </button>
+      <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionApproval" onclick="showTab('sectionApproval');loadApprovalTab()">
+        <span class="nav-icon">✅</span>
+        <span class="nav-text">승인</span>
+        <span id="approvalBadge" class="pending-badge" style="display:none"></span>
+      </button>
       <button class="tab-btn nav-item master-tab nav-master hidden" data-tab="sectionPopups" onclick="showTab('sectionPopups');loadPopups()">
         <span class="nav-icon">📢</span>
         <span class="nav-text">공지팝업</span>
@@ -731,7 +736,7 @@
             <table>
               <thead><tr>
                 <th>아이디</th><th>텔레그램</th><th>메모</th>
-                <th>알림봇</th><th>생성일</th><th>작업</th>
+                <th>레퍼럴</th><th>알림봇</th><th>생성일</th><th>작업</th>
               </tr></thead>
               <tbody id="managersList"></tbody>
             </table>
@@ -770,6 +775,61 @@
         </div>
       </div>
     </div>
+
+    <div class="tab-panel hidden" id="sectionApproval">
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <div>
+            <h2 style="margin:0">오너 계정 승인</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">회원가입 후 승인 대기 중인 오너 계정을 처리합니다.</div>
+          </div>
+          <button class="btn-ac btn-sm" onclick="loadApprovalOwners()">새로고침</button>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>오너 ID</th>
+                <th>매니저</th>
+                <th>이름</th>
+                <th>메신저</th>
+                <th>가입일</th>
+                <th>처리</th>
+              </tr></thead>
+              <tbody id="approvalOwnersBody">
+                <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <div>
+            <h2 style="margin:0">총판 출금 승인</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">총판이 신청한 출금 요청을 승인 또는 거절합니다.</div>
+          </div>
+          <button class="btn-ac btn-sm" onclick="loadApprovalWithdrawals()">새로고침</button>
+        </div>
+        <div class="table-container">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>신청일</th>
+                <th>총판 ID</th>
+                <th>금액 (USDT)</th>
+                <th>지갑 주소</th>
+                <th>처리</th>
+              </tr></thead>
+              <tbody id="approvalWithdrawBody">
+                <tr><td colspan="5" class="no-data">불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /sectionApproval -->
 
     <!-- 기존 구조 유지용 숨김 요소 -->
     <div style="display:none" id="sectionPending"></div>
@@ -1767,7 +1827,7 @@
     const isMaster = me && me.role === 'master';
 
     // master-only elements
-    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','sectionSettleMgmt','sectionPopups','sectionDownloads','userCreateForm'].forEach(id => {
+    ['sectionManagers','sectionTelegram','sectionSeeds','sectionWallet','sectionPricing','sectionGiftSeed','sectionSettleMgmt','sectionApproval','sectionPopups','sectionDownloads','userCreateForm'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', !isMaster);
     });
@@ -1842,7 +1902,9 @@
 
   async function loadAll() {
     try {
-      await Promise.all([loadUsers(), loadSeeds(), loadStats()]);
+      const tasks = [loadOwners(), loadSeeds(), loadStats()];
+      if (me && me.role === 'master') tasks.push(loadApprovalWithdrawals());
+      await Promise.all(tasks);
       if (me && me.role === 'master') {
         loadMasterTgBot();
       } else {
@@ -1879,6 +1941,34 @@
   }
 
   /* ===== MANAGERS ===== */
+  function escHtml(v) {
+    return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  async function copyText(text, okMsg) {
+    try {
+      await navigator.clipboard.writeText(String(text || ''));
+      showToast(okMsg || '복사되었습니다.', 'ok');
+    } catch (_) {
+      const ta = document.createElement('textarea');
+      ta.value = String(text || '');
+      ta.style.cssText = 'position:fixed;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(okMsg || '복사되었습니다.', 'ok');
+    }
+  }
+
+  function copyManagerReferral(referralCode) {
+    if (!referralCode) {
+      showToast('레퍼럴 코드가 없습니다.', 'err');
+      return;
+    }
+    copyText(referralCode, '레퍼럴 코드가 복사되었습니다.');
+  }
+
   async function loadManagers() {
     try {
       const list = await api('/api/admin/managers');
@@ -1893,14 +1983,21 @@
       }
       const tbody = document.getElementById('managersList');
       if (!tbody) return;
-      if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">등록된 매니저가 없습니다.</td></tr>'; return; }
+      if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">등록된 매니저가 없습니다.</td></tr>'; return; }
       tbody.innerHTML = list.map(m => {
         const esc = m.id.replace(/'/g, "\\'");
+        const referral = m.referralCode ? escHtml(m.referralCode) : '-';
         const bot = m.tg_bot_token
           ? `<span style="color:var(--ok);font-size:11px;">✅ 설정됨</span>`
           : `<span style="color:var(--muted);font-size:11px;">미설정</span>`;
         return `<tr>
-          <td>${m.id}</td><td>${m.telegram||'-'}</td><td>${m.memo||'-'}</td>
+          <td>${escHtml(m.id)}</td><td>${m.telegram ? escHtml(m.telegram) : '-'}</td><td>${m.memo ? escHtml(m.memo) : '-'}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <code style="padding:4px 7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:11px;">${referral}</code>
+              ${m.referralCode ? `<button class="btn-ghost btn-sm" onclick="copyManagerReferral('${String(m.referralCode).replace(/'/g, "\\'")}')">복사</button>` : ''}
+            </div>
+          </td>
           <td>${bot} <button class="btn-sm btn-ghost" onclick="openTgBotModal('${esc}')" style="margin-left:4px;">설정</button></td>
           <td>${m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
           <td style="display:flex;gap:5px;">
@@ -2035,10 +2132,16 @@
     const memo = document.getElementById('mgrMemo').value.trim();
     if (!id) { alert('매니저 아이디 입력'); return; }
     try {
-      await api('/api/admin/managers', 'POST', { id, password: pw, telegram, memo });
+      const data = await api('/api/admin/managers', 'POST', { id, password: pw, telegram, memo });
+      document.getElementById('mgrId').value = '';
       document.getElementById('mgrPw').value = '';
+      document.getElementById('mgrTelegram').value = '';
       document.getElementById('mgrMemo').value = '';
       await loadUsers(); await loadManagers();
+      const code = data?.manager?.referralCode;
+      if (code) {
+        showToast(`매니저 생성 완료 · 레퍼럴 코드 ${code}`, 'ok');
+      }
     } catch (e) { alert(e.message || '실패'); }
   }
   async function delManager(id) {
@@ -2091,6 +2194,88 @@
   let _ownerFilter = 'all';
   let _allOwners   = [];
   let _expandedOwner = null;
+  let _approvalPendingOwners = 0;
+  let _approvalPendingWithdrawals = 0;
+
+  function renderApprovalBadge() {
+    const badge = document.getElementById('approvalBadge');
+    if (!badge) return;
+    const total = Number(_approvalPendingOwners || 0) + Number(_approvalPendingWithdrawals || 0);
+    badge.textContent = total || '';
+    badge.style.display = total ? '' : 'none';
+  }
+
+  function loadApprovalTab() {
+    renderApprovalOwners();
+    loadApprovalWithdrawals();
+  }
+
+  function renderApprovalOwners() {
+    const tbody = document.getElementById('approvalOwnersBody');
+    if (!tbody) return;
+    const pendingOwners = (_allOwners || []).filter(o => o.status === 'pending');
+    _approvalPendingOwners = pendingOwners.length;
+    renderApprovalBadge();
+    if (!pendingOwners.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">승인 대기 중인 오너 계정이 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pendingOwners.map(o => {
+      const ownerId = String(o.id).replace(/'/g, "\\'");
+      return `<tr>
+        <td><b>${escHtml(o.id)}</b></td>
+        <td style="font-size:12px;color:var(--muted)">${o.manager_id ? escHtml(o.manager_id) : '-'}</td>
+        <td style="font-size:12px">${o.name ? escHtml(o.name) : '-'}</td>
+        <td style="font-size:12px;color:var(--muted)">${o.telegram ? escHtml(o.telegram) : '-'}</td>
+        <td style="font-size:12px;color:var(--muted)">${o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn-ok btn-sm" onclick="approveOwner('${ownerId}')">승인</button>
+          <button class="btn-err btn-sm" onclick="rejectOwner('${ownerId}')">거절</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function loadApprovalOwners() {
+    if (!me || me.role !== 'master') return;
+    if (!_allOwners.length) {
+      await loadOwners();
+      return;
+    }
+    renderApprovalOwners();
+  }
+
+  async function loadApprovalWithdrawals() {
+    const tbody = document.getElementById('approvalWithdrawBody');
+    if (!tbody || !me || me.role !== 'master') return;
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">불러오는 중...</td></tr>';
+    try {
+      const data = await api('/api/admin/withdrawals?status=pending');
+      const rows = data.withdrawals || [];
+      _approvalPendingWithdrawals = rows.length;
+      renderApprovalBadge();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="no-data">승인 대기 중인 출금 신청이 없습니다.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const rejectId = 'approvalReject_' + r.id;
+        return '<tr>' +
+          '<td style="font-size:12px;color:var(--muted)">' + (r.requested_at ? new Date(r.requested_at).toLocaleString() : '-') + '</td>' +
+          '<td><b>' + escHtml(r.manager_id) + '</b></td>' +
+          '<td style="font-weight:700">' + Number(r.amount || 0).toFixed(4) + ' USDT</td>' +
+          '<td style="font-size:11px;color:var(--muted)">' + (r.wallet_address ? escHtml(r.wallet_address) : '-') + '</td>' +
+          '<td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' +
+            '<button class="btn-ok btn-sm" onclick="processWithdraw(' + r.id + ',\'approve\')">승인</button>' +
+            '<input type="text" id="' + rejectId + '" placeholder="거절 사유" style="width:120px;padding:4px 7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
+            '<button class="btn-err btn-sm" onclick="processWithdraw(' + r.id + ',\'reject\',\'' + rejectId + '\')">거절</button>' +
+          '</div></td>' +
+        '</tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="5" class="no-data">' + escHtml(e.message) + '</td></tr>';
+    }
+  }
 
   function setOwnerFilter(f) {
     _ownerFilter = f;
@@ -2134,6 +2319,7 @@
       const pendingCount = _allOwners.filter(o => o.status === 'pending').length;
       const badge = document.getElementById('pendingBadge');
       if (badge) { badge.textContent = pendingCount || ''; badge.style.display = pendingCount ? '' : 'none'; }
+      renderApprovalOwners();
       renderOwnerList();
     } catch (e) {
       const tbody = document.getElementById('ownerListBody');
@@ -2142,7 +2328,7 @@
   }
 
   // alias so old code paths still work
-  function loadUsers() { loadOwners(); }
+  function loadUsers() { return loadOwners(); }
 
   function renderOwnerList() {
     const tbody = document.getElementById('ownerListBody');
@@ -2236,12 +2422,14 @@
         <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
           <table>
             <thead><tr>
-              <th>기기 ID</th><th>텔레그램</th><th>계정 상태</th><th>채굴</th><th>만료일</th><th>조치</th>
+              <th>기기 ID</th><th>텔레그램</th><th>계정 상태</th><th>채굴</th><th>만료일</th><th>기간 조정</th><th>조치</th>
             </tr></thead>
             <tbody>
               ${accs.map(a => {
                 const aid    = String(a.id).replace(/'/g,"\\'").replace(/</g,'&lt;');
                 const aidEsc = String(a.id).replace(/</g,'&lt;');
+                const ownerEsc = String(ownerId).replace(/'/g,"\\'");
+                const adjustInputId = ('expadj_' + ownerId + '_' + a.id).replace(/[^a-zA-Z0-9_-]/g, '_');
                 const dotCls = a.status === 'approved' ? 'dot-blue' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
                 const lbl    = a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
                 const mining = a.miner_status === 'running';
@@ -2261,10 +2449,17 @@
                   <td><div class="dot-wrap"><span class="status-dot ${dotCls}"></span><span style="font-size:11px">${lbl}</span></div></td>
                   <td>${minerCell}</td>
                   <td style="font-size:11px;color:var(--muted)">${fmtD(a.expire_date)}</td>
+                  <td onclick="event.stopPropagation()">
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                      <input type="number" id="${adjustInputId}" min="1" step="1" placeholder="일수" style="width:68px;padding:4px 7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">
+                      <button class="btn-ok btn-sm" style="font-size:10px;padding:2px 7px;" onclick="adjustUserExpiry('${ownerEsc}','${aid}','${adjustInputId}',1)">+추가</button>
+                      <button class="btn-err btn-sm" style="font-size:10px;padding:2px 7px;" onclick="adjustUserExpiry('${ownerEsc}','${aid}','${adjustInputId}',-1)">-차감</button>
+                    </div>
+                  </td>
                   <td onclick="event.stopPropagation()" style="white-space:nowrap;">
                     ${kickBtn}
                     <button class="btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;"
-                      onclick="viewDeviceSeed('${String(ownerId).replace(/'/g,"\\'")}','${aid}',1)">🌱 시드</button>
+                      onclick="viewDeviceSeed('${ownerEsc}','${aid}',1)">🌱 시드</button>
                   </td>
                 </tr>`;
               }).join('')}
@@ -2273,6 +2468,27 @@
         </div>
         <div id="devSeedWrap_${String(ownerId).replace(/</g,'&lt;')}" style="display:none;margin-top:10px;"></div>`;
     } catch (e) { el.innerHTML = `<span style="color:var(--err);font-size:12px">${String(e.message).replace(/</g,'&lt;')}</span>`; }
+  }
+
+  async function adjustUserExpiry(ownerId, userId, inputId, direction) {
+    const input = document.getElementById(inputId);
+    const raw = input ? Number(input.value) : NaN;
+    const days = Math.trunc(raw);
+    if (!Number.isFinite(days) || days <= 0) {
+      showToast('조정할 일수를 입력하세요.', 'err');
+      if (input) input.focus();
+      return;
+    }
+    try {
+      const deltaDays = direction >= 0 ? days : -days;
+      const data = await api('/api/admin/users/' + encodeURIComponent(userId) + '/expiry-adjust', 'POST', { daysDelta: deltaDays });
+      showToast(`${userId} 만료일이 ${deltaDays > 0 ? '연장' : '차감'}되었습니다.`, 'ok');
+      if (input) input.value = '';
+      await loadOwnerDevices(ownerId);
+      await loadOwners();
+    } catch (e) {
+      showToast(e.message || '기간 조정 실패', 'err');
+    }
   }
 
   function _maskSeedShort(p) {
@@ -3359,6 +3575,8 @@
       if (_selectedMgr) qs += (qs ? '&' : '?') + 'manager_id=' + encodeURIComponent(_selectedMgr);
       const data = await api('/api/admin/withdrawals' + qs);
       const rows = data.withdrawals || [];
+      _approvalPendingWithdrawals = rows.filter(r => r.status === 'pending').length;
+      renderApprovalBadge();
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-data">출금 신청이 없습니다.</td></tr>';
         return;
@@ -3389,8 +3607,8 @@
     }
   }
 
-  async function processWithdraw(id, action) {
-    const el = document.getElementById('rejectReason_' + id);
+  async function processWithdraw(id, action, rejectInputId) {
+    const el = document.getElementById(rejectInputId || ('rejectReason_' + id));
     const reject_reason = el ? el.value : '';
     if (action === 'reject' && !String(reject_reason).trim()) {
       showToast('거절 사유를 입력하세요', 'err'); return;
@@ -3399,6 +3617,7 @@
       await api('/api/admin/withdrawals/' + id, 'PATCH', { action: action, reject_reason: reject_reason });
       showToast(action === 'approve' ? '출금 승인 완료' : '출금 거절 완료');
       loadWithdrawAdmin();
+      loadApprovalWithdrawals();
       loadMgrSettleSummary();
     } catch (e) { showToast(e.message, 'err'); }
   }

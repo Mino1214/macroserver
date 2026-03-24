@@ -4417,10 +4417,6 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
-      if (!mgr?.tg_bot_token) return res.status(400).json({ error: '? ??? ?????.' });
-      const { deposit, approval } = resolveManagerTelegramChats(mgr);
-      const chat = channel === 'approval' ? approval : deposit;
-      if (!chat) return res.status(400).json({ error: '?? ?? Chat ID? ????.' });
       if (!mgr?.tg_bot_token) return res.status(400).json({ error: '매니저 봇 토큰이 없습니다.' });
       const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
       const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;

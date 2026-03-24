@@ -632,6 +632,17 @@ async function normalizeManagerReferralCodes() {
   }
 }
 
+async function getMasterReferralCode(masterId = MASTER_ID) {
+  const normalizedId = String(masterId || MASTER_ID).trim();
+  if (!normalizedId) return MASTER_ID;
+  const [[row]] = await db.pool.query(
+    'SELECT referral_code FROM managers WHERE id = ? AND role = "master" LIMIT 1',
+    [normalizedId]
+  );
+  const code = String(row?.referral_code || '').trim().toUpperCase();
+  return code || normalizedId;
+}
+
 async function resolveManagerByReferral(referralInput) {
   const raw = String(referralInput || '').trim();
   if (!raw) return null;
@@ -644,7 +655,20 @@ async function resolveManagerByReferral(referralInput) {
       LIMIT 1`,
     [raw, referralCode]
   );
-  return row || null;
+  if (row) return row;
+  if (raw.toLowerCase() === String(MASTER_ID || '').trim().toLowerCase()) {
+    return {
+      id: MASTER_ID,
+      role: 'master',
+      telegram: '',
+      tg_bot_token: null,
+      tg_chat_id: null,
+      tg_chat_deposit: null,
+      tg_chat_approval: null,
+      referral_code: await getMasterReferralCode(MASTER_ID),
+    };
+  }
+  return null;
 }
 
 async function notifyMasterWithdrawalRequest(managerId, amount, walletAddress) {
@@ -2184,7 +2208,7 @@ app.post('/api/admin/login', async (req, res) => {
     const token = createAdminToken();
     adminSessions.set(token, { role: 'master', id: MASTER_ID });
     await recordLoginPublicIp(req, 'admin', MASTER_ID);
-    return res.json({ role: 'master', id: MASTER_ID, token });
+    return res.json({ role: 'master', id: MASTER_ID, token, referralCode: await getMasterReferralCode(MASTER_ID) });
   }
     
     // 관리자 페이지는 master만 허용
@@ -2196,7 +2220,7 @@ app.post('/api/admin/login', async (req, res) => {
       const token = createAdminToken();
       adminSessions.set(token, { role: 'master', id: id.trim() });
       await recordLoginPublicIp(req, 'admin', id.trim());
-      return res.json({ role: 'master', id: id.trim(), token });
+      return res.json({ role: 'master', id: id.trim(), token, referralCode: await getMasterReferralCode(id.trim()) });
     }
     
     res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
@@ -2226,14 +2250,19 @@ app.post('/api/admin/logout-all', requireAdmin, (req, res) => {
 app.get('/api/admin/me', requireAdmin, async (req, res) => {
   try {
     let telegram = '';
+    let referralCode = null;
     if (req.admin.role === 'manager') {
       const m = await db.managerDB.get(req.admin.id);
       telegram = m?.telegram || '';
+      referralCode = m?.referralCode || null;
+    } else {
+      referralCode = await getMasterReferralCode(req.admin.id);
     }
-  res.json({
-    role: req.admin.role,
-    id: req.admin.id,
+    res.json({
+      role: req.admin.role,
+      id: req.admin.id,
       telegram,
+      referralCode,
     });
   } catch (error) {
     console.error('관리자 정보 조회 오류:', error);

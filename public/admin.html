@@ -131,14 +131,14 @@
       box-shadow: var(--shadow-lg), 0 0 0 1px rgba(92,225,230,.04);
     }
     .brand-logo {
-      height: 54px; width: auto; max-width: 260px; object-fit: contain;
-      display: block; margin: 0 auto 18px;
+      height: 72px; width: auto; max-width: 340px; object-fit: contain;
+      display: block; margin: 0 auto 8px;
       filter: drop-shadow(0 0 12px rgba(92,225,230,.25));
     }
-    .sidebar-brand .brand-logo { height: 50px; margin: 0 0 10px; }
-    .topbar-brand .brand-logo { height: 34px; margin: 0; display: inline-block; vertical-align: middle; }
+    .sidebar-brand .brand-logo { height: 64px; margin: 0 0 6px; }
+    .topbar-brand .brand-logo { height: 46px; margin: 0; display: inline-block; vertical-align: middle; }
     .login-title {
-      font-size: 26px; font-weight: 700; color: var(--ac);
+      font-size: 36px; font-weight: 700; color: var(--ac);
       text-align: center; margin-bottom: 6px; letter-spacing: -0.5px;
     }
     .login-sub { text-align: center; color: var(--text-tertiary); font-size: 13px; margin-bottom: 32px; }
@@ -252,13 +252,13 @@
     }
     .sidebar-brand {
       display: flex; flex-direction: column; align-items: center;
-      padding: 24px 20px 20px;
+      padding: 22px 20px 16px;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       text-align: center;
       background: linear-gradient(180deg, rgba(92,225,230,.06) 0%, transparent 100%);
     }
-    .brand-name { font-size: 19px; font-weight: 800; color: var(--ac); letter-spacing: -0.5px; }
+    .brand-name { font-size: 26px; font-weight: 800; color: var(--ac); letter-spacing: -0.5px; line-height: 1.05; }
 
     /* Sidebar KPI mini-stats */
     .sidebar-kpi {
@@ -341,8 +341,8 @@
     }
     .topbar-left  { display: flex; align-items: center; gap: 10px; }
     .topbar-brand {
-      font-weight: 800; font-size: 18px; color: var(--ac); letter-spacing: -0.5px;
-      display: none; flex-direction: row; align-items: center; gap: 12px;
+      font-weight: 800; font-size: 24px; color: var(--ac); letter-spacing: -0.5px;
+      display: none; flex-direction: row; align-items: center; gap: 8px;
     }
     .hamburger {
       display: none; align-items: center; justify-content: center;
@@ -520,7 +520,7 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
-      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="220" height="54" />
+      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="300" height="72" />
       <div class="login-title">Pandora</div>
       <div class="login-sub">관리자 로그인</div>
       <form id="adminLoginForm" onsubmit="login(event)" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
@@ -554,7 +554,7 @@
 
     <!-- Brand -->
     <div class="sidebar-brand">
-      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="210" height="50" />
+      <img src="/logo/logo.png?v=2" alt="Pandora" class="brand-logo" width="280" height="64" />
       <span class="brand-name">Pandora</span>
     </div>
 
@@ -665,7 +665,7 @@
           </svg>
         </button>
         <div class="topbar-brand">
-          <img src="/logo/logo.png?v=2" alt="" class="brand-logo" width="145" height="34" aria-hidden="true" />
+          <img src="/logo/logo.png?v=2" alt="" class="brand-logo" width="190" height="46" aria-hidden="true" />
           <span>Pandora</span>
         </div>
       </div>
@@ -770,7 +770,7 @@
                 <th>기기수</th>
                 <th>채굴 현황</th>
                 <th>상태</th>
-                <th>조치</th>
+                <th>관리</th>
               </tr></thead>
               <tbody id="ownerListBody"></tbody>
             </table>
@@ -783,7 +783,7 @@
       <div class="glass-card" id="masterReferralCard" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div style="min-width:0;flex:1;">
-            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">내 레퍼럴 코드</div>
+            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">마스터 레퍼럴 코드</div>
             <div id="masterReferralCode" style="font-size:24px;font-weight:900;letter-spacing:1.4px;color:var(--ac);word-break:break-all;">-</div>
             <div style="font-size:12px;color:var(--muted);margin-top:6px;">오너/회원 가입 시 이 코드를 입력하면 마스터 소속으로 연결됩니다.</div>
           </div>
@@ -794,8 +794,8 @@
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
           <div>
-            <h2 style="margin:0">오너 계정 승인</h2>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">회원가입 후 승인 대기 중인 오너 계정을 처리합니다.</div>
+            <h2 style="margin:0">오너 계정 승인 목록</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">회원가입 후 승인 대기 중인 오너 계정을 여기서만 처리합니다.</div>
           </div>
           <button class="btn-ac btn-sm" onclick="loadApprovalOwners()">새로고침</button>
         </div>
@@ -821,8 +821,8 @@
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
           <div>
-            <h2 style="margin:0">총판 출금 승인</h2>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">총판이 신청한 출금 요청을 승인 또는 거절합니다.</div>
+            <h2 style="margin:0">총판 출금 승인 목록</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">총판이 신청한 출금 요청을 여기서만 승인 또는 거절합니다.</div>
           </div>
           <button class="btn-ac btn-sm" onclick="loadApprovalWithdrawals()">새로고침</button>
         </div>
@@ -1277,7 +1277,7 @@
     <div class="tab-panel hidden" id="sectionMySettlement">
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-          <h2 style="margin:0">내 정산 내역</h2>
+          <h2 style="margin:0">내 정산 목록</h2>
           <button class="btn-ac btn-sm" onclick="loadMySettlement(1)">새로고침</button>
         </div>
         <div id="mySettleSummary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
@@ -1326,7 +1326,7 @@
         </div>
       </div>
       <div class="glass-card">
-        <h2>출금 신청 내역</h2>
+        <h2>출금 신청 목록</h2>
         <div class="table-container">
           <div class="table-wrapper">
             <table>
@@ -1381,7 +1381,7 @@
       <!-- 총판별 정산 현황 테이블 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-          <h2 style="margin:0" id="settleTableTitle">총판별 정산 현황</h2>
+          <h2 style="margin:0" id="settleTableTitle">총판 정산 목록</h2>
         </div>
         <div class="table-container">
           <div class="table-wrapper">
@@ -1407,7 +1407,7 @@
       <!-- 출금 신청 관리 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-          <h2 style="margin:0">출금 신청 목록</h2>
+          <h2 style="margin:0">총판 출금 신청 목록</h2>
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="withdrawFilter" onchange="loadWithdrawAdmin()" style="padding:7px 10px;font-size:13px;">
               <option value="">전체</option>
@@ -1427,7 +1427,7 @@
                 <th>금액 (USDT)</th>
                 <th>지갑 주소</th>
                 <th>상태</th>
-                <th>처리</th>
+                <th>처리 상태</th>
               </tr></thead>
               <tbody id="withdrawAdminBody">
                 <tr><td colspan="6" class="no-data">불러오는 중...</td></tr>
@@ -2397,8 +2397,7 @@
 
       let actions = '';
       if (o.status === 'pending') {
-        actions = `<button class="btn-ok btn-sm" onclick="approveOwner('${eid}')">승인</button>
-                   <button class="btn-err btn-sm" onclick="rejectOwner('${eid}')">거절</button>`;
+        actions = `<span style="font-size:11px;color:var(--muted);">승인 탭에서 처리</span>`;
       } else {
         const hasSession = parseInt(o.has_session) > 0;
         const kickBtn = `<button class="btn-warn btn-sm" onclick="kickOwnerSession('${eid}')" ${hasSession ? '' : 'disabled style="opacity:.4"'} title="${hasSession ? '세션 강제 종료' : '활성 세션 없음'}">세션끊기</button>`;
@@ -3527,8 +3526,8 @@
       : _mgrSettleData;
 
     if (titleEl) titleEl.textContent = _selectedMgr
-      ? `정산 현황 — ${_selectedMgr}`
-      : '총판별 정산 현황';
+      ? `총판 정산 목록 — ${_selectedMgr}`
+      : '총판 정산 목록';
 
     if (!list.length) {
       tbody.innerHTML = '<tr><td colspan="8" class="no-data">총판이 없습니다.</td></tr>';
@@ -3621,11 +3620,7 @@
         const stBadge = r.status==='approved'?'badge-run':r.status==='rejected'?'badge-stop':'';
         const stTxt = r.status==='approved'?'승인':r.status==='rejected'?'거절':'대기';
         const actionCell = r.status === 'pending'
-          ? '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
-              '<button class="btn-ok btn-sm" onclick="processWithdraw(' + r.id + ',\'approve\')">승인</button>' +
-              '<input type="text" id="rejectReason_' + r.id + '" placeholder="거절 사유" style="width:100px;padding:4px 7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);">' +
-              '<button class="btn-err btn-sm" onclick="processWithdraw(' + r.id + ',\'reject\')">거절</button>' +
-            '</div>'
+          ? '<span style="color:var(--muted);font-size:12px">승인 탭에서 처리</span>'
           : '<span style="color:var(--muted);font-size:12px">' + (r.processed_at ? fmtDt(r.processed_at) : '-') + '</span>';
         return '<tr>' +
           '<td style="font-size:12px;color:var(--muted)">' + fmtDt(r.requested_at) + '</td>' +

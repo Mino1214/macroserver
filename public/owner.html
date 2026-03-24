@@ -106,13 +106,13 @@
     }
     .login-logo {
       display:flex; align-items:center; justify-content:center;
-      margin:0 auto 22px;
+      margin:0 auto 10px;
     }
     .login-logo img {
-      height:58px; width:auto; max-width:250px; object-fit:contain;
+      height:76px; width:auto; max-width:320px; object-fit:contain;
       filter: drop-shadow(0 0 14px rgba(92,225,230,.22));
     }
-    .login-title { font-size:22px; font-weight:800; color:var(--fg); text-align:center; margin-bottom:4px; letter-spacing:-.4px; }
+    .login-title { font-size:31px; font-weight:800; color:var(--fg); text-align:center; margin-bottom:4px; letter-spacing:-.4px; }
     .login-sub { text-align:center; color:var(--muted); font-size:13px; margin-bottom:26px; line-height:1.5; }
     .field { margin-bottom:12px; }
     label { display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px; }
@@ -188,18 +188,18 @@
       position:relative;
     }
     .sidebar-brand {
-      display:flex; flex-direction:column; align-items:center; gap:8px;
-      padding:24px 18px 18px;
+      display:flex; flex-direction:column; align-items:center; gap:4px;
+      padding:22px 18px 16px;
       border-bottom:1px solid var(--border);
       flex-shrink:0;
       text-align:center;
       background: linear-gradient(180deg, rgba(92,225,230,.06) 0%, transparent 100%);
     }
     .sidebar-brand-logo {
-      height:50px; width:auto; max-width:220px; object-fit:contain;
+      height:68px; width:auto; max-width:280px; object-fit:contain;
       filter: drop-shadow(0 0 10px rgba(92,225,230,.2));
     }
-    .sidebar-brand-text { font-size:16px; font-weight:800; letter-spacing:-.3px; color:var(--ac); }
+    .sidebar-brand-text { font-size:23px; font-weight:800; letter-spacing:-.3px; color:var(--ac); line-height:1.05; }
     .sidebar-user {
       font-size:11px; color:var(--muted);
       padding:10px 16px; border-bottom:1px solid var(--border);
@@ -521,7 +521,7 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="Pandora" width="240" height="58" /></div>
+      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="Pandora" width="300" height="76" /></div>
       <div class="login-title">Pandora</div>
       <div class="login-sub">그룹 대시보드 · 연결된 모든 기기를 한눈에 관리하세요</div>
       <form id="ownerLoginForm" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" onsubmit="return false;">
@@ -622,7 +622,7 @@
   <!-- 사이드바 -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <img src="/logo/logo.png?v=2" alt="" class="sidebar-brand-logo" width="210" height="50" />
+      <img src="/logo/logo.png?v=2" alt="" class="sidebar-brand-logo" width="270" height="68" />
       <span class="sidebar-brand-text">Pandora</span>
     </div>
     <div class="sidebar-user">

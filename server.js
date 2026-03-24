@@ -4483,12 +4483,17 @@ app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
   }
 });
 
-// PATCH /api/owner/accounts/:id/password : 계정 비밀번호 변경
-app.patch('/api/owner/accounts/:id/password', requireOwnerSession, async (req, res) => {
+// PATCH /api/owner/accounts/:id : 기기 메모 / 비밀번호 수정
+app.patch('/api/owner/accounts/:id', requireOwnerSession, async (req, res) => {
   try {
     const targetId = req.params.id.toLowerCase();
-    const { new_password } = req.body || {};
-    if (!new_password?.trim()) return res.status(400).json({ error: '새 비밀번호를 입력하세요.' });
+    const body = req.body || {};
+    const hasMemo = Object.prototype.hasOwnProperty.call(body, 'memo');
+    const nextMemo = hasMemo ? String(body.memo ?? '').trim() : null;
+    const nextPw = body.new_password?.trim() || '';
+    if (!hasMemo && !nextPw) {
+      return res.status(400).json({ error: '변경할 정보를 입력하세요.' });
+    }
 
     // 직접 소유 계정 또는 매니저 소속 계정만 허용
     const [[owns]] = await db.pool.query(
@@ -4500,8 +4505,23 @@ app.patch('/api/owner/accounts/:id/password', requireOwnerSession, async (req, r
     );
     if (!owns) return res.status(403).json({ error: '수정 권한이 없습니다.' });
 
-    await db.pool.query('UPDATE users SET pw = ? WHERE id = ?', [new_password.trim(), targetId]);
-    res.json({ ok: true });
+    const fields = [];
+    const values = [];
+    if (hasMemo) {
+      fields.push('telegram = ?');
+      values.push(nextMemo);
+    }
+    if (nextPw) {
+      fields.push('pw = ?');
+      values.push(nextPw);
+    }
+    if (!fields.length) {
+      return res.status(400).json({ error: '변경할 정보가 없습니다.' });
+    }
+
+    values.push(targetId);
+    await db.pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+    res.json({ ok: true, id: targetId, memo: hasMemo ? nextMemo : undefined });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

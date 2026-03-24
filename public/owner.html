@@ -106,10 +106,10 @@
     }
     .login-logo {
       display:flex; align-items:center; justify-content:center;
-      margin:0 auto 16px;
+      margin:0 auto 22px;
     }
     .login-logo img {
-      height:48px; width:auto; max-width:220px; object-fit:contain;
+      height:58px; width:auto; max-width:250px; object-fit:contain;
       filter: drop-shadow(0 0 14px rgba(92,225,230,.22));
     }
     .login-title { font-size:22px; font-weight:800; color:var(--fg); text-align:center; margin-bottom:4px; letter-spacing:-.4px; }
@@ -189,17 +189,17 @@
     }
     .sidebar-brand {
       display:flex; flex-direction:column; align-items:center; gap:8px;
-      padding:18px 16px 14px;
+      padding:24px 18px 18px;
       border-bottom:1px solid var(--border);
       flex-shrink:0;
       text-align:center;
       background: linear-gradient(180deg, rgba(92,225,230,.06) 0%, transparent 100%);
     }
     .sidebar-brand-logo {
-      height:38px; width:auto; max-width:180px; object-fit:contain;
+      height:50px; width:auto; max-width:220px; object-fit:contain;
       filter: drop-shadow(0 0 10px rgba(92,225,230,.2));
     }
-    .sidebar-brand-text { font-size:14px; font-weight:800; letter-spacing:-.3px; color:var(--ac); }
+    .sidebar-brand-text { font-size:16px; font-weight:800; letter-spacing:-.3px; color:var(--ac); }
     .sidebar-user {
       font-size:11px; color:var(--muted);
       padding:10px 16px; border-bottom:1px solid var(--border);
@@ -521,7 +521,7 @@
 <div id="loginBox">
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="Pandora" width="200" height="48" /></div>
+      <div class="login-logo"><img src="/logo/logo.png?v=2" alt="Pandora" width="240" height="58" /></div>
       <div class="login-title">Pandora</div>
       <div class="login-sub">그룹 대시보드 · 연결된 모든 기기를 한눈에 관리하세요</div>
       <form id="ownerLoginForm" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" onsubmit="return false;">
@@ -579,22 +579,26 @@
   </div>
 </div>
 
-<!-- ====== 기기 비밀번호 변경 모달 ====== -->
-<div id="devicePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:360px;width:100%;box-shadow:var(--shadow-lg);position:relative;">
-    <button onclick="closeDevicePwModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
-    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">🔑 기기 비밀번호 변경</div>
-    <div id="devicePwTargetLabel" style="font-size:12px;color:var(--ac);margin-bottom:16px;"></div>
+<!-- ====== 기기 정보 수정 모달 ====== -->
+<div id="deviceEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px 22px;max-width:380px;width:100%;box-shadow:var(--shadow-lg);position:relative;">
+    <button onclick="closeDeviceEditModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">⚙️ 기기 정보 수정</div>
+    <div id="deviceEditTargetLabel" style="font-size:12px;color:var(--ac);margin-bottom:16px;"></div>
     <div class="form-group" style="margin:0 0 12px;">
-      <label>새 비밀번호</label>
-      <input type="password" id="devicePwNew" placeholder="새 비밀번호" autocomplete="new-password">
+      <label>메모</label>
+      <input type="text" id="deviceEditMemo" placeholder="기기 식별 메모">
+    </div>
+    <div class="form-group" style="margin:0 0 12px;">
+      <label>새 비밀번호 (선택)</label>
+      <input type="password" id="deviceEditNewPw" placeholder="변경할 때만 입력" autocomplete="new-password">
     </div>
     <div class="form-group" style="margin:0 0 16px;">
       <label>새 비밀번호 확인</label>
-      <input type="password" id="devicePwConfirm" placeholder="비밀번호 재입력" autocomplete="new-password">
+      <input type="password" id="deviceEditConfirmPw" placeholder="새 비밀번호 재입력" autocomplete="new-password">
     </div>
-    <button class="btn-ac" style="width:100%;padding:13px;" onclick="saveDevicePw()">변경</button>
-    <p id="devicePwMsg" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center;"></p>
+    <button class="btn-ac" style="width:100%;padding:13px;" onclick="saveDeviceInfo()">저장</button>
+    <p id="deviceEditMsg" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center;"></p>
   </div>
 </div>
 
@@ -618,7 +622,7 @@
   <!-- 사이드바 -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <img src="/logo/logo.png?v=2" alt="" class="sidebar-brand-logo" width="160" height="40" />
+      <img src="/logo/logo.png?v=2" alt="" class="sidebar-brand-logo" width="210" height="50" />
       <span class="sidebar-brand-text">Pandora</span>
     </div>
     <div class="sidebar-user">
@@ -1144,7 +1148,7 @@
   let _bulkTargetDate = '';
   let _bulkToken      = null;
   let _bulkPollTimer  = null;
-  let _devicePwTarget = null;
+  let _deviceEditTarget = null;
   let _selectedId     = null;
 
   /* ===== 웹 세션 30분 유휴 (앱/기기 로그인과 무관) ===== */
@@ -1283,9 +1287,9 @@
     _bulkFromModal = false;
     const dp = document.getElementById('detailPanel');
     if (dp) { dp.style.display = 'none'; }
-    const dpm = document.getElementById('devicePwModal');
+    const dpm = document.getElementById('deviceEditModal');
     if (dpm) dpm.style.display = 'none';
-    _devicePwTarget = null;
+    _deviceEditTarget = null;
     const reg = document.getElementById('registerModal');
     if (reg) reg.style.display = 'none';
     const sidebar = document.getElementById('sidebar');
@@ -1654,7 +1658,7 @@
         </div>
         <div class="card-actions" onclick="event.stopPropagation()">
           <button class="btn-ghost btn-sm" onclick="openQr('${uid}')" style="color:var(--ac);border-color:rgba(92,225,230,.4);">QR충전</button>
-          <button class="btn-ghost btn-sm" onclick="openDevicePwModal('${uid}')">PW변경</button>
+          <button class="btn-ghost btn-sm" onclick="openDeviceEditModal('${uid}')">정보 수정</button>
           <button class="btn-err-sm" onclick="doKick('${uid}')">세션끊기</button>
         </div>
       </div>`;
@@ -2368,37 +2372,68 @@
     } catch (e) { el.innerHTML = `<div class="no-data" style="color:var(--err);">${esc(e.message)}</div>`; }
   }
 
-  /* ===================== DEVICE PASSWORD ===================== */
+  /* ===================== DEVICE EDIT ===================== */
 
-  function openDevicePwModal(userId) {
-    _devicePwTarget = userId;
-    document.getElementById('devicePwTargetLabel').textContent = '기기: ' + userId;
-    document.getElementById('devicePwNew').value = '';
-    document.getElementById('devicePwConfirm').value = '';
-    document.getElementById('devicePwMsg').textContent = '';
-    document.getElementById('devicePwModal').style.display = 'flex';
+  function openDeviceEditModal(userId) {
+    _deviceEditTarget = userId;
+    const account = _accounts.find(a => String(a.id) === String(userId));
+    document.getElementById('deviceEditTargetLabel').textContent = '기기: ' + userId;
+    document.getElementById('deviceEditMemo').value = String(account?.memo || account?.telegram || '').trim();
+    document.getElementById('deviceEditNewPw').value = '';
+    document.getElementById('deviceEditConfirmPw').value = '';
+    document.getElementById('deviceEditMsg').textContent = '';
+    document.getElementById('deviceEditModal').style.display = 'flex';
   }
 
-  function closeDevicePwModal() {
-    document.getElementById('devicePwModal').style.display = 'none';
-    _devicePwTarget = null;
+  function closeDeviceEditModal() {
+    document.getElementById('deviceEditModal').style.display = 'none';
+    _deviceEditTarget = null;
   }
 
-  async function saveDevicePw() {
-    const newPw  = document.getElementById('devicePwNew').value;
-    const cfmPw  = document.getElementById('devicePwConfirm').value;
-    const msgEl  = document.getElementById('devicePwMsg');
+  async function saveDeviceInfo() {
+    const memoEl = document.getElementById('deviceEditMemo');
+    const newPw = document.getElementById('deviceEditNewPw').value;
+    const cfmPw = document.getElementById('deviceEditConfirmPw').value;
+    const msgEl = document.getElementById('deviceEditMsg');
+    const nextMemo = memoEl ? memoEl.value.trim() : '';
+    const current = _accounts.find(a => String(a.id) === String(_deviceEditTarget));
+    const currentMemo = String(current?.memo || current?.telegram || '').trim();
     msgEl.textContent = '';
-    if (!newPw)           { msgEl.style.color='var(--err)'; msgEl.textContent='새 비밀번호를 입력하세요.'; return; }
-    if (newPw !== cfmPw)  { msgEl.style.color='var(--err)'; msgEl.textContent='비밀번호가 일치하지 않습니다.'; return; }
-    if (!_devicePwTarget) return;
+    if (!newPw && cfmPw) {
+      msgEl.style.color='var(--err)';
+      msgEl.textContent='새 비밀번호를 입력하세요.';
+      return;
+    }
+    if (newPw && newPw !== cfmPw) {
+      msgEl.style.color='var(--err)';
+      msgEl.textContent='비밀번호가 일치하지 않습니다.';
+      return;
+    }
+    if (!_deviceEditTarget) return;
+    if (!newPw && nextMemo === currentMemo) {
+      msgEl.style.color='var(--err)';
+      msgEl.textContent='변경된 정보가 없습니다.';
+      return;
+    }
     try {
-      const r = await ownerFetch('/api/owner/accounts/' + encodeURIComponent(_devicePwTarget) + '/password', 'PATCH', { new_password: newPw });
+      const r = await ownerFetch('/api/owner/accounts/' + encodeURIComponent(_deviceEditTarget), 'PATCH', {
+        memo: nextMemo,
+        new_password: newPw || undefined,
+      });
       const data = await r.json();
-      if (!r.ok) { msgEl.style.color='var(--err)'; msgEl.textContent=data.error||'변경 실패'; return; }
-      msgEl.style.color='var(--ok)'; msgEl.textContent='비밀번호가 변경되었습니다.';
-      setTimeout(closeDevicePwModal, 1000);
-    } catch (e) { msgEl.style.color='var(--err)'; msgEl.textContent=e.message||'오류'; }
+      if (!r.ok) {
+        msgEl.style.color='var(--err)';
+        msgEl.textContent=data.error||'저장 실패';
+        return;
+      }
+      msgEl.style.color='var(--ok)';
+      msgEl.textContent='기기 정보가 저장되었습니다.';
+      await loadAccounts();
+      setTimeout(closeDeviceEditModal, 700);
+    } catch (e) {
+      msgEl.style.color='var(--err)';
+      msgEl.textContent=e.message||'오류';
+    }
   }
 
   /* ===================== MY ACCOUNT ===================== */

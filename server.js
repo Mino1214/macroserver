@@ -109,6 +109,42 @@ const PORT = process.env.PORT || 3000;
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
+const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
+const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
+
+function normalizeAccountId(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function validateAccountId(value) {
+  const normalized = normalizeAccountId(value);
+  if (!normalized) return '아이디를 입력하세요.';
+  if (!ACCOUNT_ID_REGEX.test(normalized)) {
+    return '아이디는 4~20자의 영문 소문자, 숫자, -, _만 사용할 수 있습니다.';
+  }
+  return null;
+}
+
+function validateAccountPassword(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return '비밀번호를 입력하세요.';
+  if (raw !== raw.trim()) return '비밀번호 앞뒤 공백은 사용할 수 없습니다.';
+  if (!ACCOUNT_PASSWORD_REGEX.test(raw)) {
+    return '비밀번호는 8~24자의 영문과 숫자를 포함해야 합니다.';
+  }
+  return null;
+}
+
+async function isReservedAdminLikeId(value) {
+  const normalized = normalizeAccountId(value);
+  if (!normalized) return false;
+  if (normalized === normalizeAccountId(MASTER_ID)) return true;
+  const [[manager]] = await db.pool.query(
+    'SELECT id FROM managers WHERE LOWER(id) = LOWER(?) LIMIT 1',
+    [normalized]
+  );
+  return !!manager;
+}
 
 /** 프록시 환경에서도 실제 공인 IP를 정규화해서 가져온다. */
 function normalizeClientIp(ip) {
@@ -571,6 +607,18 @@ async function runMigrations() {
     }
   } catch (e) {
     console.error('DB ??????(users.owner_id) ??:', e.message);
+  }
+  try {
+    const [chargeCols] = await db.pool.query("SHOW COLUMNS FROM users LIKE 'charge_required_until'");
+    if (chargeCols.length === 0) {
+      await db.pool.query("ALTER TABLE users ADD COLUMN charge_required_until DATETIME DEFAULT NULL AFTER owner_id");
+      await db.pool.query("ALTER TABLE users ADD INDEX idx_users_charge_required_until (charge_required_until)");
+      console.log('[DB] users.charge_required_until 컬럼 추가');
+    } else {
+      console.log('[DB] users.charge_required_until 컬럼 확인 완료');
+    }
+  } catch (e) {
+    console.error('[DB] users.charge_required_until 마이그레이션 실패:', e.message);
   }
   try {
     await db.pool.query(`
@@ -1147,7 +1195,9 @@ async function autoSweepAndBulkGrant(session) {
     for (const e of entries) {
       if (!e.userId || !(e.days > 0)) continue;
       await db.pool.query(
-        `UPDATE users SET expire_date = ?, status = 'approved' WHERE id = ?`,
+        `UPDATE users
+            SET expire_date = ?, status = 'approved', charge_required_until = NULL
+          WHERE id = ?`,
         [tgtStr, e.userId.toLowerCase()]
       );
       console.log(`[BULK-SWEEP] ${e.userId} 만료일 -> ${tgtStr}`);
@@ -1185,6 +1235,8 @@ cron.schedule('* * * * *', async () => {
   if (_depositCheckRunning) return; // ?? ??? ?? ??? ?? ?? skip
   _depositCheckRunning = true;
   try {
+    await cleanupExpiredUnchargedOwnerAccounts();
+
     // ?? 1?? ?? ??? ?? ?? ?? ??
     const [expireResult] = await db.pool.query(
       `UPDATE deposit_addresses
@@ -1501,6 +1553,36 @@ const sessionStore = {
   }
 };
 
+async function deleteUsersCompletely(userIds) {
+  const ids = Array.from(new Set((userIds || []).map(v => normalizeAccountId(v)).filter(Boolean)));
+  if (!ids.length) return 0;
+  await db.pool.query('DELETE FROM sessions WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM deposit_addresses WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM miner_status WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM mining_records WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM seeds WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM settlements WHERE user_id IN (?)', [ids]);
+  await db.pool.query('DELETE FROM users WHERE id IN (?)', [ids]);
+  return ids.length;
+}
+
+async function cleanupExpiredUnchargedOwnerAccounts() {
+  const [rows] = await db.pool.query(
+    `SELECT id
+       FROM users
+      WHERE owner_id IS NOT NULL
+        AND charge_required_until IS NOT NULL
+        AND charge_required_until <= NOW()
+        AND expire_date IS NULL`
+  );
+  if (!rows.length) return 0;
+  const deleted = await deleteUsersCompletely(rows.map(row => row.id));
+  if (deleted > 0) {
+    console.log(`[OWNER-AUTO-CLEANUP] 48시간 무충전 기기계정 삭제: ${deleted}개`);
+  }
+  return deleted;
+}
+
 // ---------- ??? ??: token -> { role: 'master'|'manager', id } ----------
 // ??? ?? ??? ??? (multer) ???
 const _uploadDir = path.join(__dirname, 'public', 'uploads', 'popups');
@@ -1688,7 +1770,16 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: '아이디, 비밀번호, 레퍼럴 코드를 입력하세요.' });
     }
 
-    const existing = await db.userDB.get(id.trim());
+    const idError = validateAccountId(id);
+    if (idError) return res.status(400).json({ error: idError });
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    if (await isReservedAdminLikeId(id)) {
+      return res.status(400).json({ error: '이미 사용 중인 기기 아이디입니다.' });
+    }
+
+    const normalizedId = normalizeAccountId(id);
+    const existing = await db.userDB.get(normalizedId);
     if (existing) {
       return res.status(400).json({ error: '이미 사용 중인 기기 아이디입니다.' });
     }
@@ -1698,12 +1789,12 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: '레퍼럴 코드를 찾을 수 없습니다.' });
     }
 
-    await db.userDB.addOrUpdate(id.trim(), password.trim(), manager.id, telegram || '', 'pending');
+    await db.userDB.addOrUpdate(normalizedId, password.trim(), manager.id, telegram || '', 'pending');
 
     try {
       const msg =
         `🆕 <b>기기 가입 신청</b>\n` +
-        `기기 ID: <code>${escapeHtml(id.trim())}</code>\n` +
+        `기기 ID: <code>${escapeHtml(normalizedId)}</code>\n` +
         `메모/텔레그램: ${escapeHtml(telegram?.trim() || '-')}\n` +
         `입력 코드: <code>${escapeHtml(referralCode.trim())}</code>`;
       if (manager.role === 'master') {
@@ -1752,12 +1843,18 @@ app.post('/api/login', async (req, res) => {
     }
     
     // 만료 상태 확인
+    const now = new Date();
+    const chargeDue = user.chargeRequiredUntil ? new Date(user.chargeRequiredUntil) : null;
+    if (!user.expireDate && chargeDue && chargeDue <= now) {
+      await deleteUsersCompletely([id.trim()]);
+      return res.status(403).json({ error: '이 계정은 삭제되었습니다. 오너에게 문의하세요.' });
+    }
+
     let expireDate = null;
     let remainingDays = null;
     let isExpired = false;
     
     if (user.expireDate) {
-      const now = new Date();
       expireDate = new Date(user.expireDate);
       
       // ?? ?? ?? (??? ?? ??)
@@ -2215,7 +2312,7 @@ app.post('/api/admin/login', async (req, res) => {
     const manager = await db.managerDB.validate(id, password);
     if (manager) {
       if (manager.role !== 'master') {
-        return res.status(403).json({ error: '매니저는 관리자 페이지가 아니라 오너 페이지(/owner.html)로 로그인해야 합니다.' });
+        return res.status(403).json({ error: '총판은 관리자 페이지가 아니라 오너 페이지(/owner.html)로 로그인해야 합니다.' });
       }
       const token = createAdminToken();
       adminSessions.set(token, { role: 'master', id: id.trim() });
@@ -2408,7 +2505,7 @@ app.get('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) =
       'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
       [targetId]
     );
-    if (!mgr) return res.status(404).json({ error: '매니저를 찾을 수 없습니다.' });
+    if (!mgr) return res.status(404).json({ error: '총판을 찾을 수 없습니다.' });
     res.json({
       botToken: mgr.tg_bot_token || '',
       chatId: mgr.tg_chat_id || '',
@@ -2432,7 +2529,7 @@ app.put('/api/admin/managers/:id/telegram-bot', requireAdmin, async (req, res) =
       'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
       [targetId]
     );
-    if (!existing) return res.status(404).json({ error: '매니저를 찾을 수 없습니다.' });
+    if (!existing) return res.status(404).json({ error: '총판을 찾을 수 없습니다.' });
     const pick = (bodyKey, col) => {
       if (!Object.prototype.hasOwnProperty.call(body, bodyKey)) return existing[col];
       const v = body[bodyKey];
@@ -2468,7 +2565,7 @@ app.post('/api/admin/managers/:id/telegram-bot/test', requireAdmin, async (req, 
       [targetId]
     );
     if (!mgr?.tg_bot_token) {
-      return res.status(400).json({ error: '매니저 봇 토큰이 없습니다.' });
+      return res.status(400).json({ error: '총판 봇 토큰이 없습니다.' });
     }
     const { deposit, approval } = resolveManagerTelegramChats(mgr);
     const chat = channel === 'approval' ? approval : deposit;
@@ -4252,7 +4349,15 @@ app.post('/api/owner/register', async (req, res) => {
   try {
     const { id, password, name, telegram, referralCode } = req.body || {};
     if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
-    const ownerId = id.trim().toLowerCase();
+    const idError = validateAccountId(id);
+    if (idError) return res.status(400).json({ error: idError });
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    if (await isReservedAdminLikeId(id)) {
+      return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    }
+
+    const ownerId = normalizeAccountId(id);
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
     if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
 
@@ -4363,7 +4468,7 @@ app.get('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
-      if (!mgr) return res.status(404).json({ error: '매니저를 찾을 수 없습니다.' });
+      if (!mgr) return res.status(404).json({ error: '총판을 찾을 수 없습니다.' });
       return res.json({
         botToken: mgr.tg_bot_token || '',
         chatId: mgr.tg_chat_id || '',
@@ -4393,7 +4498,7 @@ app.put('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
-      if (!existing) return res.status(404).json({ error: '매니저를 찾을 수 없습니다.' });
+      if (!existing) return res.status(404).json({ error: '총판을 찾을 수 없습니다.' });
       const pick = (bodyKey, col) => {
         if (!Object.prototype.hasOwnProperty.call(body, bodyKey)) return existing[col];
         const v = body[bodyKey];
@@ -4446,7 +4551,7 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
         'SELECT tg_bot_token, tg_chat_id, tg_chat_deposit, tg_chat_approval FROM managers WHERE id = ?',
         [req.owner.id]
       );
-      if (!mgr?.tg_bot_token) return res.status(400).json({ error: '매니저 봇 토큰이 없습니다.' });
+      if (!mgr?.tg_bot_token) return res.status(400).json({ error: '총판 봇 토큰이 없습니다.' });
       const dep = (mgr.tg_chat_deposit || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
       const appr = (mgr.tg_chat_approval || '').toString().trim() || (mgr.tg_chat_id || '').toString().trim() || null;
       const chat = channel === 'approval' ? appr : dep;
@@ -4482,7 +4587,7 @@ app.post('/api/owner/telegram-bot/test', requireOwnerSession, async (req, res) =
 app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
   try {
     const [users] = await db.pool.query(
-      `SELECT u.id, u.telegram, u.status, u.expire_date, u.subscription_days,
+      `SELECT u.id, u.telegram, u.status, u.expire_date, u.subscription_days, u.charge_required_until,
               ms.status as miner_status, ms.coin_type
        FROM users u
        LEFT JOIN miner_status ms ON ms.user_id = u.id
@@ -4493,6 +4598,8 @@ app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
     const now = new Date();
     const result = users.map(u => {
       const exp = u.expire_date ? new Date(u.expire_date) : null;
+      const chargeDue = u.charge_required_until ? new Date(u.charge_required_until) : null;
+      const needsInitialCharge = !exp && !!chargeDue && chargeDue > now;
       const remainingDays = exp ? Math.ceil((exp - now) / 86400000) : 0;
       return {
         id: u.id,
@@ -4500,8 +4607,10 @@ app.get('/api/owner/accounts', requireOwnerSession, async (req, res) => {
         memo: u.telegram || '',
         status: u.status,
         expireDate: u.expire_date || null,
+        chargeRequiredUntil: u.charge_required_until || null,
+        needsInitialCharge,
         remainingDays,
-        isExpired: exp ? now > exp : true,
+        isExpired: exp ? now > exp : !!chargeDue && chargeDue <= now,
         minerStatus: u.miner_status || 'stopped',
         coinType: u.coin_type || 'BTC',
       };
@@ -4577,14 +4686,23 @@ app.post('/api/owner/create-account', requireOwnerSession, async (req, res) => {
   try {
     const { id, password, telegram, memo } = req.body || {};
     if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
-    const newId = id.trim().toLowerCase();
+    const idError = validateAccountId(id);
+    if (idError) return res.status(400).json({ error: idError });
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    if (await isReservedAdminLikeId(id)) {
+      return res.status(400).json({ error: '이미 사용 중인 기기 아이디입니다.' });
+    }
+
+    const newId = normalizeAccountId(id);
     const [[exists]] = await db.pool.query('SELECT id FROM users WHERE id = ?', [newId]);
     if (exists) return res.status(400).json({ error: '이미 사용 중인 기기 아이디입니다.' });
     // owner의 managerId를 상속
     const managerId = req.owner.managerId || '';
     const deviceMemo = (memo ?? telegram ?? '').trim();
     await db.pool.query(
-      'INSERT INTO users (id, pw, manager_id, telegram, status, owner_id) VALUES (?, ?, ?, ?, "pending", ?)',
+      `INSERT INTO users (id, pw, manager_id, telegram, status, owner_id, charge_required_until)
+       VALUES (?, ?, ?, ?, "approved", ?, DATE_ADD(NOW(), INTERVAL 48 HOUR))`,
       [newId, password.trim(), managerId, deviceMemo, req.owner.id]
     );
     res.json({ ok: true, id: newId });
@@ -4834,7 +4952,15 @@ app.post('/api/admin/account-owners', requireAdmin, async (req, res) => {
   try {
     const { id, password, name, telegram } = req.body || {};
     if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'id, password ??' });
-    const ownerId = id.trim().toLowerCase();
+    const idError = validateAccountId(id);
+    if (idError) return res.status(400).json({ error: idError });
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    if (await isReservedAdminLikeId(id)) {
+      return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    }
+
+    const ownerId = normalizeAccountId(id);
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
     if (exists) return res.status(400).json({ error: '?? ???? ID???.' });
     const managerId = req.admin.role === 'master' ? (req.body.manager_id || null) : req.admin.id;
@@ -5160,7 +5286,7 @@ app.delete('/api/admin/downloads/:id', requireAdmin, async (req, res) => {
 
 // GET /api/owner/mgr/settlements ? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/settlements', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 권한이 필요합니다.' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '총판 권한이 필요합니다.' });
   try {
     const page     = Math.max(1, parseInt(req.query.page)     || 1);
     const pageSize = Math.min(50, parseInt(req.query.pageSize) || 20);
@@ -5180,7 +5306,7 @@ app.get('/api/owner/mgr/settlements', requireOwnerSession, async (req, res) => {
 
 // GET /api/owner/mgr/withdrawals ? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 권한이 필요합니다.' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '총판 권한이 필요합니다.' });
   try {
     const [rows] = await db.pool.query(
       'SELECT id, amount, wallet_address, status, reject_reason, requested_at, processed_at FROM withdrawal_requests WHERE manager_id = ? ORDER BY requested_at DESC',
@@ -5194,7 +5320,7 @@ app.get('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
 
 // POST /api/owner/mgr/withdrawals ? ?? ?? (??? ??)
 app.post('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 권한이 필요합니다.' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '총판 권한이 필요합니다.' });
   try {
     const { amount, wallet_address } = req.body || {};
     if (!amount || isNaN(amount) || Number(amount) <= 0) return res.status(400).json({ error: '유효한 금액을 입력하세요.' });
@@ -5215,7 +5341,7 @@ app.post('/api/owner/mgr/withdrawals', requireOwnerSession, async (req, res) => 
 
 // GET /api/owner/mgr/owners ? ?? ?? ?? ?? (??? ??)
 app.get('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 권한이 필요합니다.' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '총판 권한이 필요합니다.' });
   try {
     const [rows] = await db.pool.query(
       `SELECT o.id, o.name, o.telegram, o.status, o.created_at,
@@ -5231,11 +5357,19 @@ app.get('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
 
 // POST /api/owner/mgr/owners ? ? ?? ?? (??? ??? referral)
 app.post('/api/owner/mgr/owners', requireOwnerSession, async (req, res) => {
-  if (req.owner.role !== 'manager') return res.status(403).json({ error: '매니저 권한이 필요합니다.' });
+  if (req.owner.role !== 'manager') return res.status(403).json({ error: '총판 권한이 필요합니다.' });
   try {
     const { id, password, name, telegram } = req.body || {};
     if (!id?.trim() || !password?.trim()) return res.status(400).json({ error: 'ID와 비밀번호를 입력하세요.' });
-    const ownerId = id.trim().toLowerCase();
+    const idError = validateAccountId(id);
+    if (idError) return res.status(400).json({ error: idError });
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    if (await isReservedAdminLikeId(id)) {
+      return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    }
+
+    const ownerId = normalizeAccountId(id);
     const [[exists]] = await db.pool.query('SELECT id FROM account_owners WHERE id = ?', [ownerId]);
     if (exists) return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
     await db.pool.query(

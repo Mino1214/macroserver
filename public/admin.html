@@ -562,7 +562,7 @@
     <div class="sidebar-kpi">
       <div class="kpi-item">
         <span class="kpi-val" id="statTotalUsers">0</span>
-        <span class="kpi-lbl">사용자</span>
+        <span class="kpi-lbl">회원</span>
       </div>
       <div class="kpi-item">
         <span class="kpi-val kpi-warn" id="statPendingUsers">0</span>
@@ -590,7 +590,7 @@
       </button>
       <button class="tab-btn nav-item active" data-tab="sectionUsers" onclick="showTab('sectionUsers');loadOwners()">
         <span class="nav-icon">🗂️</span>
-        <span class="nav-text">그룹 오너</span>
+        <span class="nav-text">회원</span>
       </button>
       <button class="tab-btn nav-item" data-tab="sectionMyTgBot" onclick="showTab('sectionMyTgBot')">
         <span class="nav-icon">📣</span>
@@ -691,12 +691,12 @@
         <!-- 오너 추가 -->
         <div class="glass-card nav-master hidden" style="margin-bottom:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOwnerCreateForm()">
-            <span style="font-weight:700;font-size:14px;">➕ 오너 추가</span>
+            <span style="font-weight:700;font-size:14px;">➕ 유저 추가</span>
             <span id="ownerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
           </div>
           <div id="ownerCreateFormInline" style="display:none;margin-top:12px;">
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <input type="text"      id="ownerNewId"       placeholder="오너 ID">
+              <input type="text"      id="ownerNewId"       placeholder="유저 ID">
               <input type="password"  id="ownerNewPw"       placeholder="비밀번호">
               <input type="text"      id="ownerNewName"     placeholder="표시 이름 (선택)">
               <input type="text"      id="ownerNewTelegram" placeholder="메신저 (선택)">
@@ -712,16 +712,16 @@
         <!-- 매니저 추가 -->
         <div class="glass-card nav-master hidden" style="margin-bottom:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrCreateForm()">
-            <span style="font-weight:700;font-size:14px;">🧑‍💼 매니저 추가</span>
+            <span style="font-weight:700;font-size:14px;">🧑‍💼 총판 추가</span>
             <span id="mgrCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
           </div>
           <div id="mgrCreateFormInline" style="display:none;margin-top:12px;">
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <input type="text"     id="mgrId"       placeholder="매니저 아이디">
+              <input type="text"     id="mgrId"       placeholder="총판 아이디">
               <input type="password" id="mgrPw"       placeholder="비밀번호">
               <input type="text"     id="mgrTelegram" placeholder="텔레그램 (선택)">
               <input type="text"     id="mgrMemo"     placeholder="메모 (선택)">
-              <button class="btn-ok btn-sm" onclick="addManager()">+ 매니저 추가</button>
+              <button class="btn-ok btn-sm" onclick="addManager()">+ 총판 추가</button>
             </div>
           </div>
         </div>
@@ -730,7 +730,7 @@
       <!-- 매니저 목록 (마스터, 접힘) -->
       <div class="glass-card nav-master hidden" id="mgrListCardInline" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrListSection()">
-          <h2 style="margin:0;font-size:15px;">🧑‍💼 매니저 목록</h2>
+          <h2 style="margin:0;font-size:15px;">🧑‍💼 총판 목록</h2>
           <span id="mgrListToggle" style="color:var(--muted);font-size:12px;">▶ 열기</span>
         </div>
         <div id="mgrListWrap" style="display:none;margin-top:12px;">
@@ -749,7 +749,7 @@
       <!-- 오너 목록 -->
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-          <h2 style="margin:0">그룹 오너 목록</h2>
+          <h2 style="margin:0">회원 목록</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn-ghost btn-sm user-filter-btn active" data-filter="all"      onclick="setOwnerFilter('all')">전체</button>
             <button class="btn-ghost btn-sm user-filter-btn"        data-filter="pending"  onclick="setOwnerFilter('pending')">대기</button>
@@ -762,8 +762,8 @@
             <table>
               <thead><tr>
                 <th></th>
-                <th>오너 ID</th>
-                <th id="thOwnerManager" class="hidden">매니저</th>
+                <th>회원 ID</th>
+                <th id="thOwnerManager" class="hidden">총판</th>
                 <th>이름</th>
                 <th>메신저</th>
                 <th>기기수</th>
@@ -784,7 +784,7 @@
           <div style="min-width:0;flex:1;">
             <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">마스터 레퍼럴 코드</div>
             <div id="masterReferralCode" style="font-size:24px;font-weight:900;letter-spacing:1.4px;color:var(--ac);word-break:break-all;">-</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:6px;">오너/회원 가입 시 이 코드를 입력하면 마스터 소속으로 연결됩니다.</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px;">회원 가입 시 이 코드를 입력하면 마스터 소속으로 연결됩니다.</div>
           </div>
           <button class="btn-ac btn-sm" onclick="copyMasterReferralCode()">복사</button>
         </div>
@@ -793,8 +793,8 @@
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
           <div>
-            <h2 style="margin:0">오너 계정 승인 목록</h2>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">회원가입 후 승인 대기 중인 오너 계정을 여기서만 처리합니다.</div>
+            <h2 style="margin:0">회원 계정 승인 목록</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">회원가입 후 승인 대기 중인 회원 계정을 여기서만 처리합니다.</div>
           </div>
           <button class="btn-ac btn-sm" onclick="loadApprovalOwners()">새로고침</button>
         </div>
@@ -802,8 +802,8 @@
           <div class="table-wrapper">
             <table>
               <thead><tr>
-                <th>오너 ID</th>
-                <th>매니저</th>
+                <th>회원 ID</th>
+                <th>총판</th>
                 <th>이름</th>
                 <th>메신저</th>
                 <th>가입일</th>
@@ -1552,7 +1552,7 @@
 <!-- ===== 오너 편집 모달 ===== -->
 <div id="ownerEditModal" class="modal-overlay">
   <div class="modal-box" style="max-width:480px;">
-    <div class="modal-title">✏️ 오너 계정 편집 — <span id="ownerEditTargetId" style="color:var(--ac);"></span></div>
+    <div class="modal-title">✏️ 회원 계정 편집 — <span id="ownerEditTargetId" style="color:var(--ac);"></span></div>
     <div class="flex-col" style="gap:12px;">
       <div>
         <label>이름 (표시명)</label>
@@ -1567,9 +1567,9 @@
         <input type="password" id="ownerEditPw" placeholder="새 비밀번호 입력">
       </div>
       <div id="ownerEditManagerWrap">
-        <label>담당 매니저</label>
+        <label>담당 총판</label>
         <select id="ownerEditManager">
-          <option value="">(매니저 없음)</option>
+          <option value="">(총판 없음)</option>
         </select>
       </div>
     </div>
@@ -1581,10 +1581,10 @@
   </div>
 </div>
 
-<!-- ===== 매니저 편집 모달 ===== -->
+<!-- ===== 총판 편집 모달 ===== -->
 <div id="managerEditModal" class="modal-overlay">
   <div class="modal-box" style="max-width:420px;">
-    <div class="modal-title">✏️ 매니저 편집 — <span id="managerEditTargetId" style="color:var(--ac);"></span></div>
+    <div class="modal-title">✏️ 총판 편집 — <span id="managerEditTargetId" style="color:var(--ac);"></span></div>
     <div class="flex-col" style="gap:12px;">
       <div>
         <label>텔레그램 ID</label>
@@ -1929,14 +1929,14 @@
 
   async function loadStats() {
     try {
-      const [users, pending, sessions, seeds] = await Promise.all([
-        api('/api/admin/users'),
-        api('/api/admin/pending-users'),
+      const [ownersData, sessions, seeds] = await Promise.all([
+        api('/api/admin/account-owners'),
         api('/api/admin/sessions'),
         me.role === 'master' ? api('/api/admin/seeds') : Promise.resolve([])
       ]);
-      document.getElementById('statTotalUsers').textContent = users.length;
-      document.getElementById('statPendingUsers').textContent = pending.length;
+      const owners = ownersData.owners || [];
+      document.getElementById('statTotalUsers').textContent = owners.length;
+      document.getElementById('statPendingUsers').textContent = owners.filter(o => o.status === 'pending').length;
       document.getElementById('statActiveSessions').textContent = sessions.length;
       document.getElementById('statTotalSeeds').textContent = seeds.length;
     } catch (e) { console.error('통계 실패:', e); }
@@ -2006,7 +2006,7 @@
     try {
       const list = await api('/api/admin/managers');
       const sel = document.getElementById('newUserManager');
-      if (sel) sel.innerHTML = '<option value="">(매니저 선택)</option>' +
+      if (sel) sel.innerHTML = '<option value="">(총판 선택)</option>' +
         list.map(m => `<option value="${m.id}">${m.id}${m.telegram ? ' ('+m.telegram+')' : ''}</option>`).join('');
       // 오너 추가 폼의 담당 총판 드롭다운도 함께 갱신
       const ownerMgrSel = document.getElementById('ownerNewManager');
@@ -2016,7 +2016,7 @@
       }
       const tbody = document.getElementById('managersList');
       if (!tbody) return;
-      if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">등록된 매니저가 없습니다.</td></tr>'; return; }
+      if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">등록된 총판이 없습니다.</td></tr>'; return; }
       tbody.innerHTML = list.map(m => {
         const esc = m.id.replace(/'/g, "\\'");
         const referral = m.referralCode ? escHtml(m.referralCode) : '-';
@@ -2163,7 +2163,7 @@
     const pw = document.getElementById('mgrPw').value.trim();
     const telegram = document.getElementById('mgrTelegram').value.trim();
     const memo = document.getElementById('mgrMemo').value.trim();
-    if (!id) { alert('매니저 아이디 입력'); return; }
+    if (!id) { alert('총판 아이디를 입력하세요.'); return; }
     try {
       const data = await api('/api/admin/managers', 'POST', { id, password: pw, telegram, memo });
       document.getElementById('mgrId').value = '';
@@ -2173,12 +2173,12 @@
       await loadUsers(); await loadManagers();
       const code = data?.manager?.referralCode;
       if (code) {
-        showToast(`매니저 생성 완료 · 레퍼럴 코드 ${code}`, 'ok');
+        showToast(`총판 생성 완료 · 레퍼럴 코드 ${code}`, 'ok');
       }
     } catch (e) { alert(e.message || '실패'); }
   }
   async function delManager(id) {
-    if (!confirm(id + ' 매니저를 삭제할까요?')) return;
+    if (!confirm(id + ' 총판을 삭제할까요?')) return;
     try { await api('/api/admin/managers/' + encodeURIComponent(id), 'DELETE'); loadManagers(); }
     catch (e) { alert(e.message || '실패'); }
   }
@@ -2233,7 +2233,7 @@
   function renderApprovalBadge() {
     const badge = document.getElementById('approvalBadge');
     if (!badge) return;
-    const total = Number(_approvalPendingOwners || 0) + Number(_approvalPendingWithdrawals || 0);
+    const total = Number(_approvalPendingOwners || 0);
     badge.textContent = total || '';
     badge.style.display = total ? '' : 'none';
   }
@@ -2250,7 +2250,7 @@
     _approvalPendingOwners = pendingOwners.length;
     renderApprovalBadge();
     if (!pendingOwners.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="no-data">승인 대기 중인 오너 계정이 없습니다.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">승인 대기 중인 회원 계정이 없습니다.</td></tr>';
       return;
     }
     tbody.innerHTML = pendingOwners.map(o => {
@@ -2370,7 +2370,7 @@
     if (_ownerFilter === 'approved') list = _allOwners.filter(o => o.status === 'approved');
 
     if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">해당하는 오너가 없습니다.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">해당하는 회원이 없습니다.</td></tr>';
       return;
     }
 
@@ -2627,7 +2627,7 @@
   }
 
   async function approveOwner(ownerId) {
-    if (!confirm(ownerId + ' 오너 계정을 승인하시겠습니까?')) return;
+    if (!confirm(ownerId + ' 회원 계정을 승인하시겠습니까?')) return;
     try {
       await api('/api/admin/account-owners/' + encodeURIComponent(ownerId) + '/approve', 'POST');
       showToast('승인 완료', 'ok');
@@ -2636,7 +2636,7 @@
   }
 
   async function rejectOwner(ownerId) {
-    if (!confirm(ownerId + ' 오너 가입을 거절하시겠습니까?')) return;
+    if (!confirm(ownerId + ' 회원 가입을 거절하시겠습니까?')) return;
     try {
       await api('/api/admin/account-owners/' + encodeURIComponent(ownerId) + '/reject', 'POST');
       showToast('거절 완료');
@@ -3924,7 +3924,7 @@
       try {
         const managers = await api('/api/admin/managers');
         const sel = document.getElementById('ownerEditManager');
-        sel.innerHTML = '<option value="">(매니저 없음)</option>' +
+        sel.innerHTML = '<option value="">(총판 없음)</option>' +
           managers.map(m => `<option value="${m.id}">${m.id}</option>`).join('');
       } catch (_) {}
     }
@@ -4026,7 +4026,7 @@
       const data = await api('/api/admin/account-owners');
       const owners = data.owners || [];
       if (!owners.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-data">그룹 오너가 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">회원이 없습니다.</td></tr>';
         return;
       }
       const p = n => String(n).padStart(2,'0');
@@ -4061,7 +4061,7 @@
     msg.style.color='var(--muted)'; msg.textContent='생성 중...';
     try {
       await api('/api/admin/account-owners', 'POST', { id, password: pw, name: name||undefined, telegram: telegram||undefined, manager_id });
-      msg.style.color='var(--ok)'; msg.textContent='오너 계정 생성 완료. 로그인 주소: /owner.html';
+      msg.style.color='var(--ok)'; msg.textContent='유저 계정 생성 완료. 로그인 주소: /owner.html';
       ['ownerNewId','ownerNewPw','ownerNewName','ownerNewTelegram'].forEach(x => { document.getElementById(x).value = ''; });
       loadOwners();
       loadOwnerMgmt();
@@ -4069,17 +4069,17 @@
   }
 
   async function deleteOwner(ownerId) {
-    if (!confirm(ownerId + ' 오너 계정을 삭제하면 연결된 계정의 연결이 해제됩니다. 계속하시겠습니까?')) return;
+    if (!confirm(ownerId + ' 회원 계정을 삭제하면 연결된 계정의 연결이 해제됩니다. 계속하시겠습니까?')) return;
     try {
       await api('/api/admin/account-owners/' + ownerId, 'DELETE');
-      showToast('오너 계정이 삭제되었습니다.');
+      showToast('회원 계정이 삭제되었습니다.');
       loadOwnerMgmt();
       document.getElementById('ownerAccountsCard').style.display = 'none';
     } catch (e) { showToast(e.message, 'err'); }
   }
 
   async function kickOwnerSession(ownerId) {
-    if (!confirm(ownerId + ' 오너의 세션을 강제 종료하시겠습니까?')) return;
+    if (!confirm(ownerId + ' 회원 세션을 강제 종료하시겠습니까?')) return;
     try {
       await api('/api/admin/account-owners/' + ownerId + '/kick-session', 'POST');
       showToast('세션이 종료되었습니다.');

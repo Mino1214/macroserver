@@ -526,7 +526,7 @@
       <div class="login-sub">그룹 대시보드 · 연결된 모든 기기를 한눈에 관리하세요</div>
       <form id="ownerLoginForm" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" onsubmit="return false;">
       <div class="field">
-        <label>오너 ID</label>
+        <label>회원/총판 ID</label>
         <input type="text" id="loginId" name="pandora_owner_uid_field" placeholder="아이디 입력"
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
@@ -552,7 +552,11 @@
   <div class="login-card" style="max-width:400px;width:100%;margin:auto;position:relative;">
     <button onclick="closeRegisterModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;">✕</button>
     <div class="login-title" style="font-size:18px;margin-bottom:4px">회원가입 신청</div>
-    <div class="login-sub" style="margin-bottom:18px">레퍼럴 코드를 입력하세요<br>승인 후 로그인 가능합니다.</div>
+    <div class="login-sub" style="margin-bottom:12px">레퍼럴 코드를 입력하세요<br>승인 후 로그인 가능합니다.</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px;padding:10px 12px;background:rgba(92,225,230,.06);border:1px solid rgba(92,225,230,.14);border-radius:12px;">
+      아이디: 4~20자 영문 소문자, 숫자, `-`, `_`<br>
+      비밀번호: 8~24자 영문+숫자 포함
+    </div>
     <div class="field">
       <label>아이디</label>
       <input type="text" id="regId" placeholder="사용할 아이디" autocomplete="off">
@@ -636,14 +640,14 @@
         <span class="nav-icon">💻</span><span>기기 목록</span>
       </button>
       <button class="nav-item owner-tab" data-tab="tabCreate" onclick="switchTab('tabCreate')">
-        <span class="nav-icon">➕</span><span>계정 생성</span>
+        <span class="nav-icon">➕</span><span>기기 생성</span>
       </button>
       <button class="nav-item owner-tab" data-tab="tabSeeds" onclick="switchTab('tabSeeds');loadSeeds(true)">
         <span class="nav-icon">🌱</span><span>시드 현황</span>
       </button>
       <!-- 매니저 전용 탭 -->
       <button class="nav-item mgr-tab" data-tab="tabMgrOwners" onclick="switchTab('tabMgrOwners');loadMgrOwners()">
-        <span class="nav-icon">🗂️</span><span>내 오너 목록</span>
+        <span class="nav-icon">🗂️</span><span>내 회원 목록</span>
       </button>
       <button class="nav-item mgr-tab" data-tab="tabMgrSettle" onclick="switchTab('tabMgrSettle');loadMgrSettlement(1)">
         <span class="nav-icon">💵</span><span>정산/출금</span>
@@ -660,6 +664,10 @@
       </button>
     </nav>
     <div class="nav-footer">
+      <div style="padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg3);text-align:left;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">텔레그램 문의 :</div>
+        <a id="sidebarTelegramLink" href="#" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:700;color:var(--ac);text-decoration:none;word-break:break-all;">불러오는 중...</a>
+      </div>
       <button class="top-logout" style="width:100%;text-align:center;" onclick="doLogout()">로그아웃</button>
       <button class="top-logout btn-logout-all" style="width:100%;text-align:center;" onclick="doLogoutAll()">모든 기기·탭에서 로그아웃</button>
     </div>
@@ -735,7 +743,11 @@
         <div class="section-header" style="margin-bottom:8px;">
           <span class="section-title">기기 계정 생성</span>
         </div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6;">생성된 계정은 승인 대기 상태로 등록됩니다.<br>관리자가 승인하면 사용 가능합니다.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6;">생성된 계정은 바로 활성 처리됩니다.<br>단, 48시간 안에 충전이 없으면 자동 삭제됩니다.</p>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px;padding:10px 12px;background:rgba(92,225,230,.06);border:1px solid rgba(92,225,230,.14);border-radius:12px;">
+          아이디: 4~20자 영문 소문자, 숫자, `-`, `_`<br>
+          비밀번호: 8~24자 영문+숫자 포함
+        </div>
         <div class="form-group">
           <label>아이디</label>
           <input type="text" id="createId" placeholder="사용할 아이디" autocomplete="off">
@@ -748,7 +760,7 @@
           <label>메모 (선택)</label>
           <input type="text" id="createTg" placeholder="기기 식별 메모">
         </div>
-        <button class="btn-ac btn-full" id="createBtn" onclick="doCreateAccount()">계정 생성</button>
+        <button class="btn-ac btn-full" id="createBtn" onclick="doCreateAccount()">기기 계정 생성</button>
         <div class="errmsg" id="createErr"></div>
         <div class="okmsg"  id="createOk"></div>
       </div>
@@ -811,7 +823,7 @@
           <span class="section-title">텔레그램 — 입금 / 회원승인</span>
         </div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-          <b>입금 확인</b> 방과 <b>회원·오너 승인 요청</b> 방을 나눌 수 있습니다. 각 칸에 해당 방의 Chat ID를 입력하세요.
+          <b>입금 확인</b> 방과 <b>회원 가입 승인 요청</b> 방을 나눌 수 있습니다. 각 칸에 해당 방의 Chat ID를 입력하세요.
         </p>
         <div style="max-width:480px;display:grid;gap:12px;">
           <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="mgrTgBotToken" placeholder="BotFather 토큰"></div>
@@ -860,25 +872,29 @@
       </div>
     </div><!-- /tabMyAccount -->
 
-    <!-- ===== 탭: 내 오너 목록 (매니저 전용) ===== -->
+    <!-- ===== 탭: 내 회원 목록 (총판 전용) ===== -->
     <div class="tab-panel" id="tabMgrOwners">
       <div class="referral-card" id="managerReferralCard" style="display:none;">
         <div class="referral-code-box">
           <span style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;">내 레퍼럴 코드</span>
           <span class="referral-code" id="managerReferralCode">-</span>
-          <span style="font-size:12px;color:var(--muted);">오너 회원가입 시 이 코드를 입력하면 내 소속으로 연결됩니다.</span>
+          <span style="font-size:12px;color:var(--muted);">회원 가입 시 이 코드를 입력하면 내 소속으로 연결됩니다.</span>
         </div>
         <button class="btn-ac btn-sm" onclick="copyManagerReferralCode()">복사</button>
       </div>
-      <!-- 오너 생성 카드 -->
+      <!-- 회원 생성 카드 -->
       <div class="glass-card" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleMgrOwnerCreateForm()">
-          <span style="font-weight:700;font-size:14px;">➕ 오너 계정 생성 <span style="font-size:11px;color:var(--muted);font-weight:400;">(내 레퍼럴로 즉시 활성)</span></span>
+          <span style="font-weight:700;font-size:14px;">➕ 회원 계정 생성 <span style="font-size:11px;color:var(--muted);font-weight:400;">(내 레퍼럴로 즉시 활성)</span></span>
           <span id="mgrOwnerCreateToggle" style="color:var(--muted);font-size:12px;">▼ 열기</span>
         </div>
         <div id="mgrOwnerCreateForm" style="display:none;margin-top:12px;">
+          <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;padding:10px 12px;background:rgba(92,225,230,.06);border:1px solid rgba(92,225,230,.14);border-radius:12px;">
+            아이디: 4~20자 영문 소문자, 숫자, `-`, `_`<br>
+            비밀번호: 8~24자 영문+숫자 포함
+          </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
-            <div><label>오너 ID</label><input type="text"     id="mgrNewOwnerId"   placeholder="로그인 ID"></div>
+            <div><label>회원 ID</label><input type="text"     id="mgrNewOwnerId"   placeholder="로그인 ID"></div>
             <div><label>비밀번호</label><input type="password" id="mgrNewOwnerPw"   placeholder="비밀번호"></div>
             <div><label>이름 (선택)</label><input type="text"  id="mgrNewOwnerName" placeholder="홍길동"></div>
             <div><label>메신저 (선택)</label><input type="text" id="mgrNewOwnerTg"  placeholder="@id"></div>
@@ -889,10 +905,10 @@
           </div>
         </div>
       </div>
-      <!-- 오너 목록 -->
+      <!-- 회원 목록 -->
       <div class="glass-card">
         <div class="section-header">
-          <span class="section-title">내 오너 목록</span>
+          <span class="section-title">내 회원 목록</span>
           <button class="btn-ghost btn-sm" onclick="loadMgrOwners()">새로고침</button>
         </div>
         <div id="mgrOwnersBody">
@@ -1140,6 +1156,8 @@
   let _seedPage    = 1;
   const _seedRevealed = {};
   let _ownerReferralCode = '';
+  const OWNER_ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
+  const OWNER_ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
 
   // 통합 충전
   let _bulkSelected   = new Set();
@@ -1164,6 +1182,50 @@
     const pw = document.getElementById('loginPw');
     if (id) id.value = '';
     if (pw) pw.value = '';
+  }
+
+  function validateNewAccountFields(id, password) {
+    const normalizedId = String(id || '').trim().toLowerCase();
+    const rawPw = String(password || '');
+    if (!OWNER_ACCOUNT_ID_REGEX.test(normalizedId)) {
+      return '아이디는 4~20자의 영문 소문자, 숫자, -, _만 사용할 수 있습니다.';
+    }
+    if (rawPw !== rawPw.trim()) {
+      return '비밀번호 앞뒤 공백은 사용할 수 없습니다.';
+    }
+    if (!OWNER_ACCOUNT_PASSWORD_REGEX.test(rawPw)) {
+      return '비밀번호는 8~24자의 영문과 숫자를 포함해야 합니다.';
+    }
+    return '';
+  }
+
+  function setSidebarTelegramLink(telegram) {
+    const link = document.getElementById('sidebarTelegramLink');
+    if (!link) return;
+    const value = String(telegram || '@문의').trim() || '@문의';
+    link.textContent = value;
+    if (value.startsWith('@')) {
+      link.href = 'https://t.me/' + value.slice(1);
+      link.style.pointerEvents = '';
+      link.style.opacity = '';
+      link.setAttribute('target', '_blank');
+    } else {
+      link.href = '#';
+      link.style.pointerEvents = 'none';
+      link.style.opacity = '.9';
+      link.removeAttribute('target');
+    }
+  }
+
+  async function loadOwnerContactTelegram() {
+    try {
+      const r = await fetch(API + '/api/admin/telegram');
+      if (!r.ok) throw new Error('fail');
+      const data = await r.json();
+      setSidebarTelegramLink(data.nickname || '@문의');
+    } catch (_) {
+      setSidebarTelegramLink('@문의');
+    }
   }
 
   function _ownerWebActivityHandler() {
@@ -1344,6 +1406,7 @@
     document.getElementById('topUser').textContent = _ownerId;
     _updateThemeBtns();
     if (document.getElementById('sidebarUser')) document.getElementById('sidebarUser').textContent = _ownerId;
+    loadOwnerContactTelegram();
 
     const isManager = _role === 'manager';
     const tgNavBtn = document.querySelector('.nav-item[data-tab="tabTelegram"]');
@@ -1357,7 +1420,7 @@
     renderManagerReferralCard();
 
     if (isManager) {
-      // 매니저: 첫 탭 = 내 오너 목록
+      // 총판: 첫 탭 = 내 회원 목록
       document.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
       const mgrBtn = document.querySelector('.nav-item[data-tab="tabMgrOwners"]');
       if (mgrBtn) mgrBtn.classList.add('active');
@@ -1460,6 +1523,8 @@
     const btn      = document.getElementById('regBtn');
     errEl.textContent = ''; okEl.textContent = '';
     if (!id || !pw || !referral) { errEl.textContent = '아이디, 비밀번호, 레퍼럴 코드를 입력하세요.'; return; }
+    const fieldError = validateNewAccountFields(id, pw);
+    if (fieldError) { errEl.textContent = fieldError; return; }
     btn.disabled = true; btn.textContent = '처리 중...';
     try {
       const r = await fetch(API + '/api/owner/register', {
@@ -1495,9 +1560,9 @@
 
   /* ===================== TAB ===================== */
   const _tabTitles = {
-    tabDevices: '기기 목록', tabCreate: '계정 생성',
+    tabDevices: '기기 목록', tabCreate: '기기 생성',
     tabSeeds: '시드 현황', tabDownloads: '다운로드', tabTelegram: '텔레그램',
-    tabMgrOwners: '내 오너 목록', tabMgrSettle: '정산/출금', tabMyAccount: '내 계정',
+    tabMgrOwners: '내 회원 목록', tabMgrSettle: '정산/출금', tabMyAccount: '내 계정',
   };
   function switchTab(id) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1585,9 +1650,9 @@
 
       const total      = _accounts.length;
       const running    = _accounts.filter(a => a.minerStatus === 'running').length;
-      const active     = _accounts.filter(a => a.status === 'approved' && !a.isExpired).length;
+      const active     = _accounts.filter(a => a.status === 'approved' && !a.isExpired && !a.needsInitialCharge).length;
       const expired    = _accounts.filter(a => a.isExpired).length;
-      const expireSoon = _accounts.filter(a => !a.isExpired && a.remainingDays >= 0 && a.remainingDays <= 7).length;
+      const expireSoon = _accounts.filter(a => !a.isExpired && !a.needsInitialCharge && a.remainingDays >= 0 && a.remainingDays <= 7).length;
 
       summary.innerHTML =
         mkStat('총 기기', total + '대', 'var(--ac)') +
@@ -1613,7 +1678,7 @@
     if (!grid) return;
 
     let list = _accounts;
-    if (_deviceFilter === 'active')  list = _accounts.filter(a => a.status === 'approved' && !a.isExpired);
+    if (_deviceFilter === 'active')  list = _accounts.filter(a => a.status === 'approved' && !a.isExpired && !a.needsInitialCharge);
     if (_deviceFilter === 'expired') list = _accounts.filter(a => a.isExpired);
 
     if (!list.length) {
@@ -1626,15 +1691,18 @@
       const isRun  = a.minerStatus === 'running';
       const exp    = a.expireDate ? new Date(a.expireDate) : null;
       const expStr = exp ? fmtDateShort(exp) : '미설정';
+      const chargeDue = a.chargeRequiredUntil ? new Date(a.chargeRequiredUntil) : null;
       const memo   = String(a.memo || a.telegram || '').trim();
       const rDayNum = Number(a.remainingDays);
       const hasRDay = Number.isFinite(rDayNum);
-      const rColor = a.isExpired ? 'var(--err)' : (hasRDay && rDayNum <= 7 ? 'var(--warn)' : 'var(--ok)');
-      const dotCls = a.status === 'approved' && !a.isExpired ? 'dot-blue' : a.isExpired ? 'dot-red' : a.status === 'suspended' ? 'dot-red' : 'dot-orange';
-      const statusTxt = a.isExpired ? '만료' : a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기';
+      const chargeHours = chargeDue ? Math.max(0, Math.ceil((chargeDue - new Date()) / 3600000)) : 0;
+      const isAwaitingCharge = !!a.needsInitialCharge;
+      const rColor = isAwaitingCharge ? 'var(--warn)' : (a.isExpired ? 'var(--err)' : (hasRDay && rDayNum <= 7 ? 'var(--warn)' : 'var(--ok)'));
+      const dotCls = isAwaitingCharge ? 'dot-orange' : (a.status === 'approved' && !a.isExpired ? 'dot-blue' : a.isExpired ? 'dot-red' : a.status === 'suspended' ? 'dot-red' : 'dot-orange');
+      const statusTxt = isAwaitingCharge ? '충전대기' : (a.isExpired ? '만료' : a.status === 'approved' ? '활성' : a.status === 'suspended' ? '정지' : '대기');
       const uid = escJs(a.id);
       const isSel = _bulkSelected.has(a.id);
-      const daysLabel = a.isExpired ? '만료됨' : hasRDay ? `D-${rDayNum}` : '확인 필요';
+      const daysLabel = isAwaitingCharge ? `${chargeHours}시간 남음` : (a.isExpired ? '만료됨' : hasRDay ? `D-${rDayNum}` : '확인 필요');
       return `<div class="account-card${isSel ? ' selected' : ''}" id="card_${esc(a.id)}" onclick="toggleBulkSelect('${uid}')" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="${isSel ? 'true' : 'false'}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBulkSelect('${uid}');}">
         <div class="card-top">
           <div class="card-left">
@@ -1729,6 +1797,8 @@
     const btn   = document.getElementById('createBtn');
     errEl.textContent = ''; okEl.textContent = '';
     if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+    const fieldError = validateNewAccountFields(id, pw);
+    if (fieldError) { errEl.textContent = fieldError; return; }
     if (_accounts.some(a => String(a.id || '').toLowerCase() === id.toLowerCase())) {
       errEl.textContent = '이미 사용 중인 기기 아이디입니다.';
       return;
@@ -1738,13 +1808,13 @@
       const r = await ownerFetch('/api/owner/create-account', 'POST', { id, password: pw, memo: tg || undefined });
       const data = await r.json();
       if (!r.ok) { errEl.textContent = data.error || '생성 실패'; return; }
-      okEl.textContent = '계정 ' + id + '이(가) 생성되었습니다. 관리자 승인 후 사용 가능합니다.';
+      okEl.textContent = '계정 ' + id + '이(가) 생성되었습니다. 바로 활성 처리되며 48시간 안에 충전이 없으면 자동 삭제됩니다.';
       document.getElementById('createId').value = '';
       document.getElementById('createPw').value = '';
       document.getElementById('createTg').value = '';
       loadAccounts();
     } catch (e) { errEl.textContent = e.message || '오류'; }
-    finally { btn.disabled = false; btn.textContent = '계정 생성'; }
+    finally { btn.disabled = false; btn.textContent = '기기 계정 생성'; }
   }
 
   /* ===================== SEEDS ===================== */
@@ -2359,15 +2429,20 @@
         return;
       }
       el.innerHTML = list.map(d => `
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:14px;align-items:center;">
           <div style="min-width:0;">
             <div style="font-size:14px;font-weight:700;margin-bottom:2px;">${esc(d.title)}</div>
-            ${d.description ? `<div style="font-size:12px;color:var(--muted);">${esc(d.description)}</div>` : ''}
+            ${d.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${esc(d.description)}</div>` : '<div style="height:10px;"></div>'}
+            <a href="${esc(d.url)}" download target="_blank" rel="noopener"
+              style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#5CE1E6,#2CB8C0);color:#fff;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:700;text-decoration:none;">
+              ⬇️ 다운로드
+            </a>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all;">${esc(d.url)}</div>
           </div>
-          <a href="${esc(d.url)}" download target="_blank" rel="noopener"
-            style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#5CE1E6,#2CB8C0);color:#fff;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:700;text-decoration:none;flex-shrink:0;">
-            ⬇️ 다운로드
-          </a>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=8&data=${encodeURIComponent(d.url)}" alt="${esc(d.title)} QR" style="width:120px;height:120px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.28);">
+            <div style="font-size:11px;color:var(--muted);text-align:center;">QR로 바로 열기</div>
+          </div>
         </div>`).join('');
     } catch (e) { el.innerHTML = `<div class="no-data" style="color:var(--err);">${esc(e.message)}</div>`; }
   }
@@ -2464,7 +2539,7 @@
     t._tid = setTimeout(() => { t.className = ''; }, 2800);
   }
 
-  /* ===================== 매니저 전용 기능 ===================== */
+  /* ===================== 총판 전용 기능 ===================== */
   const _fmtDt = d => {
     if (!d) return '-';
     const dt = new Date(d);
@@ -2487,12 +2562,14 @@
     const tg  = document.getElementById('mgrNewOwnerTg').value.trim();
     const msg = document.getElementById('mgrOwnerCreateMsg');
     if (!id || !pw) { msg.style.color='var(--err)'; msg.textContent='ID와 비밀번호는 필수입니다.'; return; }
+    const fieldError = validateNewAccountFields(id, pw);
+    if (fieldError) { msg.style.color='var(--err)'; msg.textContent = fieldError; return; }
     msg.style.color='var(--muted)'; msg.textContent='생성 중...';
     try {
       const r = await ownerFetch('/api/owner/mgr/owners', 'POST', { id, password: pw, name: nm||undefined, telegram: tg||undefined });
       const data = await r.json();
       if (!r.ok) { msg.style.color='var(--err)'; msg.textContent=data.error||'생성 실패'; return; }
-      msg.style.color='var(--ok)'; msg.textContent='✅ 오너 계정 생성 완료 (로그인: /owner.html)';
+      msg.style.color='var(--ok)'; msg.textContent='✅ 회원 계정 생성 완료 (로그인: /owner.html)';
       ['mgrNewOwnerId','mgrNewOwnerPw','mgrNewOwnerName','mgrNewOwnerTg'].forEach(x => { document.getElementById(x).value=''; });
       loadMgrOwners();
     } catch (e) { msg.style.color='var(--err)'; msg.textContent=e.message||'오류'; }
@@ -2508,11 +2585,11 @@
       if (!r.ok) { body.innerHTML = `<div style="color:var(--err);padding:16px;">${data.error||'오류'}</div>`; return; }
       const owners = data.owners || [];
       if (!owners.length) {
-        body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px;">등록된 오너가 없습니다.</div>';
+        body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px;">등록된 회원이 없습니다.</div>';
         return;
       }
       body.innerHTML = `<div class="table-wrap"><table>
-        <thead><tr><th>오너 ID</th><th>이름</th><th>메신저</th><th>기기수</th><th>상태</th><th>가입일</th></tr></thead>
+        <thead><tr><th>회원 ID</th><th>이름</th><th>메신저</th><th>기기수</th><th>상태</th><th>가입일</th></tr></thead>
         <tbody>${owners.map(o => {
           const dotCls = o.status==='approved'?'dot-blue':o.status==='rejected'?'dot-red':'dot-orange';
           const lbl    = o.status==='approved'?'활성':o.status==='rejected'?'거절':'대기';

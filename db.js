@@ -196,7 +196,7 @@ const userDB = {
     expireDate.setDate(expireDate.getDate() + days);
     
     await pool.query(
-      'UPDATE users SET subscription_days = ?, expire_date = ?, status = "approved" WHERE id = ?',
+      'UPDATE users SET subscription_days = ?, expire_date = ?, status = "approved", charge_required_until = NULL WHERE id = ?',
       [days, expireDate, id.toLowerCase()]
     );
   },
@@ -212,7 +212,7 @@ const userDB = {
     const base = (currentExpiry && currentExpiry > now) ? currentExpiry : now;
     const newExpiry = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
     await pool.query(
-      'UPDATE users SET expire_date = ?, status = "approved" WHERE id = ?',
+      'UPDATE users SET expire_date = ?, status = "approved", charge_required_until = NULL WHERE id = ?',
       [newExpiry, id.toLowerCase()]
     );
     return newExpiry;
@@ -233,7 +233,7 @@ const userDB = {
     const newExpiry = new Date(base.getTime() + delta * 24 * 60 * 60 * 1000);
     const nextStatus = user?.status === 'suspended' ? 'suspended' : 'approved';
     await pool.query(
-      'UPDATE users SET expire_date = ?, status = ? WHERE id = ?',
+      'UPDATE users SET expire_date = ?, status = ?, charge_required_until = NULL WHERE id = ?',
       [newExpiry, nextStatus, id.toLowerCase()]
     );
     return newExpiry;
@@ -276,7 +276,7 @@ const userDB = {
   // 특정 사용자 조회
   async get(id) {
     const [rows] = await pool.query(
-      'SELECT id, manager_id as managerId, telegram, status, expire_date as expireDate, subscription_days as subscriptionDays FROM users WHERE id = ?',
+      'SELECT id, manager_id as managerId, telegram, status, expire_date as expireDate, subscription_days as subscriptionDays, charge_required_until as chargeRequiredUntil FROM users WHERE id = ?',
       [id.toLowerCase()]
     );
     if (rows.length > 0) {
@@ -287,6 +287,7 @@ const userDB = {
         status: rows[0].status,
         expireDate: rows[0].expireDate,
         subscriptionDays: rows[0].subscriptionDays || 0,
+        chargeRequiredUntil: rows[0].chargeRequiredUntil || null,
       };
     }
     return null;

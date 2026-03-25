@@ -487,6 +487,7 @@
     }
     .service-pill.online { color: var(--ok); border-color: rgba(74,222,128,.28); background: rgba(74,222,128,.10); }
     .service-pill.degraded { color: #fbbf24; border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.12); }
+    .service-pill.local { color: var(--ac); border-color: rgba(92,225,230,.28); background: rgba(92,225,230,.12); }
     .service-pill.offline { color: var(--err); border-color: rgba(248,113,113,.28); background: rgba(248,113,113,.10); }
 
     /* ===== FORM GRID ===== */
@@ -752,8 +753,8 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div>
             <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Master / Service Hub</div>
-            <div style="font-size:18px;font-weight:800;">admin에서 둘다관리</div>
-            <div style="font-size:13px;color:var(--muted);margin-top:6px;">Pandora-web/api와 PolyWatch-web/api를 한 화면에서 상태 확인하고 바로 이동할 수 있습니다.</div>
+            <div style="font-size:18px;font-weight:800;">서비스 선택</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:6px;">마스터 로그인 후 Pandora Admin 또는 PolyWatch Admin 중 하나를 선택해서 관리합니다.</div>
             <div id="serviceHubStatus" style="display:none;font-size:12px;color:#ffd54f;margin-top:8px;"></div>
             <div id="serviceHubMeta" style="font-size:12px;color:var(--muted);margin-top:8px;">서비스 허브를 준비 중입니다.</div>
           </div>
@@ -1918,12 +1919,14 @@
   function getServiceStateLabel(state) {
     if (state === 'online') return 'ONLINE';
     if (state === 'degraded') return 'DEGRADED';
+    if (state === 'local') return 'LOCAL';
     return 'OFFLINE';
   }
 
   function getServiceDotClass(state) {
     if (state === 'online') return 'dot-green';
     if (state === 'degraded') return 'dot-orange';
+    if (state === 'local') return 'dot-blue';
     return 'dot-red';
   }
 

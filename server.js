@@ -131,6 +131,15 @@ function deriveWebUrlFromAdminUrl(adminUrl) {
   }
 }
 
+function isLoopbackUrl(input) {
+  try {
+    const parsed = new URL(input);
+    return ['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname);
+  } catch (_error) {
+    return false;
+  }
+}
+
 function getDbRuntimeState() {
   const status = typeof db.getStatus === 'function'
     ? db.getStatus()
@@ -303,20 +312,48 @@ async function buildServiceHubSnapshot(req) {
   const polywatchApiUrl = POLYWATCH_API_URL.replace(/\/$/, '');
   const polywatchHealthUrl = `${polywatchApiUrl}/health`;
   const polywatchReadyUrl = `${polywatchApiUrl}/ready`;
+  const polywatchIsBrowserLocal = isLoopbackUrl(polywatchWebUrl) || isLoopbackUrl(polywatchApiUrl);
 
   const dbState = getDbRuntimeState();
   const pandoraApiReady = dbState.dbAvailable || dbState.dbFallback;
   const pandoraApiState = toServiceState(true, !dbState.dbAvailable);
 
-  const [polywatchWebProbe, polywatchHealthProbe, polywatchReadyProbe] = await Promise.all([
-    probeServiceUrl(polywatchWebUrl, { label: 'polywatch-web' }),
-    probeServiceUrl(polywatchHealthUrl, { label: 'polywatch-api-health' }),
-    probeServiceUrl(polywatchReadyUrl, { label: 'polywatch-api-ready' }),
-  ]);
+  let polywatchWebProbe;
+  let polywatchHealthProbe;
+  let polywatchReadyProbe;
+  let polywatchApiState;
 
-  const polywatchApiState = polywatchHealthProbe.ok
-    ? toServiceState(true, !polywatchReadyProbe.ok)
-    : 'offline';
+  if (polywatchIsBrowserLocal) {
+    polywatchWebProbe = {
+      ok: true,
+      state: 'local',
+      httpStatus: null,
+      message: '이 브라우저가 실행 중인 로컬 머신에서 열리는 대상입니다.',
+    };
+    polywatchHealthProbe = {
+      ok: true,
+      state: 'local',
+      httpStatus: null,
+      message: '로컬 API 상태는 Pandora 서버가 아니라 이 브라우저가 붙는 로컬 머신 기준입니다.',
+    };
+    polywatchReadyProbe = {
+      ok: true,
+      state: 'local',
+      httpStatus: null,
+      message: '로컬 개발 모드',
+    };
+    polywatchApiState = 'local';
+  } else {
+    [polywatchWebProbe, polywatchHealthProbe, polywatchReadyProbe] = await Promise.all([
+      probeServiceUrl(polywatchWebUrl, { label: 'polywatch-web' }),
+      probeServiceUrl(polywatchHealthUrl, { label: 'polywatch-api-health' }),
+      probeServiceUrl(polywatchReadyUrl, { label: 'polywatch-api-ready' }),
+    ]);
+
+    polywatchApiState = polywatchHealthProbe.ok
+      ? toServiceState(true, !polywatchReadyProbe.ok)
+      : 'offline';
+  }
 
   return {
     generatedAt: new Date().toISOString(),
@@ -376,6 +413,7 @@ async function buildServiceHubSnapshot(req) {
         httpStatus: polywatchWebProbe.httpStatus,
         message: polywatchWebProbe.message,
         meta: [
+          polywatchIsBrowserLocal ? 'browser-local target' : 'server-reachable target',
           `admin ${POLYWATCH_ADMIN_URL}`,
         ],
         actions: [
@@ -394,9 +432,14 @@ async function buildServiceHubSnapshot(req) {
         ok: polywatchHealthProbe.ok,
         httpStatus: polywatchHealthProbe.httpStatus,
         message: polywatchHealthProbe.ok
-          ? (polywatchReadyProbe.ok ? 'health / ready 정상' : `health 정상, ready 점검 필요 (${polywatchReadyProbe.message})`)
+          ? (
+            polywatchIsBrowserLocal
+              ? polywatchHealthProbe.message
+              : (polywatchReadyProbe.ok ? 'health / ready 정상' : `health 정상, ready 점검 필요 (${polywatchReadyProbe.message})`)
+          )
           : polywatchHealthProbe.message,
         meta: [
+          polywatchIsBrowserLocal ? 'browser-local target' : 'server-reachable target',
           `health ${polywatchHealthUrl}`,
           `ready ${polywatchReadyUrl}`,
         ],

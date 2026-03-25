@@ -109,7 +109,7 @@ const PORT = process.env.PORT || 3000;
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
-const POLYWATCH_ADMIN_URL = process.env.POLYWATCH_ADMIN_URL || 'http://127.0.0.1:43120/admin';
+const POLYWATCH_ADMIN_URL = process.env.POLYWATCH_ADMIN_URL || 'http://127.0.0.1:43120/admin.html';
 const POLYWATCH_WEB_URL = process.env.POLYWATCH_WEB_URL || deriveWebUrlFromAdminUrl(POLYWATCH_ADMIN_URL);
 const POLYWATCH_API_URL = process.env.POLYWATCH_API_URL || 'http://127.0.0.1:43121';
 const POLYWATCH_SSO_SECRET = process.env.POLYWATCH_SSO_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'polywatch-pandora-local-sso-secret');

@@ -749,33 +749,33 @@
     <!-- 그룹 오너 관리 (사용자 탭) -->
     <div class="tab-panel active" id="sectionUsers">
 
-      <div class="glass-card nav-master hidden" id="serviceHubCard" style="margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Master / Service Hub</div>
-            <div style="font-size:18px;font-weight:800;">서비스 선택</div>
-            <div style="font-size:13px;color:var(--muted);margin-top:6px;">마스터 로그인 후 Pandora Admin 또는 PolyWatch Admin 중 하나를 선택해서 관리합니다.</div>
-            <div id="serviceHubStatus" style="display:none;font-size:12px;color:#ffd54f;margin-top:8px;"></div>
-            <div id="serviceHubMeta" style="font-size:12px;color:var(--muted);margin-top:8px;">서비스 허브를 준비 중입니다.</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="btn-ghost btn-sm" onclick="refreshServiceHub()">상태 새로고침</button>
-            <button type="button" class="btn-ghost btn-sm" onclick="openPolyWatchAdmin()">PolyWatch 관리자 열기</button>
-          </div>
-        </div>
-        <div class="service-arch">
-          <div class="service-arch-title">[admin에서 둘다관리]</div>
-          <div class="service-arch-grid">
-            <span>[Pandora-web]</span>
-            <span>[PolyWatch-web]</span>
-            <span>[Pandora-api]</span>
-            <span>[PolyWatch-api]</span>
-          </div>
-        </div>
-        <div id="serviceHubGrid" class="service-grid">
-          <div class="service-card"><div class="service-card-title">서비스 상태를 불러오는 중...</div></div>
-        </div>
-      </div>
+<!--      <div class="glass-card nav-master hidden" id="serviceHubCard" style="margin-bottom:12px;">-->
+<!--        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">-->
+<!--          <div>-->
+<!--            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(&#45;&#45;muted);margin-bottom:6px;">Master / Service Hub</div>-->
+<!--            <div style="font-size:18px;font-weight:800;">서비스 선택</div>-->
+<!--            <div style="font-size:13px;color:var(&#45;&#45;muted);margin-top:6px;">마스터 로그인 후 Pandora Admin 또는 PolyWatch Admin 중 하나를 선택해서 관리합니다.</div>-->
+<!--            <div id="serviceHubStatus" style="display:none;font-size:12px;color:#ffd54f;margin-top:8px;"></div>-->
+<!--            <div id="serviceHubMeta" style="font-size:12px;color:var(&#45;&#45;muted);margin-top:8px;">서비스 허브를 준비 중입니다.</div>-->
+<!--          </div>-->
+<!--          <div style="display:flex;gap:8px;flex-wrap:wrap;">-->
+<!--            <button type="button" class="btn-ghost btn-sm" onclick="refreshServiceHub()">상태 새로고침</button>-->
+<!--            <button type="button" class="btn-ghost btn-sm" onclick="openPolyWatchAdmin()">PolyWatch 관리자 열기</button>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--        <div class="service-arch">-->
+<!--          <div class="service-arch-title">[admin에서 둘다관리]</div>-->
+<!--          <div class="service-arch-grid">-->
+<!--            <span>[Pandora-web]</span>-->
+<!--            <span>[PolyWatch-web]</span>-->
+<!--            <span>[Pandora-api]</span>-->
+<!--            <span>[PolyWatch-api]</span>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--        <div id="serviceHubGrid" class="service-grid">-->
+<!--          <div class="service-card"><div class="service-card-title">서비스 상태를 불러오는 중...</div></div>-->
+<!--        </div>-->
+<!--      </div>-->
 
       <div id="usersDbContent">
       <!-- 오너 추가 + 매니저 추가 카드 (마스터 전용) -->

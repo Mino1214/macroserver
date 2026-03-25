@@ -421,6 +421,7 @@
     .dot-red    { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.5); }
     .dot-orange { background: #fb923c; box-shadow: 0 0 6px rgba(251,146,60,.5); }
     .dot-wrap   { display: flex; align-items: center; gap: 6px; }
+    .dot-green  { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,.55); }
     .pending-badge {
       background: linear-gradient(135deg, var(--warn) 0%, #f59e0b 100%);
       color: #000; border-radius: 10px; padding: 1px 6px; font-size: 10px; font-weight: 700; margin-left: 4px;
@@ -429,6 +430,64 @@
     .period-ok   { color: var(--ok);  font-weight: 600; }
     .period-warn { color: var(--warn); font-weight: 600; }
     .period-err  { color: var(--err);  font-weight: 600; }
+    .service-arch {
+      margin-top: 14px; padding: 12px 14px; border-radius: 14px;
+      background: linear-gradient(180deg, rgba(92,225,230,.07) 0%, rgba(255,255,255,.02) 100%);
+      border: 1px solid rgba(92,225,230,.12);
+    }
+    .service-arch-title {
+      font-size: 12px; font-weight: 800; color: var(--ac); letter-spacing: .08em; margin-bottom: 8px;
+    }
+    .service-arch-grid {
+      display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr));
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .service-arch-grid span {
+      display: block; padding: 9px 11px; border-radius: 10px;
+      background: rgba(0,0,0,.16); border: 1px solid rgba(255,255,255,.06);
+    }
+    .service-grid {
+      display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 14px;
+    }
+    .service-card {
+      padding: 14px; border-radius: 16px; background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07); box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    .service-card-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px;
+    }
+    .service-card-kicker {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-tertiary); margin-bottom: 4px;
+    }
+    .service-card-title {
+      font-size: 16px; font-weight: 800; color: var(--text-primary);
+    }
+    .service-card-desc {
+      font-size: 12px; color: var(--text-secondary); line-height: 1.5; min-height: 34px; margin-bottom: 10px;
+    }
+    .service-card-url {
+      display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; color: var(--text-tertiary); word-break: break-all; margin-bottom: 10px;
+    }
+    .service-card-message {
+      font-size: 12px; color: var(--text-secondary); min-height: 18px; margin-bottom: 10px;
+    }
+    .service-meta {
+      display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px;
+      font-size: 11px; color: var(--text-tertiary);
+    }
+    .service-actions {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .service-pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px;
+      border-radius: 999px; font-size: 11px; font-weight: 700;
+      border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04);
+    }
+    .service-pill.online { color: var(--ok); border-color: rgba(74,222,128,.28); background: rgba(74,222,128,.10); }
+    .service-pill.degraded { color: #fbbf24; border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.12); }
+    .service-pill.offline { color: var(--err); border-color: rgba(248,113,113,.28); background: rgba(248,113,113,.10); }
 
     /* ===== FORM GRID ===== */
     .form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 16px; }
@@ -693,16 +752,31 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div>
             <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Master / Service Hub</div>
-            <div style="font-size:18px;font-weight:800;">서비스 선택</div>
-            <div style="font-size:13px;color:var(--muted);margin-top:6px;">마스터 계정으로 Pandora 운영 화면과 PolyWatch 관리자 화면을 바로 전환할 수 있습니다.</div>
+            <div style="font-size:18px;font-weight:800;">admin에서 둘다관리</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:6px;">Pandora-web/api와 PolyWatch-web/api를 한 화면에서 상태 확인하고 바로 이동할 수 있습니다.</div>
+            <div id="serviceHubStatus" style="display:none;font-size:12px;color:#ffd54f;margin-top:8px;"></div>
+            <div id="serviceHubMeta" style="font-size:12px;color:var(--muted);margin-top:8px;">서비스 허브를 준비 중입니다.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="btn-ac btn-sm" disabled>Pandora</button>
+            <button type="button" class="btn-ghost btn-sm" onclick="refreshServiceHub()">상태 새로고침</button>
             <button type="button" class="btn-ghost btn-sm" onclick="openPolyWatchAdmin()">PolyWatch 관리자 열기</button>
           </div>
         </div>
+        <div class="service-arch">
+          <div class="service-arch-title">[admin에서 둘다관리]</div>
+          <div class="service-arch-grid">
+            <span>[Pandora-web]</span>
+            <span>[PolyWatch-web]</span>
+            <span>[Pandora-api]</span>
+            <span>[PolyWatch-api]</span>
+          </div>
+        </div>
+        <div id="serviceHubGrid" class="service-grid">
+          <div class="service-card"><div class="service-card-title">서비스 상태를 불러오는 중...</div></div>
+        </div>
       </div>
 
+      <div id="usersDbContent">
       <!-- 오너 추가 + 매니저 추가 카드 (마스터 전용) -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px;">
 
@@ -793,6 +867,7 @@
             </table>
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -1657,6 +1732,7 @@
   let allUsers = [];
   let allSeeds = [];
   let currentSeedPage = 1;
+  let _serviceHubTimer = null;
 
   /* ===== 웹 세션 30분 유휴 → 연장 확인 (앱/기기 세션과 별도) ===== */
   const WEB_IDLE_MS = 30 * 60 * 1000;
@@ -1830,6 +1906,125 @@
     return r.json();
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getServiceStateLabel(state) {
+    if (state === 'online') return 'ONLINE';
+    if (state === 'degraded') return 'DEGRADED';
+    return 'OFFLINE';
+  }
+
+  function getServiceDotClass(state) {
+    if (state === 'online') return 'dot-green';
+    if (state === 'degraded') return 'dot-orange';
+    return 'dot-red';
+  }
+
+  function openServiceUrl(url, target = '_blank') {
+    if (!url) return;
+    window.open(url, target, target === '_self' ? undefined : 'noopener,noreferrer');
+  }
+
+  function renderServiceActions(actions) {
+    return (actions || []).map(action => {
+      if (action.action === 'polywatch-admin') {
+        return '<button type="button" class="btn-ac btn-sm" onclick="openPolyWatchAdmin()">관리자 SSO</button>';
+      }
+
+      return `<button type="button" class="btn-ghost btn-sm" onclick='openServiceUrl(${JSON.stringify(action.url || '')}, ${JSON.stringify(action.target || '_blank')})'>${escapeHtml(action.label || '열기')}</button>`;
+    }).join('');
+  }
+
+  function renderServiceHub(snapshot) {
+    const grid = document.getElementById('serviceHubGrid');
+    const metaEl = document.getElementById('serviceHubMeta');
+    if (!grid) return;
+
+    const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+    if (!services.length) {
+      grid.innerHTML = '<div class="service-card"><div class="service-card-title">표시할 서비스가 없습니다.</div></div>';
+      if (metaEl) metaEl.textContent = '서비스 허브 정보를 찾지 못했습니다.';
+      return;
+    }
+
+    grid.innerHTML = services.map(service => {
+      const state = service.state || 'offline';
+      const meta = (service.meta || [])
+        .map(item => `<span>${escapeHtml(item)}</span>`)
+        .join('');
+
+      return `
+        <div class="service-card">
+          <div class="service-card-header">
+            <div>
+              <div class="service-card-kicker">${escapeHtml(service.group || '')} / ${escapeHtml(service.tier || '')}</div>
+              <div class="service-card-title">${escapeHtml(service.label || '')}</div>
+            </div>
+            <span class="service-pill ${escapeHtml(state)}">
+              <span class="status-dot ${getServiceDotClass(state)}"></span>
+              ${getServiceStateLabel(state)}
+            </span>
+          </div>
+          <div class="service-card-desc">${escapeHtml(service.description || '')}</div>
+          <span class="service-card-url">${escapeHtml(service.url || '-')}</span>
+          <div class="service-card-message">${escapeHtml(service.message || '')}</div>
+          <div class="service-meta">${meta}</div>
+          <div class="service-actions">${renderServiceActions(service.actions)}</div>
+        </div>
+      `;
+    }).join('');
+
+    if (metaEl) {
+      const checkedAt = snapshot?.generatedAt ? new Date(snapshot.generatedAt) : null;
+      metaEl.textContent = checkedAt && !Number.isNaN(checkedAt.getTime())
+        ? `마지막 점검: ${checkedAt.toLocaleString()}`
+        : '서비스 허브 상태를 갱신했습니다.';
+    }
+  }
+
+  async function refreshServiceHub(silent = false) {
+    if (!me || me.role !== 'master') return;
+
+    const grid = document.getElementById('serviceHubGrid');
+    if (grid && !silent) {
+      grid.innerHTML = '<div class="service-card"><div class="service-card-title">서비스 상태를 다시 확인하는 중...</div></div>';
+    }
+
+    try {
+      const snapshot = await api('/api/admin/service-hub');
+      renderServiceHub(snapshot);
+    } catch (err) {
+      if (grid) {
+        grid.innerHTML = `<div class="service-card"><div class="service-card-title">서비스 허브를 불러오지 못했습니다.</div><div class="service-card-message">${escapeHtml(err.message || '오류')}</div></div>`;
+      }
+      const metaEl = document.getElementById('serviceHubMeta');
+      if (metaEl) metaEl.textContent = '서비스 허브 상태 조회 실패';
+      if (!silent) showToast(err.message || '서비스 허브 상태 조회 실패', 'warn');
+    }
+  }
+
+  function stopServiceHubPolling() {
+    if (_serviceHubTimer) {
+      clearInterval(_serviceHubTimer);
+      _serviceHubTimer = null;
+    }
+  }
+
+  function startServiceHubPolling() {
+    stopServiceHubPolling();
+    if (!me || me.role !== 'master') return;
+    _serviceHubTimer = setInterval(() => {
+      refreshServiceHub(true);
+    }, 30000);
+  }
+
   /* ===== THEME ===== */
   (function() {
     const t = localStorage.getItem('theme');
@@ -1862,6 +2057,7 @@
   /* ===== NAV ===== */
   function showLogin() {
     stopWebSessionWatch();
+    stopServiceHubPolling();
     document.getElementById('loginBox').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
     clearLoginInputs();
@@ -1879,6 +2075,29 @@
 
   // backward compat for any inline calls
   function scrollToSection(id) { showTab(id); }
+
+  function isDbDegradedMode() {
+    return !!(me && me.dbAvailable === false);
+  }
+
+  function applyServiceHubStatus() {
+    const statusEl = document.getElementById('serviceHubStatus');
+    const usersDbContent = document.getElementById('usersDbContent');
+    const metaEl = document.getElementById('serviceHubMeta');
+    if (!statusEl || !usersDbContent) return;
+
+    if (isDbDegradedMode()) {
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'MariaDB 연결 없이 제한 모드로 실행 중입니다. 지금은 서비스 허브와 PolyWatch 관리자 전환만 사용 가능합니다.';
+      usersDbContent.style.display = 'none';
+      if (metaEl) metaEl.style.color = '#fbbf24';
+    } else {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+      usersDbContent.style.display = '';
+      if (metaEl) metaEl.style.color = '';
+    }
+  }
 
   function showDashboard() {
     document.getElementById('loginBox').style.display = 'none';
@@ -1911,6 +2130,24 @@
     document.getElementById('adminName').textContent = me.id || '관리자';
     document.getElementById('adminRole').textContent = isMaster ? 'MASTER' : 'MANAGER';
     renderMasterReferralCard();
+    applyServiceHubStatus();
+    if (isMaster) {
+      refreshServiceHub(true);
+      startServiceHubPolling();
+    } else {
+      stopServiceHubPolling();
+    }
+
+    if (isDbDegradedMode()) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const tab = btn.getAttribute('data-tab') || '';
+        if (tab !== 'sectionUsers') btn.classList.add('hidden');
+      });
+      showTab('sectionUsers');
+      startWebSessionWatch();
+      showToast('Pandora 제한 모드로 실행 중입니다. PolyWatch 관리 전환은 정상 동작합니다.', 'warn');
+      return;
+    }
 
     // 알림봇 탭: 마스터 ↔ 매니저 섹션 토글
     const masterTgEl = document.getElementById('masterTgBotSection');
@@ -1952,6 +2189,7 @@
   async function logout() {
     if (!confirm('로그아웃 하시겠습니까?')) return;
     stopWebSessionWatch();
+    stopServiceHubPolling();
     try { await api('/api/admin/logout', 'POST'); } catch (_) {}
     adminToken = '';
     localStorage.removeItem('adminToken');
@@ -4047,8 +4285,10 @@
   function showToast(msg, type) {
     var t = document.getElementById('adminToast');
     if (!t) return;
-    t.textContent = (type === 'err' ? '❌ ' : '✅ ') + msg;
-    t.className = 'admin-toast show' + (type === 'err' ? ' err' : ' ok');
+    var isErr = type === 'err';
+    var isWarn = type === 'warn';
+    t.textContent = (isErr ? '❌ ' : isWarn ? '⚠️ ' : '✅ ') + msg;
+    t.className = 'admin-toast show' + (isErr ? ' err' : isWarn ? ' warn' : ' ok');
     clearTimeout(t._tid);
     t._tid = setTimeout(function() { t.className = 'admin-toast'; }, 2800);
   }
@@ -4221,6 +4461,7 @@
   }
   .admin-toast.show { opacity: 1; }
   .admin-toast.ok  { border-color: rgba(74,222,128,.4);  color: var(--ok); }
+  .admin-toast.warn { border-color: rgba(245,158,11,.4); color: #fbbf24; }
   .admin-toast.err { border-color: rgba(248,113,113,.4); color: var(--err); }
   /* settlement overview stat boxes */
   .stat-box   { min-width: 130px; }

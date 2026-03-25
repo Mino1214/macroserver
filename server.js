@@ -110,11 +110,39 @@ const PORT = process.env.PORT || 3000;
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
 const POLYWATCH_ADMIN_URL = process.env.POLYWATCH_ADMIN_URL || 'http://127.0.0.1:43120/admin';
+const POLYWATCH_WEB_URL = process.env.POLYWATCH_WEB_URL || deriveWebUrlFromAdminUrl(POLYWATCH_ADMIN_URL);
+const POLYWATCH_API_URL = process.env.POLYWATCH_API_URL || 'http://127.0.0.1:43121';
 const POLYWATCH_SSO_SECRET = process.env.POLYWATCH_SSO_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'polywatch-pandora-local-sso-secret');
 const POLYWATCH_SSO_ISSUER = process.env.POLYWATCH_SSO_ISSUER || 'pandora-admin';
 const POLYWATCH_SSO_AUDIENCE = process.env.POLYWATCH_SSO_AUDIENCE || 'polywatch-admin';
+const SERVICE_STATUS_TIMEOUT_MS = Number(process.env.SERVICE_STATUS_TIMEOUT_MS || 4000);
 const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
 const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
+
+function deriveWebUrlFromAdminUrl(adminUrl) {
+  try {
+    const parsed = new URL(adminUrl);
+    parsed.search = '';
+    parsed.hash = '';
+    parsed.pathname = parsed.pathname.replace(/\/admin(?:\.html)?\/?$/i, '/') || '/';
+    return parsed.toString().replace(/\/$/, '');
+  } catch (_error) {
+    return adminUrl.replace(/\/admin(?:\.html)?\/?$/i, '');
+  }
+}
+
+function getDbRuntimeState() {
+  const status = typeof db.getStatus === 'function'
+    ? db.getStatus()
+    : { available: true, fallback: false, optional: false, error: null };
+
+  return {
+    dbAvailable: Boolean(status.available),
+    dbFallback: Boolean(status.fallback),
+    dbOptional: Boolean(status.optional),
+    dbError: status.error || null,
+  };
+}
 
 function normalizeAccountId(value) {
   return String(value || '').trim().toLowerCase();
@@ -216,6 +244,169 @@ function createPolyWatchAdminSsoToken(admin) {
     },
     POLYWATCH_SSO_SECRET
   );
+}
+
+function getRequestOrigin(req) {
+  const forwardedProto = (req.headers['x-forwarded-proto'] || '').toString().split(',')[0].trim();
+  const proto = forwardedProto || req.protocol || 'http';
+  return `${proto}://${req.get('host')}`;
+}
+
+function toServiceState(ok, degraded = false) {
+  if (!ok) return 'offline';
+  return degraded ? 'degraded' : 'online';
+}
+
+async function probeServiceUrl(url, { label, timeout = SERVICE_STATUS_TIMEOUT_MS } = {}) {
+  if (!url) {
+    return {
+      ok: false,
+      state: 'offline',
+      httpStatus: null,
+      message: `${label || 'service'} URL is not configured.`,
+    };
+  }
+
+  try {
+    const response = await axios.get(url, {
+      timeout,
+      maxRedirects: 5,
+      validateStatus: () => true,
+      responseType: 'text',
+      transformResponse: [(data) => data],
+    });
+
+    const ok = response.status >= 200 && response.status < 400;
+    return {
+      ok,
+      state: toServiceState(ok),
+      httpStatus: response.status,
+      message: ok ? 'reachable' : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      state: 'offline',
+      httpStatus: null,
+      message: error.message || 'request failed',
+    };
+  }
+}
+
+async function buildServiceHubSnapshot(req) {
+  const origin = getRequestOrigin(req);
+  const pandoraWebUrl = `${origin}/admin.html`;
+  const pandoraApiUrl = origin;
+  const pandoraHealthUrl = `${origin}/health`;
+  const pandoraReadyUrl = `${origin}/ready`;
+  const polywatchWebUrl = POLYWATCH_WEB_URL;
+  const polywatchApiUrl = POLYWATCH_API_URL.replace(/\/$/, '');
+  const polywatchHealthUrl = `${polywatchApiUrl}/health`;
+  const polywatchReadyUrl = `${polywatchApiUrl}/ready`;
+
+  const dbState = getDbRuntimeState();
+  const pandoraApiReady = dbState.dbAvailable || dbState.dbFallback;
+  const pandoraApiState = toServiceState(true, !dbState.dbAvailable);
+
+  const [polywatchWebProbe, polywatchHealthProbe, polywatchReadyProbe] = await Promise.all([
+    probeServiceUrl(polywatchWebUrl, { label: 'polywatch-web' }),
+    probeServiceUrl(polywatchHealthUrl, { label: 'polywatch-api-health' }),
+    probeServiceUrl(polywatchReadyUrl, { label: 'polywatch-api-ready' }),
+  ]);
+
+  const polywatchApiState = polywatchHealthProbe.ok
+    ? toServiceState(true, !polywatchReadyProbe.ok)
+    : 'offline';
+
+  return {
+    generatedAt: new Date().toISOString(),
+    layout: [
+      ['pandora-web', 'polywatch-web'],
+      ['pandora-api', 'polywatch-api'],
+    ],
+    services: [
+      {
+        id: 'pandora-web',
+        group: 'Pandora',
+        tier: 'web',
+        label: 'Pandora Web',
+        description: '현재 마스터 관리자 셸',
+        url: pandoraWebUrl,
+        state: 'online',
+        ok: true,
+        httpStatus: 200,
+        message: '현재 세션에서 사용 중인 관리자 화면입니다.',
+        meta: [`origin ${origin}`],
+        actions: [
+          { label: '열기', url: pandoraWebUrl, target: '_self' },
+        ],
+      },
+      {
+        id: 'pandora-api',
+        group: 'Pandora',
+        tier: 'api',
+        label: 'Pandora API',
+        description: 'Pandora 관리자 백엔드',
+        url: pandoraApiUrl,
+        state: pandoraApiState,
+        ok: true,
+        httpStatus: 200,
+        message: dbState.dbAvailable
+          ? 'MariaDB 연결 정상'
+          : (dbState.dbFallback ? 'MariaDB 없이 제한 모드로 동작 중' : 'DB 상태를 확인하세요.'),
+        meta: [
+          dbState.dbAvailable ? 'DB ready' : 'DB fallback',
+          `health ${pandoraHealthUrl}`,
+          `ready ${pandoraReadyUrl}`,
+        ],
+        actions: [
+          { label: 'Health', url: pandoraHealthUrl, target: '_blank' },
+          { label: 'Ready', url: pandoraReadyUrl, target: '_blank' },
+        ],
+      },
+      {
+        id: 'polywatch-web',
+        group: 'PolyWatch',
+        tier: 'web',
+        label: 'PolyWatch Web',
+        description: '예측 시장 관전 웹',
+        url: polywatchWebUrl,
+        state: polywatchWebProbe.state,
+        ok: polywatchWebProbe.ok,
+        httpStatus: polywatchWebProbe.httpStatus,
+        message: polywatchWebProbe.message,
+        meta: [
+          `admin ${POLYWATCH_ADMIN_URL}`,
+        ],
+        actions: [
+          { label: '사이트', url: polywatchWebUrl, target: '_blank' },
+          { label: '관리자 SSO', action: 'polywatch-admin' },
+        ],
+      },
+      {
+        id: 'polywatch-api',
+        group: 'PolyWatch',
+        tier: 'api',
+        label: 'PolyWatch API',
+        description: 'Polymarket 프록시 및 포인트 백엔드',
+        url: polywatchApiUrl,
+        state: polywatchApiState,
+        ok: polywatchHealthProbe.ok,
+        httpStatus: polywatchHealthProbe.httpStatus,
+        message: polywatchHealthProbe.ok
+          ? (polywatchReadyProbe.ok ? 'health / ready 정상' : `health 정상, ready 점검 필요 (${polywatchReadyProbe.message})`)
+          : polywatchHealthProbe.message,
+        meta: [
+          `health ${polywatchHealthUrl}`,
+          `ready ${polywatchReadyUrl}`,
+        ],
+        actions: [
+          { label: 'Health', url: polywatchHealthUrl, target: '_blank' },
+          { label: 'Ready', url: polywatchReadyUrl, target: '_blank' },
+        ],
+      },
+    ],
+  };
 }
 
 /** 로그인 시 공인 IP를 기록한다. */
@@ -2340,6 +2531,45 @@ app.get('/api/admin/telegram', async (req, res) => {
   }
 });
 
+app.get('/health', (_req, res) => {
+  const dbState = getDbRuntimeState();
+  res.json({
+    status: 'ok',
+    service: 'pandora-api',
+    timestamp: new Date().toISOString(),
+    db: {
+      available: dbState.dbAvailable,
+      fallback: dbState.dbFallback,
+      optional: dbState.dbOptional,
+      error: dbState.dbError,
+    },
+    integrations: {
+      polywatchAdmin: POLYWATCH_ADMIN_URL,
+      polywatchWeb: POLYWATCH_WEB_URL,
+      polywatchApi: POLYWATCH_API_URL,
+    },
+  });
+});
+
+app.get('/ready', (_req, res) => {
+  const dbState = getDbRuntimeState();
+  const ready = dbState.dbAvailable || dbState.dbFallback;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'degraded',
+    service: 'pandora-api',
+    timestamp: new Date().toISOString(),
+    dependencies: {
+      database: {
+        ready,
+        mode: dbState.dbAvailable ? 'mariadb' : 'fallback',
+        message: dbState.dbAvailable
+          ? 'MariaDB connected'
+          : (dbState.dbFallback ? 'MariaDB unavailable, dev fallback active' : dbState.dbError || 'Database unavailable'),
+      },
+    },
+  });
+});
+
 // ---------- 관리자 인증 ----------
 app.post('/api/admin/login', async (req, res) => {
   try {
@@ -2353,7 +2583,13 @@ app.post('/api/admin/login', async (req, res) => {
     const token = createAdminToken();
     adminSessions.set(token, { role: 'master', id: MASTER_ID });
     await recordLoginPublicIp(req, 'admin', MASTER_ID);
-    return res.json({ role: 'master', id: MASTER_ID, token, referralCode: await getMasterReferralCode(MASTER_ID) });
+    return res.json({
+      role: 'master',
+      id: MASTER_ID,
+      token,
+      referralCode: await getMasterReferralCode(MASTER_ID),
+      ...getDbRuntimeState(),
+    });
   }
     
     // 관리자 페이지는 master만 허용
@@ -2365,7 +2601,13 @@ app.post('/api/admin/login', async (req, res) => {
       const token = createAdminToken();
       adminSessions.set(token, { role: 'master', id: id.trim() });
       await recordLoginPublicIp(req, 'admin', id.trim());
-      return res.json({ role: 'master', id: id.trim(), token, referralCode: await getMasterReferralCode(id.trim()) });
+      return res.json({
+        role: 'master',
+        id: id.trim(),
+        token,
+        referralCode: await getMasterReferralCode(id.trim()),
+        ...getDbRuntimeState(),
+      });
     }
     
     res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
@@ -2408,6 +2650,7 @@ app.get('/api/admin/me', requireAdmin, async (req, res) => {
       id: req.admin.id,
       telegram,
       referralCode,
+      ...getDbRuntimeState(),
     });
   } catch (error) {
     console.error('관리자 정보 조회 오류:', error);
@@ -2432,6 +2675,19 @@ app.post('/api/admin/integrations/polywatch/token', requireAdmin, requireMaster,
   } catch (error) {
     console.error('PolyWatch integration token 오류:', error);
     res.status(500).json({ error: 'PolyWatch 연동 토큰 발급에 실패했습니다.' });
+  }
+});
+
+app.get('/api/admin/service-hub', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    const snapshot = await buildServiceHubSnapshot(req);
+    res.json({
+      ok: true,
+      ...snapshot,
+    });
+  } catch (error) {
+    console.error('서비스 허브 상태 조회 오류:', error);
+    res.status(500).json({ error: '서비스 허브 상태를 불러오지 못했습니다.' });
   }
 });
 
@@ -5504,6 +5760,6 @@ app.listen(PORT, () => {
   console.log('URL: http://localhost:' + PORT);
   console.log('관리자 페이지: http://localhost:' + PORT + '/admin.html');
   console.log('마스터 계정: ' + MASTER_ID + ' / ' + MASTER_PW);
-  console.log('데이터베이스: MariaDB 연결');
+  console.log('데이터베이스: MariaDB 초기화 중 (dev fallback 가능)');
   console.log('========================================');
 });

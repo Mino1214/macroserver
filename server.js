@@ -109,6 +109,10 @@ const PORT = process.env.PORT || 3000;
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
+const POLYWATCH_ADMIN_URL = process.env.POLYWATCH_ADMIN_URL || 'http://127.0.0.1:43120/admin';
+const POLYWATCH_SSO_SECRET = process.env.POLYWATCH_SSO_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'polywatch-pandora-local-sso-secret');
+const POLYWATCH_SSO_ISSUER = process.env.POLYWATCH_SSO_ISSUER || 'pandora-admin';
+const POLYWATCH_SSO_AUDIENCE = process.env.POLYWATCH_SSO_AUDIENCE || 'polywatch-admin';
 const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
 const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
 
@@ -168,6 +172,50 @@ function getClientPublicIp(req) {
   }
   const raw = req.ip || req.socket?.remoteAddress || '';
   return normalizeClientIp(String(raw));
+}
+
+function base64UrlEncode(input) {
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(String(input));
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function signHs256Token(payload, secret) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest();
+
+  return `${encodedHeader}.${encodedPayload}.${base64UrlEncode(signature)}`;
+}
+
+function createPolyWatchAdminSsoToken(admin) {
+  if (!POLYWATCH_SSO_SECRET) {
+    throw new Error('POLYWATCH_SSO_SECRET is not configured.');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  return signHs256Token(
+    {
+      iss: POLYWATCH_SSO_ISSUER,
+      aud: POLYWATCH_SSO_AUDIENCE,
+      sub: String(admin.id || '').trim(),
+      role: admin.role === 'master' ? 'master' : 'admin',
+      username: String(admin.id || '').trim(),
+      email: `${String(admin.id || 'master').trim().toLowerCase()}@pandora.admin.local`,
+      source: 'pandora',
+      target: 'polywatch',
+      iat: now,
+      exp: now + 60,
+    },
+    POLYWATCH_SSO_SECRET
+  );
 }
 
 /** 로그인 시 공인 IP를 기록한다. */
@@ -2364,6 +2412,26 @@ app.get('/api/admin/me', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('관리자 정보 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+app.post('/api/admin/integrations/polywatch/token', requireAdmin, requireMaster, async (req, res) => {
+  try {
+    if (!POLYWATCH_SSO_SECRET) {
+      return res.status(503).json({ error: 'PolyWatch SSO secret is not configured.' });
+    }
+
+    const token = createPolyWatchAdminSsoToken(req.admin);
+    res.json({
+      ok: true,
+      target: 'polywatch',
+      url: POLYWATCH_ADMIN_URL,
+      token,
+      expiresIn: 60,
+    });
+  } catch (error) {
+    console.error('PolyWatch integration token 오류:', error);
+    res.status(500).json({ error: 'PolyWatch 연동 토큰 발급에 실패했습니다.' });
   }
 });
 

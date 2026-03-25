@@ -669,6 +669,10 @@
         </div>
       </div>
       <div class="topbar-right">
+        <div class="nav-master hidden" id="serviceSwitcher" style="display:flex;align-items:center;gap:6px;">
+          <button type="button" class="btn-ac btn-sm" disabled>Pandora</button>
+          <button type="button" class="btn-ghost btn-sm" id="openPolyWatchBtn" onclick="openPolyWatchAdmin()">PolyWatch</button>
+        </div>
         <button onclick="toggleTheme()" class="theme-toggle btn-ghost btn-sm" id="themeToggleBtn" title="라이트/다크 전환">🌙</button>
         <div class="user-chip">
           <div class="dot"></div>
@@ -684,6 +688,20 @@
 
     <!-- 그룹 오너 관리 (사용자 탭) -->
     <div class="tab-panel active" id="sectionUsers">
+
+      <div class="glass-card nav-master hidden" id="serviceHubCard" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Master / Service Hub</div>
+            <div style="font-size:18px;font-weight:800;">서비스 선택</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:6px;">마스터 계정으로 Pandora 운영 화면과 PolyWatch 관리자 화면을 바로 전환할 수 있습니다.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn-ac btn-sm" disabled>Pandora</button>
+            <button type="button" class="btn-ghost btn-sm" onclick="openPolyWatchAdmin()">PolyWatch 관리자 열기</button>
+          </div>
+        </div>
+      </div>
 
       <!-- 오너 추가 + 매니저 추가 카드 (마스터 전용) -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px;">
@@ -1755,6 +1773,36 @@
 
   function authHeaders() {
     return adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {};
+  }
+
+  async function openPolyWatchAdmin() {
+    if (!me || me.role !== 'master') {
+      alert('마스터 계정만 PolyWatch 관리자에 접근할 수 있습니다.');
+      return;
+    }
+
+    const btn = document.getElementById('openPolyWatchBtn');
+    const previous = btn ? btn.textContent : 'PolyWatch';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '연결중...';
+    }
+
+    try {
+      const data = await api('/api/admin/integrations/polywatch/token', 'POST');
+      const targetUrl = new URL(data.url, window.location.origin);
+      targetUrl.searchParams.set('ssoProvider', 'pandora');
+      targetUrl.searchParams.set('ssoToken', data.token);
+      window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+      showToast('PolyWatch 관리자 창을 열었습니다.');
+    } catch (err) {
+      alert(err.message || 'PolyWatch 관리자 연결에 실패했습니다.');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = previous;
+      }
+    }
   }
 
   async function api(path, method = 'GET', body = null) {

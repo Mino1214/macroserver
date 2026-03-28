@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const multer = require('multer');
 // child_process는 직접 쓰지 않지만 seed-checker.js 로딩 영향이 있어 유지
 
@@ -118,6 +119,7 @@ const POLYWATCH_SSO_AUDIENCE = process.env.POLYWATCH_SSO_AUDIENCE || 'polywatch-
 const SERVICE_STATUS_TIMEOUT_MS = Number(process.env.SERVICE_STATUS_TIMEOUT_MS || 4000);
 const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
 const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
+const DOWNLOAD_DESKTOP_ALIASES = ['Desktop', 'desktop', '데스크탑', '바탕화면'];
 
 function deriveWebUrlFromAdminUrl(adminUrl) {
   try {
@@ -2619,29 +2621,121 @@ app.get('/api/seed/history', async (req, res) => {
 
 // ---------- APK ???? (??? ???) ----------
 // ????? nexus ??? ?? ?? .apk ??? ?????.
+function isExternalDownloadUrl(url) {
+  return /^(https?:)?\/\//i.test(String(url || '').trim());
+}
+
+function isAppDownloadUrl(url) {
+  return /^\/(download|api|uploads)\b/i.test(String(url || '').trim());
+}
+
+function normalizeStoredDownloadPath(rawValue) {
+  let raw = String(rawValue || '').trim();
+  if (!raw) return '';
+  raw = raw.replace(/^["']|["']$/g, '');
+  if (/^file:\/\//i.test(raw)) {
+    try {
+      raw = decodeURIComponent(new URL(raw).pathname);
+    } catch (_) {}
+  }
+  return raw.replace(/\\/g, '/');
+}
+
+function buildStoredDownloadCandidates(rawValue) {
+  const normalized = normalizeStoredDownloadPath(rawValue);
+  const candidates = new Set();
+  const add = (candidate) => {
+    if (!candidate) return;
+    candidates.add(path.normalize(candidate));
+  };
+  if (!normalized || isExternalDownloadUrl(normalized) || isAppDownloadUrl(normalized)) return [];
+
+  if (path.isAbsolute(normalized)) add(normalized);
+  if (normalized.startsWith('~/')) add(path.join(os.homedir(), normalized.slice(2)));
+
+  const trimmed = normalized.replace(/^\/+/, '');
+  const desktopAlias = DOWNLOAD_DESKTOP_ALIASES.find((alias) => trimmed === alias || trimmed.startsWith(`${alias}/`));
+  if (desktopAlias) {
+    const rest = trimmed.slice(desktopAlias.length).replace(/^\/+/, '');
+    add(path.join(os.homedir(), 'Desktop', rest));
+  }
+
+  add(path.join(os.homedir(), normalized));
+  add(path.join(__dirname, normalized));
+  add(path.join(__dirname, 'public', normalized));
+  add(path.join(__dirname, 'uploads', normalized));
+
+  return Array.from(candidates);
+}
+
+async function resolveStoredDownloadFile(rawValue) {
+  const candidates = buildStoredDownloadCandidates(rawValue);
+  for (const candidate of candidates) {
+    try {
+      const stat = await fs.promises.stat(candidate);
+      if (stat.isFile()) return candidate;
+    } catch (_) {}
+  }
+  throw new Error(`다운로드 파일을 찾을 수 없습니다: ${rawValue}`);
+}
+
+function makeDownloadFilename(title, fullPath) {
+  const ext = path.extname(fullPath || '');
+  const safeTitle = String(title || 'download').replace(/[\\/:*?"<>|]+/g, ' ').trim();
+  if (!safeTitle) return path.basename(fullPath || 'download');
+  if (ext && safeTitle.toLowerCase().endsWith(ext.toLowerCase())) return safeTitle;
+  return safeTitle + ext;
+}
+
+function toPublicDownloadUrl(req, row) {
+  const raw = String(row?.url || '').trim();
+  if (!raw) return '';
+  let publicUrl = raw;
+  if (!isExternalDownloadUrl(raw) && !isAppDownloadUrl(raw)) {
+    publicUrl = `/api/downloads/file/${row.id}`;
+  }
+  if (/^(https?:)?\/\//i.test(publicUrl)) return publicUrl;
+  return new URL(publicUrl, `${req.protocol}://${req.get('host')}`).toString();
+}
+
+async function listApkCandidates() {
+  const dirs = [
+    path.join(os.homedir(), 'Desktop'),
+    path.join(os.homedir(), 'Desktop', 'nexus'),
+    path.join(os.homedir(), 'Desktop', 'nexus', 'macroApp'),
+    path.join(os.homedir(), 'Desktop', 'nexus', 'macroServer'),
+    path.join(os.homedir(), 'Downloads'),
+    __dirname,
+  ];
+  const seenDirs = new Set();
+  const apks = [];
+
+  for (const dir of dirs) {
+    const normalizedDir = path.normalize(dir);
+    if (seenDirs.has(normalizedDir)) continue;
+    seenDirs.add(normalizedDir);
+    try {
+      const entries = await fs.promises.readdir(normalizedDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.apk')) continue;
+        const fullPath = path.join(normalizedDir, entry.name);
+        const stat = await fs.promises.stat(fullPath);
+        apks.push({ name: entry.name, fullPath, mtime: stat.mtimeMs });
+      }
+    } catch (_) {}
+  }
+
+  return apks;
+}
+
 app.get('/download/apk', async (req, res) => {
   try {
-    const apkDir = path.join('/home', 'myno', '????', 'nexus');
-
-    // ?? ? APK ?? ?? ??
-    const files = await fs.promises.readdir(apkDir);
-    const apkFiles = files.filter((name) => name.toLowerCase().endsWith('.apk'));
-
+    const apkFiles = await listApkCandidates();
     if (apkFiles.length === 0) {
       return res.status(404).json({ error: 'APK ??? ?? ? ????.' });
     }
-
-    // ?? ??? ??? APK ?? ??
-    const stats = await Promise.all(
-      apkFiles.map(async (name) => {
-        const fullPath = path.join(apkDir, name);
-        const stat = await fs.promises.stat(fullPath);
-        return { name, fullPath, mtime: stat.mtimeMs };
-      })
-    );
-
-    stats.sort((a, b) => b.mtime - a.mtime);
-    const latest = stats[0];
+    apkFiles.sort((a, b) => b.mtime - a.mtime);
+    const latest = apkFiles[0];
 
     // ????? ?? (Content-Disposition: attachment)
     return res.download(latest.fullPath, latest.name);
@@ -5659,8 +5753,37 @@ app.get('/api/downloads', async (req, res) => {
     const [rows] = await db.pool.query(
       `SELECT id, title, url, description FROM downloads WHERE active=1 ORDER BY sort_order, created_at DESC`
     );
-    res.json(rows);
+    res.json(
+      rows.map((row) => ({
+        ...row,
+        url: toPublicDownloadUrl(req, row),
+      }))
+    );
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/downloads/file/:id : 로컬 파일 경로로 저장된 다운로드를 안전하게 전달
+app.get('/api/downloads/file/:id', async (req, res) => {
+  try {
+    const [rows] = await db.pool.query(
+      `SELECT id, title, url, active FROM downloads WHERE id = ? LIMIT 1`,
+      [req.params.id]
+    );
+    const row = rows?.[0];
+    if (!row || !row.active) return res.status(404).json({ error: '다운로드 항목을 찾을 수 없습니다.' });
+
+    const raw = String(row.url || '').trim();
+    if (!raw) return res.status(404).json({ error: '다운로드 경로가 비어 있습니다.' });
+
+    if (isExternalDownloadUrl(raw) || isAppDownloadUrl(raw)) {
+      return res.redirect(raw);
+    }
+
+    const fullPath = await resolveStoredDownloadFile(raw);
+    return res.download(fullPath, makeDownloadFilename(row.title, fullPath));
+  } catch (e) {
+    res.status(404).json({ error: e.message || '다운로드 파일을 찾을 수 없습니다.' });
+  }
 });
 
 // POST /api/admin/upload-popup-image : 팝업 이미지 업로드

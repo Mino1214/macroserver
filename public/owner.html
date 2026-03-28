@@ -2600,22 +2600,28 @@
         el.innerHTML = '<div class="no-data">등록된 다운로드가 없습니다.</div>';
         return;
       }
-      el.innerHTML = list.map(d => `
+      el.innerHTML = list.map(d => {
+        const downloadUrl = String(d.url || '').trim();
+        const absoluteUrl = downloadUrl
+          ? new URL(downloadUrl, window.location.origin).toString()
+          : '';
+        return `
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:14px;align-items:center;">
           <div style="min-width:0;">
             <div style="font-size:14px;font-weight:700;margin-bottom:2px;">${esc(d.title)}</div>
             ${d.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${esc(d.description)}</div>` : '<div style="height:10px;"></div>'}
-            <a href="${esc(d.url)}" download target="_blank" rel="noopener"
+            <a href="${esc(absoluteUrl)}" download target="_blank" rel="noopener"
               style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#5CE1E6,#2CB8C0);color:#fff;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:700;text-decoration:none;">
               ⬇️ 다운로드
             </a>
-            <div style="font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all;">${esc(d.url)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all;">${esc(absoluteUrl)}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=8&data=${encodeURIComponent(d.url)}" alt="${esc(d.title)} QR" style="width:120px;height:120px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.28);">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=8&data=${encodeURIComponent(absoluteUrl)}" alt="${esc(d.title)} QR" style="width:120px;height:120px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.28);">
             <div style="font-size:11px;color:var(--muted);text-align:center;">QR로 바로 열기</div>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     } catch (e) { el.innerHTML = `<div class="no-data" style="color:var(--err);">${esc(e.message)}</div>`; }
   }
 

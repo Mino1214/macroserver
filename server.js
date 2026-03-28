@@ -120,6 +120,17 @@ const SERVICE_STATUS_TIMEOUT_MS = Number(process.env.SERVICE_STATUS_TIMEOUT_MS |
 const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
 const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
 const DOWNLOAD_DESKTOP_ALIASES = ['Desktop', 'desktop', '데스크탑', '바탕화면'];
+const APK_ENV_KEYS = [
+  'APK_DOWNLOAD_PATH',
+  'APK_DOWNLOAD_FILE',
+  'LATEST_APK_PATH',
+  'DOWNLOAD_APK_PATH',
+  'APK_PATH',
+  'APK_FILE_PATH',
+  'APK_DIR',
+  'APK_DOWNLOAD_DIR',
+  'DOWNLOAD_APK_DIR',
+];
 
 function deriveWebUrlFromAdminUrl(adminUrl) {
   try {
@@ -2698,6 +2709,64 @@ function toPublicDownloadUrl(req, row) {
   return new URL(publicUrl, `${req.protocol}://${req.get('host')}`).toString();
 }
 
+function normalizeApkInputPath(rawValue) {
+  const normalized = normalizeStoredDownloadPath(rawValue);
+  if (!normalized) return '';
+  if (normalized.startsWith('~/')) return path.join(os.homedir(), normalized.slice(2));
+  if (path.isAbsolute(normalized)) return normalized;
+  const trimmed = normalized.replace(/^\/+/, '');
+  const desktopAlias = DOWNLOAD_DESKTOP_ALIASES.find((alias) => trimmed === alias || trimmed.startsWith(`${alias}/`));
+  if (desktopAlias) {
+    const rest = trimmed.slice(desktopAlias.length).replace(/^\/+/, '');
+    return path.join(os.homedir(), 'Desktop', rest);
+  }
+  return path.join(__dirname, normalized);
+}
+
+async function walkApkFiles(dirPath, depth = 3, bucket = []) {
+  if (depth < 0) return bucket;
+  let entries = [];
+  try {
+    entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+  } catch (_) {
+    return bucket;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      await walkApkFiles(fullPath, depth - 1, bucket);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.apk')) continue;
+    try {
+      const stat = await fs.promises.stat(fullPath);
+      bucket.push({ name: entry.name, fullPath, mtime: stat.mtimeMs });
+    } catch (_) {}
+  }
+  return bucket;
+}
+
+async function collectApkCandidatesFromTarget(targetPath) {
+  const resolvedPath = normalizeApkInputPath(targetPath);
+  if (!resolvedPath) return [];
+  try {
+    const stat = await fs.promises.stat(resolvedPath);
+    if (stat.isFile() && resolvedPath.toLowerCase().endsWith('.apk')) {
+      return [{ name: path.basename(resolvedPath), fullPath: resolvedPath, mtime: stat.mtimeMs }];
+    }
+    if (stat.isDirectory()) {
+      return walkApkFiles(resolvedPath, 4, []);
+    }
+  } catch (_) {}
+  return [];
+}
+
+function getConfiguredApkTargets() {
+  return APK_ENV_KEYS
+    .map((key) => ({ key, value: String(process.env[key] || '').trim() }))
+    .filter((item) => item.value);
+}
+
 async function listApkCandidates() {
   const dirs = [
     path.join(os.homedir(), 'Desktop'),
@@ -2709,6 +2778,12 @@ async function listApkCandidates() {
   ];
   const seenDirs = new Set();
   const apks = [];
+  const configuredTargets = getConfiguredApkTargets();
+
+  for (const target of configuredTargets) {
+    const hits = await collectApkCandidatesFromTarget(target.value);
+    apks.push(...hits);
+  }
 
   for (const dir of dirs) {
     const normalizedDir = path.normalize(dir);
@@ -2725,14 +2800,23 @@ async function listApkCandidates() {
     } catch (_) {}
   }
 
-  return apks;
+  const seenFiles = new Set();
+  return apks.filter((item) => {
+    const key = path.normalize(item.fullPath);
+    if (seenFiles.has(key)) return false;
+    seenFiles.add(key);
+    return true;
+  });
 }
 
 app.get('/download/apk', async (req, res) => {
   try {
     const apkFiles = await listApkCandidates();
     if (apkFiles.length === 0) {
-      return res.status(404).json({ error: 'APK ??? ?? ? ????.' });
+      return res.status(404).json({
+        error: 'APK 파일을 찾지 못했습니다.',
+        configuredApkTargets: getConfiguredApkTargets(),
+      });
     }
     apkFiles.sort((a, b) => b.mtime - a.mtime);
     const latest = apkFiles[0];

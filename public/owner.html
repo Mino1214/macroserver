@@ -804,17 +804,25 @@
         <div class="section-header">
           <span class="section-title">텔레그램 — 시드 잔고 발견 알림</span>
         </div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-          소속 기기에서 <b>시드 문구에 잔고가 잡히면</b> 이 봇으로 알림을 받습니다. (마스터 방과 별도)<br>
-          봇 1개 + 해당 방의 <b>Chat ID</b>만 입력하세요.
-        </p>
+        <div style="margin-bottom:14px;padding:12px 14px;border-radius:14px;background:rgba(92,225,230,.06);border:1px solid rgba(92,225,230,.14);font-size:12px;color:var(--muted);line-height:1.7;">
+          <div style="font-weight:700;color:var(--txt);margin-bottom:6px;">아주 간단하게 설정하세요</div>
+          <div>1. 텔레그램에서 <b>@BotFather</b> 검색 후 <b>/newbot</b> 입력</div>
+          <div>2. 받은 <b>봇 토큰</b>을 아래 칸에 붙여넣기</div>
+          <div>3. 알림 받을 개인채팅 또는 그룹방에 봇 초대</div>
+          <div>4. 개인채팅이면 <b>/start</b>, 그룹방이면 <b>@봇아이디 test</b>처럼 봇을 한 번 불러주기</div>
+          <div>5. <b>Chat ID 자동 찾기</b> 버튼 누르면 아래 칸에 자동 입력됩니다</div>
+        </div>
         <div style="max-width:480px;display:grid;gap:12px;">
           <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="ownTgBotToken" placeholder="BotFather 토큰"></div>
           <div class="form-group" style="margin:0;"><label>Chat ID (시드 발견)</label><input type="text" id="ownTgChatSeed" placeholder="-100..."></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn-ghost btn-sm" onclick="inspectOwnerTgBot('owner')">토큰 확인</button>
+            <button class="btn-ghost btn-sm" onclick="discoverOwnerTgChats('owner')">Chat ID 자동 찾기</button>
             <button class="btn-ac btn-sm" onclick="saveOwnerTgBot()">저장</button>
             <button class="btn-ghost btn-sm" onclick="testOwnerTgBot()">테스트 전송</button>
           </div>
+          <div id="ownTgBotInfo" style="font-size:12px;color:var(--muted);min-height:18px;"></div>
+          <div id="ownTgDiscoverList" style="display:grid;gap:8px;"></div>
           <p id="ownTgMsg" style="font-size:13px;min-height:18px;"></p>
         </div>
       </div>
@@ -822,18 +830,27 @@
         <div class="section-header">
           <span class="section-title">텔레그램 — 입금 / 회원승인</span>
         </div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-          <b>입금 확인</b> 방과 <b>회원 가입 승인 요청</b> 방을 나눌 수 있습니다. 각 칸에 해당 방의 Chat ID를 입력하세요.
-        </p>
+        <div style="margin-bottom:14px;padding:12px 14px;border-radius:14px;background:rgba(92,225,230,.06);border:1px solid rgba(92,225,230,.14);font-size:12px;color:var(--muted);line-height:1.7;">
+          <div style="font-weight:700;color:var(--txt);margin-bottom:6px;">입금 / 승인 알림 방 연결</div>
+          <div>1. <b>봇 토큰</b> 입력</div>
+          <div>2. 입금방 / 승인방에 봇 초대</div>
+          <div>3. 개인채팅이면 <b>/start</b>, 그룹방이면 <b>@봇아이디 test</b>처럼 봇을 한 번 불러주기</div>
+          <div>4. <b>Chat ID 자동 찾기</b> 후 아래 버튼으로 입금 / 승인 칸에 넣기</div>
+          <div>한 개 방만 쓸 경우 같은 Chat ID를 두 칸에 넣어도 됩니다</div>
+        </div>
         <div style="max-width:480px;display:grid;gap:12px;">
           <div class="form-group" style="margin:0;"><label>봇 Token</label><input type="text" id="mgrTgBotToken" placeholder="BotFather 토큰"></div>
           <div class="form-group" style="margin:0;"><label>Chat ID — 입금</label><input type="text" id="mgrTgChatDeposit" placeholder="-100..."></div>
           <div class="form-group" style="margin:0;"><label>Chat ID — 회원승인</label><input type="text" id="mgrTgChatApproval" placeholder="-100..."></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn-ghost btn-sm" onclick="inspectOwnerTgBot('manager')">토큰 확인</button>
+            <button class="btn-ghost btn-sm" onclick="discoverOwnerTgChats('manager')">Chat ID 자동 찾기</button>
             <button class="btn-ac btn-sm" onclick="saveOwnerTgBot()">저장</button>
             <button class="btn-ghost btn-sm" onclick="testOwnerTgBot('deposit')">테스트·입금</button>
             <button class="btn-ghost btn-sm" onclick="testOwnerTgBot('approval')">테스트·승인</button>
           </div>
+          <div id="mgrTgBotInfo" style="font-size:12px;color:var(--muted);min-height:18px;"></div>
+          <div id="mgrTgDiscoverList" style="display:grid;gap:8px;"></div>
           <p id="mgrTgMsg" style="font-size:13px;min-height:18px;"></p>
         </div>
       </div>
@@ -1416,7 +1433,7 @@
     // 탭 가시성 설정
     document.querySelectorAll('.owner-tab').forEach(el => el.style.display = isManager ? 'none' : '');
     document.querySelectorAll('.mgr-tab').forEach(el => el.style.display = isManager ? '' : 'none');
-    if (tgNavBtn) tgNavBtn.style.display = isManager ? 'none' : '';
+    if (tgNavBtn) tgNavBtn.style.display = '';
     renderManagerReferralCard();
 
     if (isManager) {
@@ -1578,19 +1595,174 @@
   }
 
   /* ===================== TELEGRAM (owner / manager) ===================== */
+  function getOwnerTgScope(scope) {
+    const isMgr = scope === 'manager';
+    return {
+      isMgr,
+      tokenId: isMgr ? 'mgrTgBotToken' : 'ownTgBotToken',
+      msgId: isMgr ? 'mgrTgMsg' : 'ownTgMsg',
+      botInfoId: isMgr ? 'mgrTgBotInfo' : 'ownTgBotInfo',
+      listId: isMgr ? 'mgrTgDiscoverList' : 'ownTgDiscoverList',
+      primaryInputId: isMgr ? 'mgrTgChatDeposit' : 'ownTgChatSeed',
+      secondaryInputId: isMgr ? 'mgrTgChatApproval' : null,
+    };
+  }
+  function setOwnerTgMessage(scope, text, tone) {
+    const cfg = getOwnerTgScope(scope);
+    const el = document.getElementById(cfg.msgId);
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.color = tone === 'ok' ? 'var(--ok)' : tone === 'err' ? 'var(--err)' : 'var(--muted)';
+  }
+  function setOwnerTgBotInfo(scope, bot) {
+    const cfg = getOwnerTgScope(scope);
+    const el = document.getElementById(cfg.botInfoId);
+    if (!el) return;
+    if (!bot) {
+      el.textContent = '';
+      return;
+    }
+    const name = bot.name ? `${bot.name} ` : '';
+    const username = bot.username ? `@${bot.username}` : '봇';
+    el.textContent = `${name}${username} 연결 확인됨`;
+  }
+  function fillOwnerTgChat(scope, target, chat) {
+    const cfg = getOwnerTgScope(scope);
+    const chatId = String(chat?.id ?? '').trim();
+    if (!chatId) return;
+    if (!cfg.isMgr) {
+      const input = document.getElementById(cfg.primaryInputId);
+      if (input) input.value = chatId;
+      setOwnerTgMessage(scope, `"${chat.title}" 방 Chat ID를 시드 알림 칸에 넣었습니다.`, 'ok');
+      return;
+    }
+    const targetId = target === 'approval' ? cfg.secondaryInputId : cfg.primaryInputId;
+    const input = document.getElementById(targetId);
+    if (input) input.value = chatId;
+    setOwnerTgMessage(scope, `"${chat.title}" 방 Chat ID를 ${target === 'approval' ? '승인' : '입금'} 칸에 넣었습니다.`, 'ok');
+  }
+  function renderOwnerTgChats(scope, chats) {
+    const cfg = getOwnerTgScope(scope);
+    const wrap = document.getElementById(cfg.listId);
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!Array.isArray(chats) || !chats.length) return;
+
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:12px;color:var(--muted);font-weight:700;margin-top:2px;';
+    label.textContent = '최근 찾은 채팅방';
+    wrap.appendChild(label);
+
+    chats.forEach((chat) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 13px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);';
+
+      const meta = document.createElement('div');
+      meta.style.cssText = 'display:grid;gap:3px;min-width:180px;flex:1 1 220px;';
+      const title = document.createElement('div');
+      title.style.cssText = 'font-size:13px;font-weight:700;color:var(--txt);';
+      title.textContent = chat.title || `Chat ${chat.id}`;
+      const sub = document.createElement('div');
+      sub.style.cssText = 'font-size:12px;color:var(--muted);line-height:1.5;';
+      sub.textContent = `${chat.type || 'chat'} · ${chat.id}${chat.username ? ` · ${chat.username}` : ''}`;
+      meta.appendChild(title);
+      meta.appendChild(sub);
+
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+
+      const makeBtn = (text, handler, accent) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = accent ? 'btn-ac btn-sm' : 'btn-ghost btn-sm';
+        btn.textContent = text;
+        btn.onclick = handler;
+        return btn;
+      };
+
+      if (cfg.isMgr) {
+        actions.appendChild(makeBtn('입금에 넣기', () => fillOwnerTgChat(scope, 'deposit', chat), true));
+        actions.appendChild(makeBtn('승인에 넣기', () => fillOwnerTgChat(scope, 'approval', chat), false));
+      } else {
+        actions.appendChild(makeBtn('시드 알림에 넣기', () => fillOwnerTgChat(scope, 'seed', chat), true));
+      }
+
+      row.appendChild(meta);
+      row.appendChild(actions);
+      wrap.appendChild(row);
+    });
+  }
+  async function inspectOwnerTgBot(scope) {
+    const cfg = getOwnerTgScope(scope);
+    const token = document.getElementById(cfg.tokenId)?.value.trim() || '';
+    setOwnerTgMessage(scope, '봇 토큰 확인 중...', 'muted');
+    setOwnerTgBotInfo(scope, null);
+    renderOwnerTgChats(scope, []);
+    try {
+      const r = await ownerFetch('/api/owner/telegram-bot/discover', 'POST', { botToken: token, discoverChats: false });
+      const data = await r.json();
+      if (!r.ok) {
+        setOwnerTgMessage(scope, data.error || '확인 실패', 'err');
+        return;
+      }
+      setOwnerTgBotInfo(scope, data.bot);
+      setOwnerTgMessage(scope, data.message || '봇 연결 확인 완료', 'ok');
+    } catch (e) {
+      setOwnerTgMessage(scope, e.message || '오류', 'err');
+    }
+  }
+  async function discoverOwnerTgChats(scope) {
+    const cfg = getOwnerTgScope(scope);
+    const token = document.getElementById(cfg.tokenId)?.value.trim() || '';
+    setOwnerTgMessage(scope, '최근 대화방을 찾는 중...', 'muted');
+    setOwnerTgBotInfo(scope, null);
+    renderOwnerTgChats(scope, []);
+    try {
+      const r = await ownerFetch('/api/owner/telegram-bot/discover', 'POST', { botToken: token, discoverChats: true });
+      const data = await r.json();
+      if (!r.ok) {
+        setOwnerTgMessage(scope, data.error || '조회 실패', 'err');
+        return;
+      }
+      const chats = Array.isArray(data.chats) ? data.chats : [];
+      setOwnerTgBotInfo(scope, data.bot);
+      renderOwnerTgChats(scope, chats);
+      let statusText = data.message || '조회 완료';
+      let statusTone = chats.length ? 'ok' : 'muted';
+      if (!cfg.isMgr && chats.length === 1) {
+        fillOwnerTgChat(scope, 'seed', chats[0]);
+        statusText = `"${chats[0].title}" 방 Chat ID를 시드 알림 칸에 자동 입력했습니다.`;
+        statusTone = 'ok';
+      } else if (cfg.isMgr && chats.length === 1) {
+        const depositInput = document.getElementById(cfg.primaryInputId);
+        const approvalInput = document.getElementById(cfg.secondaryInputId);
+        if (depositInput && !depositInput.value.trim()) depositInput.value = chats[0].id;
+        if (approvalInput && !approvalInput.value.trim()) approvalInput.value = chats[0].id;
+        statusText = `"${chats[0].title}" 방 Chat ID를 입금/승인 칸에 자동 입력했습니다.`;
+        statusTone = 'ok';
+      }
+      setOwnerTgMessage(scope, statusText, statusTone);
+    } catch (e) {
+      setOwnerTgMessage(scope, e.message || '오류', 'err');
+    }
+  }
   async function loadOwnerTgBot() {
     const oMsg = document.getElementById('ownTgMsg');
     const mMsg = document.getElementById('mgrTgMsg');
     if (oMsg) oMsg.textContent = '';
     if (mMsg) mMsg.textContent = '';
+    setOwnerTgBotInfo('owner', null);
+    setOwnerTgBotInfo('manager', null);
+    renderOwnerTgChats('owner', []);
+    renderOwnerTgChats('manager', []);
     try {
       const r = await ownerFetch('/api/owner/telegram-bot');
       const d = await r.json();
       if (!r.ok) return;
       if (_role === 'manager') {
         document.getElementById('mgrTgBotToken').value = d.botToken || '';
-        document.getElementById('mgrTgChatDeposit').value = d.chatDeposit || '';
-        document.getElementById('mgrTgChatApproval').value = d.chatApproval || '';
+        document.getElementById('mgrTgChatDeposit').value = d.chatDeposit || d.chatId || '';
+        document.getElementById('mgrTgChatApproval').value = d.chatApproval || d.chatId || '';
       } else {
         document.getElementById('ownTgBotToken').value = d.botToken || '';
         document.getElementById('ownTgChatSeed').value = d.chatSeed || '';

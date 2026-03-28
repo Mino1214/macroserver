@@ -1154,6 +1154,93 @@ async function sendTelegram(botToken, chatId, text, throwOnError = false, parseM
   }
 }
 
+function normalizeTelegramBotToken(botToken) {
+  return String(botToken ?? '').trim();
+}
+
+async function callTelegramBotApi(botToken, method, params = {}) {
+  const token = normalizeTelegramBotToken(botToken);
+  if (!token) throw new Error('봇 토큰을 입력하세요.');
+  try {
+    const { data } = await axios.get(
+      `https://api.telegram.org/bot${token}/${method}`,
+      {
+        params,
+        timeout: 8000,
+      }
+    );
+    if (!data?.ok) {
+      throw new Error(data?.description || 'Telegram API 호출 실패');
+    }
+    return data.result;
+  } catch (e) {
+    const desc = e.response?.data?.description || e.message || 'Telegram API 호출 실패';
+    throw new Error(`Telegram 오류: ${desc}`);
+  }
+}
+
+async function getTelegramBotProfile(botToken) {
+  const result = await callTelegramBotApi(botToken, 'getMe');
+  return {
+    id: result?.id || null,
+    username: result?.username || '',
+    name: result?.first_name || '',
+    canJoinGroups: !!result?.can_join_groups,
+    canReadAllGroupMessages: !!result?.can_read_all_group_messages,
+  };
+}
+
+function formatTelegramChatTitle(chat = {}) {
+  const parts = [];
+  if (chat.title) parts.push(chat.title);
+  if (!chat.title) {
+    const fullName = [chat.first_name, chat.last_name].filter(Boolean).join(' ').trim();
+    if (fullName) parts.push(fullName);
+  }
+  if (chat.username) parts.push(`@${chat.username}`);
+  if (!parts.length) parts.push(`Chat ${chat.id}`);
+  return parts.join(' · ');
+}
+
+function extractTelegramChatCandidates(updates = []) {
+  const chatMap = new Map();
+  const registerChat = (chat, source) => {
+    if (!chat || chat.id == null) return;
+    const id = String(chat.id);
+    if (chatMap.has(id)) return;
+    chatMap.set(id, {
+      id,
+      type: chat.type || 'unknown',
+      title: formatTelegramChatTitle(chat),
+      username: chat.username ? `@${chat.username}` : '',
+      rawName: chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(' ').trim() || '',
+      source: source || 'message',
+    });
+  };
+
+  for (const update of Array.isArray(updates) ? updates : []) {
+    registerChat(update?.message?.chat, 'message');
+    registerChat(update?.edited_message?.chat, 'edited_message');
+    registerChat(update?.channel_post?.chat, 'channel_post');
+    registerChat(update?.edited_channel_post?.chat, 'edited_channel_post');
+    registerChat(update?.my_chat_member?.chat, 'my_chat_member');
+    registerChat(update?.chat_member?.chat, 'chat_member');
+    registerChat(update?.business_message?.chat, 'business_message');
+    registerChat(update?.edited_business_message?.chat, 'edited_business_message');
+    registerChat(update?.callback_query?.message?.chat, 'callback_query');
+  }
+
+  return Array.from(chatMap.values());
+}
+
+async function getTelegramChatCandidates(botToken) {
+  const updates = await callTelegramBotApi(botToken, 'getUpdates', {
+    limit: 100,
+    timeout: 0,
+  });
+  return extractTelegramChatCandidates(updates);
+}
+
 // ---------- ?? ?? & ?? ?? ----------
 
 const DEFAULT_PACKAGES = [
@@ -4853,6 +4940,43 @@ app.get('/api/owner/telegram-bot', requireOwnerSession, async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/owner/telegram-bot/discover : 봇 토큰 확인 + 최근 대화방(Chat ID) 탐색
+app.post('/api/owner/telegram-bot/discover', requireOwnerSession, async (req, res) => {
+  try {
+    const botToken = normalizeTelegramBotToken(req.body?.botToken);
+    const discoverChats = req.body?.discoverChats !== false;
+    if (!botToken) return res.status(400).json({ error: '봇 토큰을 입력하세요.' });
+
+    const bot = await getTelegramBotProfile(botToken);
+    let chats = [];
+    let message = `봇 @${bot.username || bot.name || bot.id} 확인 완료`;
+
+    if (discoverChats) {
+      chats = await getTelegramChatCandidates(botToken);
+      if (chats.length) {
+        message = `최근 대화방 ${chats.length}개를 찾았습니다.`;
+      } else {
+        message = '최근 대화방을 찾지 못했습니다. 봇을 채팅방/그룹에 초대한 뒤 아무 메시지나 한 번 보내고 다시 눌러주세요.';
+      }
+    }
+
+    res.json({
+      ok: true,
+      bot,
+      chats,
+      message,
+      guide: [
+        '1. Telegram에서 @BotFather 를 열고 /newbot 으로 봇을 만듭니다.',
+        '2. 알림 받을 개인채팅 또는 그룹방에 봇을 초대합니다.',
+        '3. 개인채팅이면 /start, 그룹방이면 @봇아이디 test 처럼 봇을 한 번 불러줍니다.',
+        '4. 아래 "Chat ID 자동 찾기" 버튼을 누르면 최근 방 목록이 나옵니다.',
+      ],
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Telegram 확인 실패' });
   }
 });
 

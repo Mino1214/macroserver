@@ -13,6 +13,9 @@ function mountMarketApi(app) {
   app.use('/market-static/videos', express.static(videoUploadDir));
 
   const market = express.Router();
+  market.get('/ping', (_req, res) => {
+    res.json({ ok: true, service: 'market-api', t: new Date().toISOString() });
+  });
   market.use(resolveMarketTenant);
   market.use('/auth', authRoutes);
   market.use('/master', masterRoutes);

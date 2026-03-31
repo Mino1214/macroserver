@@ -2096,8 +2096,26 @@ function requireMuAdmin(req, res, next) {
   next();
 }
 
-// ---------- ???? ----------
-app.use(cors());
+// ---------- CORS (masterAdmin 등 별도 프론트에서 API 호출) ----------
+const corsOptions = {
+  origin:
+    process.env.CORS_ORIGINS === '*'
+      ? true
+      : process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+        : true,
+  credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Operator-Id',
+    'X-Forwarded-Host',
+    'X-Requested-With',
+  ],
+  optionsSuccessStatus: 204,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // API ?? ?? ????

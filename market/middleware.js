@@ -5,6 +5,7 @@ const { verifyAccess } = require('./jwtMarket');
  * Host / X-Operator-Id 기반 테넌트 (운영자 mu_users.id)
  */
 async function resolveMarketTenant(req, res, next) {
+  if (req.method === 'OPTIONS') return next();
   req.marketTenantOperatorId = null;
   const headerOp = req.headers['x-operator-id'];
   if (headerOp !== undefined && headerOp !== null && String(headerOp).trim() !== '') {

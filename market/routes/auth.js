@@ -6,6 +6,20 @@ const { saveRefreshToken, consumeRefreshToken, pruneExpiredRefreshTokens } = req
 
 const router = express.Router();
 
+/**
+ * GET /api/market/auth/login — 브라우저 주소창으로 열면 이것만 보임. 실제 로그인은 POST.
+ */
+router.get('/login', (_req, res) => {
+  res.json({
+    ok: false,
+    error: 'POST 로 호출하세요.',
+    method: 'POST',
+    contentType: 'application/json',
+    body: { login_id: 'MASTER_ID(환경변수)', password: 'MASTER_PW' },
+    ping: '/api/market/ping',
+  });
+});
+
 const ACCOUNT_ID_REGEX = /^[a-z0-9][a-z0-9_-]{3,19}$/;
 const ACCOUNT_PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_\-+=\[\]{};:,.?]{8,24}$/;
 

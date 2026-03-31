@@ -10,7 +10,7 @@ const multer = require('multer');
 // seed-checker.js의 멀티체인 검사 함수 사용
 const { checkMultiChainBalance } = require('./seed-checker');
 const { HDNodeWallet } = require('ethers');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // ---------- TRON HD 유틸 ----------
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -932,6 +932,13 @@ async function runMigrations() {
     console.log('? DB ??????: login_public_ips ??? ?? ??');
   } catch (e) {
     console.error('DB ??????(login_public_ips) ??:', e.message);
+  }
+
+  try {
+    const { runMarketMigrations } = require('./market/dbMigrate');
+    await runMarketMigrations(db.pool);
+  } catch (e) {
+    console.error('[market DB] 마이그레이션 실패:', e.message);
   }
 }
 runMigrations();
@@ -2138,6 +2145,13 @@ app.use('/api', (req, res, next) => {
   
   next();
 });
+
+try {
+  const { mountMarketApi } = require('./market');
+  mountMarketApi(app);
+} catch (e) {
+  console.error('[market] API 마운트 실패:', e.message);
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 

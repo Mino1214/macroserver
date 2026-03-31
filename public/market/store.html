@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market Store</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+    section { margin: 16px 0; padding: 16px; border: 1px solid #e0e0e0; border-radius: 8px; }
+    input, button { padding: 8px; margin: 4px 0; width: 100%; max-width: 280px; box-sizing: border-box; }
+    button { background: #246; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    pre { font-size: 11px; background: #f8f8f8; padding: 8px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>유저 스토어 (마켓)</h1>
+  <p>운영자 사이트 도메인으로 열면 테넌트가 자동 적용됩니다. 로컬에서는 선택적으로 <code>X-Operator-Id</code> 헤더는 브라우저에서 설정할 수 없으니, 회원가입 시 <code>operator_mu_user_id</code>를 입력하거나 마스터가 만든 운영자 ID를 사용하세요.</p>
+  <section>
+    <h2>회원가입</h2>
+    <input id="rid" placeholder="아이디" />
+    <input id="rpw" type="password" placeholder="비밀번호" />
+    <input id="rop" placeholder="operator_mu_user_id (숫자, 선택)" />
+    <button type="button" id="reg">가입</button>
+  </section>
+  <section>
+    <h2>로그인</h2>
+    <input id="lid" placeholder="아이디" />
+    <input id="lpw" type="password" placeholder="비밀번호" />
+    <button type="button" id="login">로그인</button>
+  </section>
+  <section>
+    <h2>내 정보 / 상품</h2>
+    <button type="button" id="me">/user/me</button>
+    <button type="button" id="products">상품 목록</button>
+    <button type="button" id="attend">출석</button>
+    <button type="button" id="charge">개발 충전 +1000</button>
+    <ul id="plist"></ul>
+    <pre id="out"></pre>
+  </section>
+  <script>
+    const api = (path, opts = {}) =>
+      fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...opts.headers } }).then(async (r) => {
+        const t = await r.text();
+        let j; try { j = JSON.parse(t); } catch { j = t; }
+        if (!r.ok) throw new Error(typeof j === 'object' && j.error ? j.error : t);
+        return j;
+      });
+    const ut = () => localStorage.getItem('marketUserAccess') || '';
+    document.getElementById('reg').onclick = async () => {
+      const body = { id: document.getElementById('rid').value, password: document.getElementById('rpw').value };
+      const op = document.getElementById('rop').value.trim();
+      if (op) body.operator_mu_user_id = parseInt(op, 10);
+      const j = await api('/api/market/auth/register', { method: 'POST', body: JSON.stringify(body) });
+      localStorage.setItem('marketUserAccess', j.accessToken);
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('login').onclick = async () => {
+      const j = await api('/api/market/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ login_id: document.getElementById('lid').value, password: document.getElementById('lpw').value }),
+      });
+      if (j.role === 'user') localStorage.setItem('marketUserAccess', j.accessToken);
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('me').onclick = async () => {
+      const j = await api('/api/market/user/me', { headers: { Authorization: 'Bearer ' + ut() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('products').onclick = async () => {
+      const j = await api('/api/market/user/products', { headers: { Authorization: 'Bearer ' + ut() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+      const ul = document.getElementById('plist');
+      ul.innerHTML = '';
+      (j.products || []).forEach((p) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${p.name} · ${p.price_cash}캐쉬</span><button data-id="${p.id}">구매</button>`;
+        ul.appendChild(li);
+      });
+      ul.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const r = await api('/api/market/user/orders', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + ut() },
+              body: JSON.stringify({ product_id: parseInt(btn.dataset.id, 10), quantity: 1 }),
+            });
+            alert('주문 완료: ' + JSON.stringify(r));
+          } catch (e) {
+            alert(e.message);
+          }
+        };
+      });
+    };
+    document.getElementById('attend').onclick = async () => {
+      const j = await api('/api/market/user/attendance', { method: 'POST', headers: { Authorization: 'Bearer ' + ut() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('charge').onclick = async () => {
+      try {
+        const j = await api('/api/market/user/cash/charge', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + ut() },
+          body: JSON.stringify({ amount: 1000 }),
+        });
+        document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+      } catch (e) {
+        document.getElementById('out').textContent = '충전 실패 (개발: NODE_ENV!=production 또는 MARKET_DEV_CHARGE=1 필요): ' + e.message;
+      }
+    };
+  </script>
+</body>
+</html>

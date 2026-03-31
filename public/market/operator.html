@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market Operator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+    section { margin: 20px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px; }
+    label { display: block; margin-top: 8px; }
+    input, button { margin-top: 4px; padding: 8px; width: 100%; max-width: 280px; }
+    button { background: #0a5; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 12px; font-size: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>운영자 콘솔</h1>
+  <section>
+    <label>login_id <input id="lid" /></label>
+    <label>password <input id="lpw" type="password" /></label>
+    <button type="button" id="login">로그인</button>
+  </section>
+  <section>
+    <button type="button" id="dash">대시보드</button>
+    <button type="button" id="users">유저 목록</button>
+    <button type="button" id="vids">동영상</button>
+    <pre id="out"></pre>
+  </section>
+  <script>
+    const api = (path, opts = {}) =>
+      fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...opts.headers } }).then(async (r) => {
+        const t = await r.text();
+        let j; try { j = JSON.parse(t); } catch { j = t; }
+        if (!r.ok) throw new Error(typeof j === 'object' && j.error ? j.error : t);
+        return j;
+      });
+    const tok = () => localStorage.getItem('marketOpAccess') || '';
+    document.getElementById('login').onclick = async () => {
+      const j = await api('/api/market/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ login_id: document.getElementById('lid').value, password: document.getElementById('lpw').value }),
+      });
+      localStorage.setItem('marketOpAccess', j.accessToken);
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('dash').onclick = async () => {
+      const j = await api('/api/market/operator/dashboard', { headers: { Authorization: 'Bearer ' + tok() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('users').onclick = async () => {
+      const j = await api('/api/market/operator/users', { headers: { Authorization: 'Bearer ' + tok() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+    document.getElementById('vids').onclick = async () => {
+      const j = await api('/api/market/operator/videos', { headers: { Authorization: 'Bearer ' + tok() } });
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    };
+  </script>
+</body>
+</html>

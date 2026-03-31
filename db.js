@@ -130,6 +130,9 @@ const pool = {
       return {
         release() {},
         query: safeQuery,
+        async beginTransaction() {},
+        async rollback() {},
+        async commit() {},
       };
     }
 
@@ -141,6 +144,9 @@ const pool = {
         return {
           release() {},
           query: safeQuery,
+          async beginTransaction() {},
+          async rollback() {},
+          async commit() {},
         };
       }
       throw err;

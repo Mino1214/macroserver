@@ -224,6 +224,67 @@ async function runMarketMigrations(pool) {
     console.warn('[market DB] policy seed:', e.message);
   }
 
+  /** 총마켓: 판매 모듈 카탈로그 + 고객 + 모듈별 권한(플래그) */
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS master_catalog_modules (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(64) NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      description TEXT,
+      sort_order INT NOT NULL DEFAULT 0,
+      admin_entry_url VARCHAR(500) DEFAULT NULL,
+      ops_entry_url VARCHAR(500) DEFAULT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_master_cat_slug (slug),
+      INDEX idx_master_cat_active (is_active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS master_market_customers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      display_name VARCHAR(200) NOT NULL,
+      contact_email VARCHAR(255) DEFAULT NULL,
+      site_domain VARCHAR(255) DEFAULT NULL,
+      notes TEXT,
+      macro_user_id VARCHAR(50) DEFAULT NULL COMMENT 'Pandora users.id 등 연결',
+      status VARCHAR(20) NOT NULL DEFAULT 'active',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_mmc_email (contact_email),
+      INDEX idx_mmc_macro_user (macro_user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS master_customer_entitlements (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      customer_id INT NOT NULL,
+      module_slug VARCHAR(64) NOT NULL,
+      can_admin TINYINT(1) NOT NULL DEFAULT 1,
+      can_operator TINYINT(1) NOT NULL DEFAULT 1,
+      flags_json TEXT,
+      granted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_cust_module (customer_id, module_slug),
+      INDEX idx_ent_customer (customer_id),
+      INDEX idx_ent_slug (module_slug)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  try {
+    await pool.query(
+      `INSERT IGNORE INTO master_catalog_modules (slug, name, description, sort_order, admin_entry_url, ops_entry_url, is_active)
+       VALUES
+         ('pandora', 'Pandora (macroServer)', '시드·총판·장비 등 macroServer 단', 10, '/admin.html', '/owner.html', 1),
+         ('polymart', 'PolyMart / Polywatch', '폴리마켓 연동 웹/API 모듈', 20, NULL, NULL, 1)`,
+    );
+  } catch (e) {
+    console.warn('[market DB] master catalog seed:', e.message);
+  }
+
   console.log('[market DB] 마이그레이션 완료');
 }
 

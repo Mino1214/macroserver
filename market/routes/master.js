@@ -2,9 +2,11 @@ const express = require('express');
 const db = require('../../db');
 const { hashPassword } = require('../password');
 const { requireMarketRoles } = require('../middleware');
+const masterTotalMarket = require('./masterTotalMarket');
 
 const router = express.Router();
 router.use(requireMarketRoles('master'));
+router.use(masterTotalMarket);
 
 /** GET /operators */
 router.get('/operators', async (_req, res) => {

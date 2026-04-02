@@ -1,0 +1,12 @@
+# Prevent Korean / UTF-8 text from turning into ?? in source files
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+[*.{js,mjs,cjs,ts,tsx,json,html,css,md,env,sql,sh}]
+indent_style = space
+indent_size = 2

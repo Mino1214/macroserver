@@ -1155,7 +1155,19 @@
     if (tl) { tl.style.color =  isLight ? 'var(--ac)' : 'var(--muted)'; tl.style.borderColor =  isLight ? 'var(--ac)' : ''; }
   }
 
-  const API = '';
+  /** Empty = same-origin /api. For WebView/Capacitor set window.__API_BASE__='https://your.domain' or <meta name="api-base" content="https://..."> */
+  const API = (function () {
+    if (typeof window !== 'undefined' && window.__API_BASE__) {
+      const b = String(window.__API_BASE__).trim().replace(/\/$/, '');
+      if (b) return b;
+    }
+    const el = typeof document !== 'undefined' && document.querySelector('meta[name="api-base"]');
+    if (el) {
+      const c = (el.getAttribute('content') || '').trim();
+      if (c) return c.replace(/\/$/, '');
+    }
+    return '';
+  })();
   let _token    = localStorage.getItem('owner_token') || '';
   let _ownerId  = localStorage.getItem('owner_id')    || '';
   let _role     = localStorage.getItem('owner_role')  || 'owner'; // 'owner' | 'manager'

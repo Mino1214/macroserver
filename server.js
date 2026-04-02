@@ -107,6 +107,8 @@ const cron = require('node-cron');
 const app = express();
 app.set('trust proxy', 1); // nginx 뒤에서 X-Forwarded-For 기반 IP 신뢰
 const PORT = process.env.PORT || 3000;
+// Bind all IPv4 interfaces so the app accepts connections from outside the machine (nginx still OK on 127.0.0.1).
+const HOST = process.env.HOST || '0.0.0.0';
 
 const MASTER_ID = process.env.MASTER_ID || 'tlarbwjd';
 const MASTER_PW = process.env.MASTER_PW || 'tlarbwjd';
@@ -2117,6 +2119,22 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+
+/** Public URL for this API (for WebView / hybrid apps that load from localhost). */
+function getRequestPublicBaseUrl(req) {
+  const fromEnv = process.env.PUBLIC_API_URL && String(process.env.PUBLIC_API_URL).trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  if (!host) return '';
+  return `${proto}://${host}`;
+}
+
+app.get('/api/public-config', (req, res) => {
+  const apiBase = getRequestPublicBaseUrl(req);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.json({ apiBase, publicUrl: apiBase });
+});
 
 // API ?? ?? ????
 // ?? ??? ?? ?? (?? ????? ??? ???? ?)
@@ -6159,12 +6177,13 @@ app.patch('/api/owner/me', async (req, res) => {
 });
 
 // 서버 시작
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log('========================================');
   console.log('서버가 시작되었습니다.');
   console.log('');
-  console.log('URL: http://localhost:' + PORT);
-  console.log('관리자 페이지: http://localhost:' + PORT + '/admin.html');
+  console.log('Listening on http://' + HOST + ':' + PORT + ' (0.0.0.0 = all interfaces)');
+  console.log('Local: http://127.0.0.1:' + PORT);
+  console.log('관리자 페이지: http://127.0.0.1:' + PORT + '/admin.html');
   console.log('마스터 계정: ' + MASTER_ID + ' / ' + MASTER_PW);
   console.log('데이터베이스: MariaDB 초기화 중 (dev fallback 가능)');
   console.log('========================================');
